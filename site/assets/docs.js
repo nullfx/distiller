@@ -1,6 +1,6 @@
 // Lists the catalogue's example recipes (examples.json) in the recipe format section.
-import { graphicsName, recipeSourceURL } from "./catalogue-data.js";
-import { el, fetchCatalogue } from "./site.js";
+import { graphicsName } from "./catalogue-data.js";
+import { el, fetchCatalogue, recipeViewer } from "./site.js";
 
 const examples = document.getElementById("examples");
 
@@ -10,12 +10,10 @@ fetchCatalogue("examples.json").then((index) => {
     examples.replaceChildren(el("p", { class: "muted", text: "No examples are published right now." }));
     return;
   }
-  examples.replaceChildren(el("ul", {}, items.map(({ game, recipe }) => {
-    const source = recipeSourceURL(recipe.path);
-    return el("li", {},
-      source ? el("a", { href: source, text: `${game.title}: ${recipe.id}` }) : `${game.title}: ${recipe.id}`,
-      el("span", { class: "muted", text: ` (${graphicsName(recipe.graphics)}${recipe.forked_from ? `, a fork of ${recipe.forked_from}` : ""})` }));
-  })));
+  examples.replaceChildren(...items.map(({ game, recipe }) => recipeViewer(recipe.path, {
+    title: `${game.title}: ${recipe.id} (${graphicsName(recipe.graphics)}${recipe.forked_from ? `, a fork of ${recipe.forked_from}` : ""})`,
+    downloadName: `${game.slug}-${recipe.id}.yaml`,
+  })).filter(Boolean));
 }).catch(() => {
   examples.replaceChildren(el("p", {}, "See the ", el("a", { href: "https://github.com/nullfx/distiller-recipes/tree/main/recipes", text: "recipes folder" }), " in the repository."));
 });
