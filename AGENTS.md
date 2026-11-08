@@ -19,7 +19,7 @@ This file is the shared reference for the architecture and the rules; the recipe
 | `Sources/distiller-cli` | The `distiller` command: everything the app does, from a terminal. |
 | `Sources/DistillerApp` | The SwiftUI app. Keep it thin: it calls `DistillerEngine` and `DistillerCommunity`. |
 | `Tests/DistillerCoreTests` | XCTest unit tests and fixtures. |
-| `Scripts/` | `bundle-app.sh` (builds and signs `dist/Distiller.app`), `make-dmg.sh` and `notarize.sh` (release packaging, used by `.github/workflows/release.yml`; see `RELEASING.md`), `make-icon.sh` and `render-svg.swift` (the app icon). |
+| `Scripts/` | `bundle-app.sh` (builds and signs `dist/Distiller.app`), `make-dmg.sh`, `notarize.sh` and `staple.sh` (release packaging, used by `.github/workflows/release.yml`; see `RELEASING.md`), `make-icon.sh` and `render-svg.swift` (the app icon). |
 | `Design/` | The app icon source (`AppIcon.svg`), the generated `.icns`, and mockups. |
 | `site/` | The website, published to GitHub Pages by `.github/workflows/pages.yml`: plain HTML, CSS and JavaScript modules, no build step. It reads the catalogue from distiller-recipes' Pages at run time. |
 | `docs/` | The maintainer's local notes. Not in git. |
