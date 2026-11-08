@@ -19,6 +19,13 @@
   --tier-bronze: #a0612f;
   --tier-borked: #b23a3a;
   --tier-none: #8b837c;
+  --code-bg: #fdfbf9;
+  --code-key: #9a4a17;
+  --code-string: #2f6b3a;
+  --code-number: #1f5f99;
+  --code-literal: #7a3b8f;
+  --code-comment: #8b837c;
+  --code-punct: #8b7d72;
   color-scheme: light;
 }
 
@@ -39,6 +46,13 @@
     --tier-silver: #b9bec5;
     --tier-bronze: #d08a52;
     --tier-borked: #e06666;
+    --code-bg: #1a1715;
+    --code-key: #f0a46f;
+    --code-string: #9fd39d;
+    --code-number: #8cc3f0;
+    --code-literal: #d6a3e6;
+    --code-comment: #8f857c;
+    --code-punct: #a39689;
     color-scheme: dark;
   }
 }
@@ -202,3 +216,33 @@ dialog.lightbox form { position: absolute; top: 10px; right: 10px; }
 .docs article section:first-of-type h2 { border-top: 0; }
 .docs article li { margin: 4px 0; }
 .docs .callout { border-left: 3px solid var(--copper); background: var(--bg-raised); padding: 12px 16px; border-radius: 0 10px 10px 0; }
+
+/* Recipe files, shown like a code block in a Markdown viewer */
+.code-details { margin-top: 14px; }
+.code-details > summary { cursor: pointer; color: var(--copper); font-weight: 600; font-size: 0.95rem; padding: 4px 0; list-style-position: inside; }
+.code-details > summary:hover { color: var(--copper-strong); }
+.code-details[open] > summary { margin-bottom: 8px; }
+.code-block { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--code-bg); }
+.code-head { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 14px; background: var(--bg-sunk); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.code-name { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.85rem; overflow-wrap: anywhere; }
+.code-lang { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.04em; color: var(--text-muted); background: var(--bg-raised); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; }
+.code-actions { margin-left: auto; display: flex; gap: 6px; }
+.code-actions .button[aria-disabled="true"], .code-actions .button:disabled { opacity: 0.5; pointer-events: none; }
+.code-body { max-height: 70vh; overflow: auto; }
+.code-status { margin: 0; padding: 14px; color: var(--text-muted); font-size: 0.9rem; }
+pre.code { margin: 0; padding: 12px 0; background: none; border-radius: 0; font-size: 0.85rem; line-height: 1.6; counter-reset: line; overflow: visible; }
+pre.code code { display: block; min-width: max-content; }
+pre.code .line { display: block; padding-right: 16px; white-space: pre; }
+pre.code .line::before {
+  counter-increment: line; content: counter(line);
+  display: inline-block; width: 3.2em; padding-right: 1.1em; margin-right: 0.2em; text-align: right;
+  color: var(--code-comment); opacity: 0.7; user-select: none; -webkit-user-select: none;
+}
+pre.code .line:hover { background: color-mix(in srgb, var(--copper-soft) 55%, transparent); }
+.tok-key { color: var(--code-key); }
+.tok-string { color: var(--code-string); }
+.tok-number { color: var(--code-number); }
+.tok-literal { color: var(--code-literal); }
+.tok-comment { color: var(--code-comment); font-style: italic; }
+.tok-punct { color: var(--code-punct); }
+#examples .code-details { border-top: 1px solid var(--line); padding-top: 8px; }

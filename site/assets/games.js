@@ -1,9 +1,9 @@
 // The catalogue: the game list with search and filters, and a game's page (?game=<slug>).
 import {
   coverPath, describeHardwareKey, describeRecipe, detailURL, facets, filterGames, genreName, graphicsName,
-  installLink, mediaURL, openLink, rankRecipes, recipeSourceURL, safeHttpsURL, SLUG, sortGames,
+  installLink, mediaURL, openLink, rankRecipes, safeHttpsURL, SLUG, sortGames,
 } from "./catalogue-data.js";
-import { el, fetchCatalogue, picture, tierBadge } from "./site.js";
+import { el, fetchCatalogue, picture, recipeViewer, tierBadge } from "./site.js";
 
 const root = document.getElementById("catalogue");
 const params = new URLSearchParams(location.search);
@@ -178,8 +178,8 @@ function gallery(shots) {
 }
 
 function recipeBlock(game, recipe) {
-  const source = recipeSourceURL(recipe.path);
   const link = installLink(game.slug, recipe.id);
+  const viewer = recipeViewer(recipe.path, { title: "Recipe file", downloadName: `${game.slug}-${recipe.id}.yaml` });
   const details = describeRecipe(recipe.recipe);
   const authors = recipe.recipe?.authors ?? [];
   return el("article", { class: "recipe", id: `recipe-${recipe.id}` },
@@ -192,9 +192,13 @@ function recipeBlock(game, recipe) {
           authors.length ? el("span", { text: `by ${authors.join(", ")}` }) : null)),
       el("div", { class: "button-row" },
         link ? el("a", { class: "button small primary", href: link, text: "Install" }) : null,
-        source ? el("a", { class: "button small", href: source, rel: "noopener", text: "Recipe file" }) : null)),
+        viewer ? el("button", {
+          class: "button small", type: "button", text: "View recipe",
+          onclick: () => { viewer.open = true; viewer.scrollIntoView({ behavior: "smooth", block: "start" }); },
+        }) : null)),
     recipe.recipe?.notes ? el("p", { class: "description", text: recipe.recipe.notes }) : null,
     el("dl", { class: "details" }, details.flatMap(([term, value]) => [el("dt", { text: term }), el("dd", { text: value })])),
+    viewer,
     hardwareTable(recipe),
     reportsList(recipe));
 }

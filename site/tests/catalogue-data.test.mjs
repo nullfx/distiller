@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   CATALOGUE_BASE, chipFamily, coverPath, describeHardwareKey, describeRecipe, facets, filterGames,
-  installLink, mediaURL, openLink, rankRecipes, recipeSourceURL, safeHttpsURL, sortGames, tierInfo,
+  highlightYAML, installLink, mediaURL, openLink, rankRecipes, recipeRawURL, recipeSourceURL, safeHttpsURL, sortGames, tierInfo,
 } from "../assets/catalogue-data.js";
 
 const games = [
@@ -85,4 +85,47 @@ test("summarises a recipe", () => {
   assert.equal(lines["Windows version"], "Windows 11");
   assert.equal(lines.Environment, "DXVK_ASYNC=1");
   assert.equal(lines.Arguments, "-mapLoadinfo");
+});
+
+test("recipe files are fetched only from the recipes folder", () => {
+  assert.equal(recipeRawURL("recipes/guild-wars-2/dxvk.yaml"), "https://raw.githubusercontent.com/nullfx/distiller-recipes/main/recipes/guild-wars-2/dxvk.yaml");
+  assert.equal(recipeRawURL("recipes/../scripts/x.yaml"), null);
+  assert.equal(recipeRawURL("https://evil.example/x.yaml"), null);
+});
+
+test("highlights YAML without changing it", () => {
+  const source = [
+    "# A comment",
+    "schema: 1",
+    "id: dxvk",
+    "game:",
+    "  title: Guild Wars 2  # trailing comment",
+    "  installer: { url: \"https://cdn.example.com/Setup.exe\" }",
+    "prefix:",
+    "  winetricks: [corefonts, vcrun2022]",
+    "  retina: true",
+    "install:",
+    "  - download: { url: https://cdn.example.com/a.exe, sha256: \"ab\", to: cache/a.exe }",
+    "launch:",
+    "  exe: 'C:\\Program Files\\Game\\Game.exe'",
+    "  args: [\"-a\", '-b']",
+    "notes: |",
+    "  Text with: a colon and # not a comment",
+    "",
+    "  - <script>alert(1)</script>",
+  ].join("\n");
+  const lines = highlightYAML(source);
+  assert.equal(lines.map((tokens) => tokens.map((token) => token.text).join("")).join("\n"), source, "round trip");
+  const types = (n) => lines[n].filter((token) => token.text.trim()).map((token) => `${token.type}:${token.text.trim()}`);
+  assert.deepEqual(types(0), ["comment:# A comment"]);
+  assert.deepEqual(types(1), ["key:schema", "punct::", "number:1"]);
+  assert.deepEqual(types(4), ["key:title", "punct::", "string:Guild Wars 2", "comment:# trailing comment"]);
+  assert.deepEqual(types(5), ["key:installer", "punct::", "punct:{", "key:url", "punct::", "string:\"https://cdn.example.com/Setup.exe\"", "punct:}"]);
+  assert.deepEqual(types(7), ["key:winetricks", "punct::", "punct:[", "string:corefonts", "punct:,", "string:vcrun2022", "punct:]"]);
+  assert.deepEqual(types(8), ["key:retina", "punct::", "literal:true"]);
+  assert.equal(types(10)[0], "punct:-");
+  assert.deepEqual(types(12), ["key:exe", "punct::", "string:'C:\\Program Files\\Game\\Game.exe'"]);
+  assert.deepEqual(types(14), ["key:notes", "punct::", "punct:|"]);
+  assert.deepEqual(types(15), ["string:Text with: a colon and # not a comment"], "a block scalar's lines are text");
+  assert.ok(types(17).join(" ").includes("<script>"), "markup stays text for the page to show as text");
 });

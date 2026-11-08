@@ -88,6 +88,106 @@ export function recipeSourceURL(path) {
   return `${RECIPES_REPOSITORY}/blob/main/${text}`;
 }
 
+/** The recipe file's raw text on GitHub (served with CORS), for showing it on the page. */
+export function recipeRawURL(path) {
+  const text = String(path ?? "");
+  if (!/^recipes\/[a-z0-9][a-z0-9-]{1,63}\/[a-z0-9][a-z0-9-]{1,63}\.yaml$/.test(text)) return null;
+  return `https://raw.githubusercontent.com/nullfx/distiller-recipes/main/${text}`;
+}
+
+/**
+ * Splits YAML into lines of highlighted tokens for display: `{ type, text }`, where type is
+ * "key", "string", "number", "literal" (true, false, null), "comment", "punct" or "plain".
+ * Joining every token's text gives back each line exactly. Only for display: it never
+ * interprets the YAML, and pages put each token on screen as text.
+ */
+export function highlightYAML(source) {
+  const lines = String(source ?? "").replace(/\r\n?/g, "\n").split("\n");
+  let blockIndent = null; // inside a block scalar (`key: |`), lines indented deeper than its key are text
+  return lines.map((line) => {
+    const indent = /^\s*/.exec(line)[0].length;
+    if (blockIndent !== null) {
+      if (line.trim() === "" || indent > blockIndent) {
+        return [{ type: "plain", text: line.slice(0, indent) }, { type: "string", text: line.slice(indent) }].filter((token) => token.text);
+      }
+      blockIndent = null;
+    }
+    const tokens = highlightLine(line);
+    const last = tokens.filter((token) => token.text.trim()).pop();
+    if (last && last.type === "punct" && /^[|>][-+0-9]*$/.test(last.text.trim())) blockIndent = indent;
+    return tokens;
+  });
+}
+
+const LITERAL = /^(?:true|false|null|yes|no|on|off|~)$/i;
+const NUMBER = /^[-+]?(?:\d[\d_]*(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?$/;
+
+function highlightLine(line) {
+  const tokens = [];
+  const push = (type, text) => {
+    if (!text) return;
+    const last = tokens[tokens.length - 1];
+    if (last && last.type === type) last.text += text;
+    else tokens.push({ type, text });
+  };
+  let rest = line;
+  const indent = /^\s*/.exec(rest)[0];
+  push("plain", indent);
+  rest = rest.slice(indent.length);
+  if (rest.startsWith("#")) { push("comment", rest); return tokens; }
+  // Sequence dashes ("- ", "- - ").
+  let dash;
+  while ((dash = /^-(?:\s+|$)/.exec(rest))) { push("punct", "-"); push("plain", dash[0].slice(1)); rest = rest.slice(dash[0].length); }
+  // A block mapping key: `key:` followed by a space or the end of the line.
+  const key = /^((?:"[^"]*"|'[^']*'|[^\s#:{}\[\],"'][^#:{}\[\],]*?))(\s*)(:)(?=\s|$)/.exec(rest);
+  if (key) {
+    push("key", key[1]); push("plain", key[2]); push("punct", ":");
+    rest = rest.slice(key[0].length);
+  }
+  scanValue(rest, push);
+  return tokens;
+}
+
+// A value: plain scalars, quoted strings, flow collections ({ a: 1, b: [x] }) and comments.
+function scanValue(text, push) {
+  let i = 0;
+  while (i < text.length) {
+    const rest = text.slice(i);
+    const space = /^\s+/.exec(rest);
+    if (space) {
+      // A comment needs a space before it.
+      if (rest.slice(space[0].length).startsWith("#")) { push("plain", space[0]); push("comment", rest.slice(space[0].length)); return; }
+      push("plain", space[0]); i += space[0].length; continue;
+    }
+    if (i === 0 && rest.startsWith("#")) { push("comment", rest); return; }
+    if (rest[0] === '"' || rest[0] === "'") {
+      const quote = rest[0];
+      let end = 1;
+      while (end < rest.length) {
+        if (quote === '"' && rest[end] === "\\") { end += 2; continue; }
+        if (rest[end] === quote) {
+          if (quote === "'" && rest[end + 1] === "'") { end += 2; continue; }
+          end += 1; break;
+        }
+        end += 1;
+      }
+      push("string", rest.slice(0, end)); i += end; continue;
+    }
+    if (/^[{}\[\],]/.test(rest)) { push("punct", rest[0]); i += 1; continue; }
+    if (rest[0] === "|" || rest[0] === ">") { push("punct", rest); return; }
+    // A word up to the next delimiter; inside flow collections `word:` is a key.
+    const word = /^[^\s,{}\[\]]+/.exec(rest)[0];
+    const flowKey = /^([^:]+)(:)$/.exec(word);
+    if (flowKey) { push("key", flowKey[1]); push("punct", ":"); i += word.length; continue; }
+    // Take the rest of a plain scalar up to a comment, a comma or a bracket.
+    const scalar = /^[^,{}\[\]#]*?(?=\s+#|[,{}\[\]]|$)/.exec(rest)[0] || word;
+    const trimmed = scalar.trimEnd();
+    push(LITERAL.test(trimmed) ? "literal" : NUMBER.test(trimmed) ? "number" : "string", trimmed);
+    push("plain", scalar.slice(trimmed.length));
+    i += scalar.length;
+  }
+}
+
 /** distiller://install?game=…&recipe=… (see DistillerLink.swift), or null for bad slugs. */
 export function installLink(game, recipe) {
   if (!SLUG.test(game ?? "") || !SLUG.test(recipe ?? "")) return null;
