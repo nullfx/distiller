@@ -219,18 +219,18 @@ struct McpCommand: AsyncParsableCommand {
 struct AssistantCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "assistant",
-        abstract: "Turn the AI troubleshooting assistant (distiller mcp) on or off, or connect it to Claude Desktop.",
+        abstract: "Turn the AI troubleshooting assistant (distiller mcp) on or off, or show how to connect an AI app.",
         discussion: """
             on / off take effect at once, even for an assistant that's already connected.
             The assistant is off until you turn it on.
-            connect-claude / disconnect-claude add or remove Distiller in Claude Desktop's settings
-            (restart Claude Desktop afterwards).
-            setup [client] prints how to connect an MCP client, with this command's path:
+            Distiller doesn't change other apps' settings: add `<path to distiller> mcp` to your AI
+            app's MCP servers and it starts Distiller's server when it needs it.
+            setup [client] prints how, with this command's path:
             \(MCPClient.allCases.map(\.rawValue).joined(separator: ", ")).
             """
     )
 
-    @Argument(help: "status, on, off, connect-claude, disconnect-claude or setup.")
+    @Argument(help: "status, on, off or setup.")
     var action: String = "status"
 
     @Argument(help: "For setup: the client to explain (default: all of them).")
@@ -239,26 +239,21 @@ struct AssistantCommand: ParsableCommand {
     func run() throws {
         let root = DistillerPaths().root
         var settings = StorageSettings.load(fromSupportFolder: root)
-        let claude = ClaudeDesktopConfig()
         let executable = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL.resolvingSymlinksInPath()
         switch action {
         case "on", "off":
             settings.assistantEnabled = action == "on"
             try settings.save(toSupportFolder: root)
-        case "connect-claude":
-            try claude.connect(serverExecutable: executable)
-        case "disconnect-claude":
-            try claude.disconnect()
         case "status":
             break
         case "setup":
             try printSetup(MCPClientSetup(serverPath: executable.path), enabled: settings.isAssistantEnabled)
             return
         default:
-            throw ValidationError("Choose status, on, off, connect-claude, disconnect-claude or setup.")
+            throw ValidationError("Choose status, on, off or setup.")
         }
         print("Assistant: \(settings.isAssistantEnabled ? "on" : "off")")
-        print("Claude Desktop: \(claude.configuredCommand().map { "connected (\($0) mcp)" } ?? (claude.claudeDesktopPresent ? "not connected" : "not installed"))")
+        print("Server: \(executable.path) mcp (see: distiller assistant setup)")
     }
 
     private func printSetup(_ setup: MCPClientSetup, enabled: Bool) throws {

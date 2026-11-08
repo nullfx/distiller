@@ -36,9 +36,8 @@ struct AssistantConnectView: View {
             }
             Divider()
             HStack {
-                Text("Connection details are also in the docs at nullfx.github.io/distiller.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Link("Read the guide online", destination: MCPClientSetup.docsURL)
+                    .font(.callout)
                 Spacer()
                 Button("Done") { dismiss() }
                     .keyboardShortcut(.defaultAction)
@@ -58,7 +57,7 @@ struct AssistantConnectView: View {
                 .frame(width: 36)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Connect an AI Assistant").font(.title2.bold())
-                Text("Distiller includes an MCP (Model Context Protocol) server. An assistant you connect can read a game's setup, launch logs, crash dumps and program details, then suggest recipe settings to try. It can't change, run or delete anything.")
+                Text("Distiller includes an MCP (Model Context Protocol) server. Add it to your AI app and the app can read a game's setup, launch logs, crash dumps and program details, then suggest recipe settings to try. It can't change, run or delete anything. Distiller doesn't change your AI app's settings; the steps below show where to add it.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -107,7 +106,6 @@ struct AssistantConnectView: View {
                     Text(step).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
                 }
             }
-            if client == .claudeDesktop { claudeDesktopRow }
             ForEach(setup.snippets(for: client), id: \.text) { SnippetView(snippet: $0) }
             Label(client.runsLocally
                   ? "The model runs on this Mac, so what the tools return stays here."
@@ -116,21 +114,6 @@ struct AssistantConnectView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private var claudeDesktopRow: some View {
-        HStack {
-            let command = model.claudeDesktopCommand
-            Text(command == nil ? "Claude Desktop isn't connected." : "Claude Desktop is connected.")
-                .foregroundStyle(.secondary)
-            Spacer()
-            if command == nil {
-                Button("Connect") { model.connectClaudeDesktop(true) }
-                    .disabled(model.bundledServer == nil)
-            } else {
-                Button("Disconnect") { model.connectClaudeDesktop(false) }
-            }
         }
     }
 
@@ -201,7 +184,8 @@ private struct SnippetView: View {
     }
 }
 
-private struct CopyButton: View {
+/// Copies text to the clipboard, and says so for a moment.
+struct CopyButton: View {
     let text: String
     @State private var copied = false
 

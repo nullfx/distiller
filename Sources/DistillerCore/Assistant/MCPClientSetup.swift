@@ -46,6 +46,9 @@ public struct MCPClientSetup: Sendable {
     }
 
     public static let serverName = "distiller"
+    /// The website's guide to the assistant: turning it on, connecting apps, an example.
+    public static let docsURL = URL(string: "https://nullfx.github.io/distiller/docs/#assistant")!
+
     /// Where the command is in an app installed in /Applications.
     public static let defaultServerPath = "/Applications/Distiller.app/Contents/Helpers/distiller"
 
@@ -70,7 +73,7 @@ public struct MCPClientSetup: Sendable {
         switch client {
         case .claudeDesktop:
             [
-                "Click Connect, or add the entry below under \"mcpServers\" in ~/Library/Application Support/Claude/claude_desktop_config.json (Claude ▸ Settings ▸ Developer ▸ Edit Config).",
+                "In Claude, choose Settings ▸ Developer ▸ Edit Config. Add the entry below under \"mcpServers\" in claude_desktop_config.json, keeping any servers already there.",
                 "Quit and reopen Claude Desktop. Distiller's tools appear under the tools button in a new chat.",
                 "Claude asks before each tool call; allow the ones you're happy to share.",
             ]

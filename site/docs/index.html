@@ -144,7 +144,7 @@ overlays:
           <p>The assistant can't change, run or delete anything. It only reads a game's own folder and bottle, its answers are text and size-capped, and paths in your home folder are shown as <code>~</code>.</p>
 
           <h3 id="assistant-on">Turn it on</h3>
-          <p>The assistant is <strong>off until you turn it on</strong>. In <strong>Distiller ▸ Settings ▸ AI Assistant</strong>, switch on <strong>Let AI assistants troubleshoot games</strong>. The <strong>Connect an AI Assistant</strong> window opens with the steps and settings for each client below, filled in with the path on your Mac and ready to copy. It's also under <strong>Connection Guide…</strong> in the same section. From a terminal:</p>
+          <p>The assistant is <strong>off until you turn it on</strong>. In <strong>Distiller ▸ Settings</strong>, open the <strong>AI Assistant</strong> tab and switch on <strong>Let AI assistants troubleshoot games</strong>. The <strong>Connect an AI Assistant</strong> window opens with the steps for each app below, filled in with the path on your Mac and ready to copy; <strong>Connection Steps…</strong> in the same tab opens it again. From a terminal:</p>
 <pre data-copy><code>distiller assistant on
 distiller assistant setup lm-studio   # or claude-desktop, claude-code, chatgpt, ollama, other</code></pre>
           <p>Your assistant starts the server itself when it needs it. The server talks over standard input and output (stdio) and never listens on the network. In an app installed in Applications, the command is:</p>
@@ -169,14 +169,12 @@ distiller assistant setup lm-studio   # or claude-desktop, claude-code, chatgpt,
           <p class="callout"><strong>Where your data goes:</strong> Claude and ChatGPT send what the tools return (log lines, file contents, your Mac's setup) to their service, under that service's privacy terms. With a model in LM Studio or Ollama, everything stays on your Mac. Your assistant asks before each tool call, so you can see what's read.</p>
 
           <h3 id="assistant-connect">Connect your assistant</h3>
-          <p>Each client below needs the same two things: the command (the path above) and the single argument <code>mcp</code>. Change the path if Distiller isn't in Applications.</p>
+          <p><strong>Distiller doesn't change your AI app's settings.</strong> You add Distiller's command to the app's list of MCP servers, and the app starts Distiller's server whenever it needs it. The server runs only while that app uses it, and talks only to that app. Any app that supports local (stdio) MCP servers can connect: the steps below cover common ones, and for others, look for "MCP servers", "tools" or "integrations" in the app's settings.</p>
+          <p>Every app needs the same two things: the command (the path above) and the single argument <code>mcp</code>. Change the path if Distiller isn't in Applications.</p>
 
           <details class="connect" open>
             <summary>Claude Desktop</summary>
-            <ol>
-              <li>In Distiller's connection guide (or Settings ▸ AI Assistant), click <strong>Connect</strong>. Distiller adds itself to Claude Desktop's settings, backs the file up first, and leaves everything else in it alone.</li>
-              <li>Or add it yourself: in Claude, choose <strong>Settings ▸ Developer ▸ Edit Config</strong> and add this to <code>claude_desktop_config.json</code> (merge it with any <code>mcpServers</code> you already have):</li>
-            </ol>
+            <p>In Claude, choose <strong>Settings ▸ Developer ▸ Edit Config</strong> and add the <code>distiller</code> entry to <code>claude_desktop_config.json</code>, keeping any <code>mcpServers</code> you already have:</p>
 <pre data-copy><code>{
   "mcpServers": {
     "distiller": {

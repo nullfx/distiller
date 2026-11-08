@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import DistillerCommunity
 
@@ -132,6 +133,22 @@ struct GitHubToolbarButton: View {
             }
             .onChange(of: model.githubUser) { if model.githubUser != nil { isShowingSignIn = false } }
         }
+    }
+}
+
+extension NSImage {
+    /// GitHub's mark as a template image, for places that need an `Image` rather than a
+    /// shape (the Settings tab).
+    @MainActor static var gitHubMarkTemplate: NSImage {
+        let image = NSImage(size: NSSize(width: 20, height: 20), flipped: true) { rect in
+            guard let context = NSGraphicsContext.current?.cgContext else { return false }
+            context.addPath(GitHubMark().path(in: rect.insetBy(dx: 1, dy: 1)).cgPath)
+            context.setFillColor(NSColor.black.cgColor)
+            context.fillPath()
+            return true
+        }
+        image.isTemplate = true
+        return image
     }
 }
 
