@@ -14,6 +14,34 @@ final class DistillerVersionTests: XCTestCase {
     func testVersionFileIsAVersion() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         let version = try String(contentsOf: root.appendingPathComponent("VERSION"), encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
-        XCTAssertNotNil(version.range(of: #"^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$"#, options: .regularExpression), "VERSION holds \(version)")
+        XCTAssertNotNil(version.range(of: #"^[0-9]+\.[0-9]+\.[0-9]+$"#, options: .regularExpression), "VERSION holds \(version), not major.minor.revision")
+    }
+
+    /// Scripts/next-version.sh: VERSION's major.minor with the revision after the newest release.
+    func testNextReleaseVersion() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let work = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: work) }
+        func next(version: String, tags: [String]) throws -> String {
+            try (version + "\n").write(to: work.appendingPathComponent("VERSION"), atomically: true, encoding: .utf8)
+            try tags.joined(separator: "\n").write(to: work.appendingPathComponent("tags"), atomically: true, encoding: .utf8)
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/bash")
+            process.arguments = [root.appendingPathComponent("Scripts/next-version.sh").path, "--tags-file", work.appendingPathComponent("tags").path]
+            process.environment = ["VERSION_FILE": work.appendingPathComponent("VERSION").path, "PATH": "/usr/bin:/bin"]
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            try process.run()
+            process.waitUntilExit()
+            return String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        XCTAssertEqual(try next(version: "1.0.0", tags: []), "1.0.0", "The first release of a major.minor")
+        XCTAssertEqual(try next(version: "1.0.0", tags: ["v1.0.0"]), "1.0.1")
+        XCTAssertEqual(try next(version: "1.0.0", tags: ["v0.9.9", "v1.0.0", "v1.0.4", "v1.0.2"]), "1.0.5", "One past the newest, in any order")
+        XCTAssertEqual(try next(version: "1.0.0", tags: ["v1.0.9", "v1.0.10"]), "1.0.11", "Compared as numbers")
+        XCTAssertEqual(try next(version: "1.1.0", tags: ["v1.0.5"]), "1.1.0", "A new minor starts again")
+        XCTAssertEqual(try next(version: "1.0.7", tags: ["v1.0.3"]), "1.0.7", "VERSION's revision is the floor")
+        XCTAssertEqual(try next(version: "1.0.0", tags: ["v1.0.3-beta", "v11.0.20", "v1.0"]), "1.0.0", "Only v<major>.<minor>.<n> tags count")
     }
 }

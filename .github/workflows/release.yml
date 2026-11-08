@@ -3,15 +3,17 @@ name: Release
 # Builds Distiller.app, signs it with the maintainer's Developer ID, notarizes and staples it,
 # packs it in a signed and notarized disk image, and publishes a GitHub Release.
 #
-#   The VERSION file is the version. When a change to it reaches main (Scripts/bump-version.sh
-#   in a pull request), this workflow tags v<version> and releases it, after the owner
-#   approves the run. A VERSION with a suffix (0.2.0-beta.1) makes a pre-release.
-#   Pushing a v<version> tag by hand also releases, but only if it matches VERSION at that commit.
+#   Run it by hand: Actions ▸ Release ▸ Run workflow, on main. It releases VERSION's major.minor
+#   with the next revision (Scripts/next-version.sh: one past the newest v<major>.<minor>.<n> tag,
+#   or VERSION's own revision for the first release of that major.minor), tags v<version>
+#   after a successful build, and publishes. VERSION only changes, by hand in a pull request,
+#   for a new major or minor version (Scripts/bump-version.sh minor|major).
+#   Tick "Dry run" for the same build kept as a workflow artifact for a week, without a tag
+#   or a release.
+#
 #   Each release has Distiller-<version>.dmg and the same image as Distiller.dmg, so
 #   https://github.com/nullfx/distiller/releases/latest/download/Distiller.dmg always gets the
 #   newest release (pre-releases excluded). The website and README link there: keep that name.
-#   Run the workflow by hand ("Run workflow") for a dry run: the same build, kept as a
-#   workflow artifact for a week instead of a release.
 #
 # Signing material lives only in the "release" environment's secrets (Settings ▸ Environments),
 # which needs the owner's approval for every run and only accepts main and v* tags. The
@@ -29,17 +31,19 @@ name: Release
 #   APPLE_TEAM_ID              the team the certificate must belong to
 
 on:
-  push:
-    branches: [main]
-    paths: [VERSION]     # path filters don't apply to tag pushes
-    tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: build, sign and notarize, but don't tag or publish (the disk image is kept for a week)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
+# One release at a time, so two runs can't pick the same revision.
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
@@ -60,41 +64,30 @@ jobs:
       - uses: actions/checkout@v7
       - name: Plan
         id: plan
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
         run: |
-          full="$(tr -d '[:space:]' < VERSION)"
-          if [[ ! "$full" =~ ^([0-9]+\.[0-9]+\.[0-9]+)(-[0-9A-Za-z.]+)?$ ]]; then
-            echo "::error file=VERSION::VERSION holds '$full', not a version like 1.2.3 or 1.2.3-beta.1."
+          # The release environment's signing secrets are only available to main.
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "::error::Run Release on main (this run is on $GITHUB_REF_NAME)."
             exit 1
           fi
-          version="${BASH_REMATCH[1]}"
-          prerelease=$([[ -n "${BASH_REMATCH[2]}" ]] && echo true || echo false)
-          tag="v$full"
-          release=true publish=true create_tag=false
-          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            # A dry run: the same build, kept as an artifact.
-            full="$full-dev.${GITHUB_SHA::7}" prerelease=true publish=false
-          elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
-            if [[ "$GITHUB_REF_NAME" != "$tag" ]]; then
-              echo "::error::The tag $GITHUB_REF_NAME doesn't match VERSION ($full) at that commit. Change VERSION with Scripts/bump-version.sh instead of tagging by hand."
-              exit 1
-            fi
-          elif git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
-            echo "::notice::$tag already exists, so there's nothing to release. Bump VERSION to release again."
-            release=false
-          else
-            create_tag=true
+          next="$(Scripts/next-version.sh)"
+          release=true publish=true create_tag=true full="$next"
+          if [[ "$DRY_RUN" == "true" ]]; then
+            full="$next-dev.${GITHUB_SHA::7}" publish=false create_tag=false
           fi
           {
             echo "release=$release"
             echo "publish=$publish"
             echo "create_tag=$create_tag"
-            echo "tag=$tag"
-            echo "version=$version"
+            echo "tag=v$next"
+            echo "version=$next"
             echo "full=$full"
-            echo "prerelease=$prerelease"
+            echo "prerelease=false"
             echo "dmg=Distiller-$full.dmg"
           } >> "$GITHUB_OUTPUT"
-          echo "Plan: release=$release publish=$publish tag=$tag full=$full create_tag=$create_tag"
+          echo "::notice::$([[ "$DRY_RUN" == "true" ]] && echo "Dry run of $full" || echo "Releasing $next as v$next")"
 
   release:
     needs: plan
