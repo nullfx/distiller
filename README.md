@@ -70,9 +70,9 @@ From a terminal: `distiller github login`, `distiller recipe community-check <ga
 
 Distiller includes an MCP server (`distiller mcp`) with read-only tools that let an AI assistant read a game's setup, launch logs, crash dumps and program details, and suggest recipe settings while you build a recipe. It's **off until you turn it on** in the **AI Assistant** tab of Settings (or `distiller assistant on`). Distiller doesn't change other apps' settings: you add its command (`/Applications/Distiller.app/Contents/Helpers/distiller mcp`) to your AI app's MCP servers, and the app starts the server when it needs it. Turning the assistant on opens the **Connect an AI Assistant** window, with the steps and copyable settings for Claude Desktop, Claude Code, ChatGPT, LM Studio, Ollama and other MCP clients; `distiller assistant setup [client]` prints the same in a terminal. Online assistants send what the tools return to their service; models in LM Studio or Ollama keep it on your Mac. The [docs](https://nullfx.github.io/distiller/docs/#assistant) walk through building a recipe from scratch with it.
 
-## Phase 0: run Notepad
+## Quick Start: run Notepad
 
-The phase 0 gate is running a Windows program from the CLI.
+An easy quick start test is to run a Windows program from the CLI.
 
 1. **Get a Wine build.** `swift run distiller setup install wine winetricks` downloads one. To use a build you downloaded yourself, import its folder or archive (an app bundle such as `Wine Staging.app` works; Distiller finds the `bin/wine` inside):
 
