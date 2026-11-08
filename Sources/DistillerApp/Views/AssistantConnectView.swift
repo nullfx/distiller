@@ -201,7 +201,8 @@ private struct SnippetView: View {
     }
 }
 
-private struct CopyButton: View {
+/// Copies text to the clipboard, and says so for a moment.
+struct CopyButton: View {
     let text: String
     @State private var copied = false
 

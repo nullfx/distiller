@@ -33,6 +33,8 @@ final class AppModel {
     // Navigation, and links from the catalogue website. See AppModel+Links.swift.
     var sidebarSelection: SidebarItem? = .library
     var communityQuery = ""
+    /// The Community tab's navigation: the slugs of the game pages open, innermost last.
+    var communityPath: [String] = []
     var pendingLink: DistillerLink?
     var linkInstall: LinkInstallRequest?
 

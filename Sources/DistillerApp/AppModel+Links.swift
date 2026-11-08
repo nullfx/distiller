@@ -38,18 +38,23 @@ extension AppModel {
         switch link {
         case .showGame(let slug):
             guard let game = await catalogueGame(slug) else { return }
-            sidebarSelection = .community
-            communityQuery = game.title
+            showCommunityPage(game)
         case .install(let slug, let recipeID):
             guard let game = await catalogueGame(slug) else { return }
             guard let recipe = game.recipes.first(where: { $0.id == recipeID }) else {
                 errorMessage = "The community catalogue has \(game.title), but no recipe called “\(recipeID)”. It may have been renamed or not be published yet."
                 return
             }
-            sidebarSelection = .community
-            communityQuery = game.title
+            showCommunityPage(game)
             linkInstall = LinkInstallRequest(game: game, recipe: recipe)
         }
+    }
+
+    /// Opens a game's page in Community.
+    func showCommunityPage(_ game: IndexGame) {
+        sidebarSelection = .community
+        communityQuery = ""
+        communityPath = [game.slug]
     }
 
     /// The catalogue entry for a slug, downloading the catalogue again if it isn't there yet

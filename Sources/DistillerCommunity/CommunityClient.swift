@@ -75,14 +75,31 @@ public final class CommunityClient: @unchecked Sendable {
     }
 
     public func fetchRecipe(_ recipe: IndexRecipe) async throws -> Recipe {
-        let parts = recipe.path.split(separator: "/")
-        guard parts.first == "recipes", !parts.contains(".."), recipe.path.hasSuffix(".yaml") else {
-            throw DistillerError.invalidRecipe("the index lists an unexpected path, \(recipe.path).")
+        try RecipeLoader.decode(yaml: try await fetchRecipeText(path: recipe.path))
+    }
+
+    /// A recipe file's YAML, exactly as published. Only paths in the `recipes/` folder.
+    public func fetchRecipeText(path: String) async throws -> String {
+        let parts = path.split(separator: "/")
+        guard parts.first == "recipes", !parts.contains(".."), path.hasSuffix(".yaml") else {
+            throw DistillerError.invalidRecipe("the index lists an unexpected path, \(path).")
         }
-        let url = repository.rawBaseURL.appendingPathComponent(recipe.path)
+        let url = repository.rawBaseURL.appendingPathComponent(path)
         let (data, response) = try await session.data(from: url)
         try Self.checkStatus(response, url: url)
-        return try RecipeLoader.decode(yaml: String(decoding: data, as: UTF8.self))
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    /// A game's detail file (`games/<slug>.json`): its recipes' content and reports.
+    public func fetchDetail(for game: IndexGame) async throws -> CommunityGameDetail {
+        let path = game.detail ?? "games/\(game.slug).json"
+        guard path == "games/\(game.slug).json" else {
+            throw DistillerError.invalidRecipe("the index lists an unexpected detail file, \(path).")
+        }
+        let url = repository.indexURL.deletingLastPathComponent().appendingPathComponent(path)
+        let (data, response) = try await session.data(from: url)
+        try Self.checkStatus(response, url: url)
+        return try JSONDecoder().decode(CommunityGameDetail.self, from: data)
     }
 
     /// A link to the repository's report issue form with everything filled in.

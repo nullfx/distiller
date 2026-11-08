@@ -50,6 +50,10 @@ Every authored game opens in the **recipe workshop**: choose the program, adjust
 
 The CLI has the same steps: `distiller recipe inspect`, `recipe create`, `recipe programs`, `recipe set-launch`, `recipe edit`, `recipe reload` and `recipe run-installer`.
 
+## Browsing community recipes
+
+The **Community** tab lists the games in the [community catalogue](https://nullfx.github.io/distiller/games/). Click one to see its page before installing: screenshots from contributors' test runs, the game's details and links, and each recipe with its rating for Macs like yours, its settings, the recipe file and the reports behind its rating. **Install…** confirms what will be installed and from where.
+
 ## Submitting recipes
 
 Shared recipes must install the game from its publisher's official installer. Before submitting, run the **community check**: in a fresh bottle Distiller downloads that installer, applies your recipe, runs the installer and starts the game; you capture a few screenshots (a floating panel, or ⌃⌥⌘S from inside the game) and confirm it reached its login screen or menu.
@@ -93,7 +97,7 @@ The phase 0 gate is running a Windows program from the CLI.
 | Path | Contents |
 | --- | --- |
 | `Sources/DistillerCore` | Engine: hardware probe, components, recipes, bottles, Wine process handling. No UI. |
-| `Sources/DistillerCommunity` | Reads the community index and recipes; builds report links. |
+| `Sources/DistillerCommunity` | Reads the community index, game detail files and recipes; builds report links. |
 | `Sources/distiller-cli` | The `distiller` command. Everything the app does, from a terminal. |
 | `Sources/DistillerApp` | SwiftUI app. |
 | `Tests/DistillerCoreTests` | Unit tests. Fixtures come from the distiller-recipes repository. |
