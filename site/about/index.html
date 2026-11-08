@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>About · Distiller</title>
+  <meta name="description" content="A tour of the Distiller app: your library, the community catalogue, game pages, recipe tools, components and the AI troubleshooting assistant.">
+  <meta name="color-scheme" content="light dark">
+  <meta property="og:title" content="About · Distiller">
+  <meta property="og:description" content="A tour of the Distiller app: your library, the community catalogue, game pages, recipe tools, components and the AI troubleshooting assistant.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://nullfx.github.io/distiller/about/">
+  <!-- The link preview shows the app's window: Scripts/make-social-card.sh renders it. -->
+  <meta property="og:image" content="https://nullfx.github.io/distiller/assets/social-card.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Distiller's My Library window, beside the tagline: Windows games on your Mac, distilled into recipes.">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" type="image/png" href="../assets/favicon.png">
+  <link rel="apple-touch-icon" href="../assets/icon.png">
+  <link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../"><img src="../assets/favicon.png" alt="" width="30" height="30">Distiller</a>
+      <nav class="site-nav" aria-label="Site">
+        <a href="../">Home</a>
+        <a href="../games/">Games</a>
+        <a href="../docs/">Docs</a>
+        <a href="../about/" aria-current="page">About</a>
+        <a class="nav-github" href="https://github.com/nullfx/distiller"><svg class="nav-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"/></svg>GitHub</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="wrap">
+      <header class="page-intro">
+        <h1>About Distiller</h1>
+        <p class="lede">Distiller is a Mac app for playing Windows games on Apple silicon. It sets each game up with Wine from a <strong>recipe</strong>: a shareable description of exactly what that game needs, proven by other players on Macs like yours. Here's a tour of the app.</p>
+        <nav class="tour-nav" aria-label="On this page">
+          <a href="#library">My Library</a> <a href="#community">Community</a> <a href="#game-page">A game's page</a> <a href="#create">Creating a recipe</a> <a href="#workshop">The recipe workshop</a> <a href="#components">Components</a> <a href="#assistant">AI troubleshooting assistant</a>
+        </nav>
+      </header>
+
+      <section class="tour-item pair" id="library">
+        <div class="tour-text">
+          <h2>My Library</h2>
+            <p>Every game you've installed, ready to play. Each one lives in its own bottle (a separate Wine setup, cloned in an instant), so one game's settings never trip up another.</p>
+            <p>Each row shows the graphics layer the game runs on, whether its recipe is published in the community catalogue, and when you last played. Switch between a list and a grid of icons, add a game from a recipe file, or create a new recipe with <strong>⌘N</strong>.</p>
+        </div>
+        <div class="tour-shots">
+          <figure class="shot">
+            <img src="../assets/about/library.png" alt="My Library in list view: Guild Wars and Guild Wars 2, each with its graphics layer, catalogue status and a Play button" width="1080" height="720" loading="lazy" decoding="async">
+          </figure>
+          <figure class="shot">
+            <img src="../assets/about/library-icons.png" alt="My Library as a grid of game icons, each with a Play button" width="1080" height="720" loading="lazy" decoding="async">
+          </figure>
+        </div>
+      </section>
+      <section class="tour-item flip" id="community">
+        <div class="tour-text">
+          <h2>Community</h2>
+            <p>The community catalogue, inside the app: games with recipes other players have proven, rated from Platinum to Borked by how they ran on real Macs.</p>
+            <p>Search by title, publisher or description, and filter by genre, graphics layer and rating, or sort by rating or the most recent reports, just like the <a href="../games/">games page</a> on this site. Browsing never needs an account.</p>
+        </div>
+        <div class="tour-shots">
+          <figure class="shot">
+            <img src="../assets/about/community.png" alt="The Community tab: a search field, genre, graphics layer, rating and sort menus, and two games with their ratings" width="1080" height="720" loading="lazy" decoding="async">
+          </figure>
+        </div>
+      </section>
+      <section class="tour-item" id="game-page">
+        <div class="tour-text">
+          <h2>A game's page</h2>
+            <p>Click a game to see everything before you install it: who makes it, what it's about, and the recipe that works best on a Mac like yours, with the rating it earned from Macs like yours.</p>
+            <p>Each recipe lists its settings in plain terms (Wine version, graphics layer, Windows version, winetricks components, environment and launch options), with the recipe file itself, a table of how it runs on different Macs, and every report behind its rating. <strong>Install…</strong> shows exactly what will happen and asks first; games always install from their publisher's official installer.</p>
+        </div>
+        <div class="tour-shots">
+          <figure class="shot">
+            <img src="../assets/about/community-game.png" alt="Guild Wars 2's page: publisher, rating, a Play it on your Mac panel with Install, a description, links and the recipe's settings" width="1080" height="720" loading="lazy" decoding="async">
+            <figcaption>The page also shows screenshots from contributors' test runs, left out of this picture.</figcaption>
+          </figure>
+        </div>
+      </section>
+      <section class="tour-item flip" id="create">
+        <div class="tour-text">
+          <h2>Creating a recipe</h2>
+            <p>Have a game that isn't in the catalogue yet? <strong>Create Recipe…</strong> starts from what you have: a game already on your Mac (a GOG download, a disc, a copy from a Windows PC), a Windows installer, or an empty bottle you set up yourself.</p>
+            <p>Distiller reads the game's program before it ever runs and suggests a starting point from the libraries it uses: the graphics layer, the Windows version and the Windows components it's likely to need.</p>
+        </div>
+        <div class="tour-shots">
+          <figure class="shot">
+            <img src="../assets/about/create-recipe.png" alt="Create Recipe, step one: choose a game already on this Mac, a Windows installer, or an empty bottle" width="720" height="700" loading="lazy" decoding="async">
+          </figure>
+        </div>
+      </section>
+      <section class="tour-item" id="workshop">
+        <div class="tour-text">
+          <h2>The recipe workshop</h2>
+            <p>Every game you add opens in the workshop, where you get it running: choose the program to launch, adjust the settings, edit the recipe file directly or in your own editor, run installers and Wine's tools in the game's bottle, and press <strong>Play</strong> to test.</p>
+            <p>When it works, the community check proves it does for everyone: Distiller installs the game from its official installer in a fresh bottle and you play it. Then <strong>Submit to Community…</strong> opens a pull request with your recipe and a few screenshots, for a maintainer to review.</p>
+        </div>
+        <div class="tour-shots">
+          <figure class="shot">
+            <img src="../assets/about/workshop.png" alt="The recipe workshop's Settings tab: the program to launch, the game's details and its official installer link, with Play and Submit to Community buttons" width="760" height="720" loading="lazy" decoding="async">
+          </figure>
+        </div>
+      </section>
+      <section class="tour-item flip" id="components">
+        <div class="tour-text">
+          <h2>Components</h2>
+            <p>The building blocks games run on: Wine builds, graphics layers that translate DirectX to Metal (D3DMetal, DXMT, and DXVK with MoltenVK), and winetricks for Windows components.</p>
+            <p>The Setup Assistant installs what's needed on first run, each download checked against its publisher's checksum. D3DMetal comes from your own Game Porting Toolkit download from Apple, which Distiller imports for you. Components are versioned, so a recipe can ask for exactly what it was tested with.</p>
+        </div>
+        <div class="tour-shots">
+          <figure class="shot">
+            <img src="../assets/about/components.png" alt="Components: a Wine Staging build, the D3DMetal, DXMT and DXVK graphics layers, and winetricks" width="1080" height="720" loading="lazy" decoding="async">
+          </figure>
+        </div>
+      </section>
+      <section class="tour-item" id="assistant">
+        <div class="tour-text">
+          <h2>AI troubleshooting assistant</h2>
+            <p>When a game won't start, an AI assistant can help work out why. Turn it on in Settings, and Distiller's built-in MCP server lets the AI app you already use (Claude, ChatGPT, or a local model in LM Studio or Ollama) read a game's setup, launch logs and crash dumps, then suggest settings to try.</p>
+            <p>The connection guide gives the exact settings for each app, ready to copy. The assistant can only read, only within a game's own folders, and it's off until you turn it on. The <a href="../docs/#assistant">docs</a> walk through building a recipe from scratch with it.</p>
+        </div>
+        <div class="tour-shots">
+          <figure class="shot">
+            <img src="../assets/about/assistant.png" alt="The Connect an AI Assistant window: the server command, tabs for Claude Desktop, Claude Code, ChatGPT, LM Studio, Ollama and other apps, and a configuration snippet to copy" width="720" height="808" loading="lazy" decoding="async">
+          </figure>
+        </div>
+      </section>
+
+      <section class="tour-end">
+        <h2>Try it</h2>
+        <p>Distiller is free and open source, for Apple silicon Macs with macOS 14 or later.</p>
+        <div class="button-row">
+          <a class="button primary" href="https://github.com/nullfx/distiller/releases/latest/download/Distiller.dmg">Download Distiller</a>
+          <a class="button" href="../games/">Browse games</a>
+          <a class="button" href="../docs/">Read the docs</a>
+        </div>
+      </section>
+    </div>
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <span>Distiller is open source under the <a href="https://github.com/nullfx/distiller/blob/main/LICENSE">MIT licence</a>. Recipes from <a href="https://github.com/nullfx/distiller-recipes">distiller-recipes</a>.</span>
+      <span>Game names, icons and screenshots belong to their publishers.</span>
+    </div>
+  </footer>
+  <script type="module" src="../assets/site.js"></script>
+</body>
+</html>

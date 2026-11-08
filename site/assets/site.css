@@ -272,3 +272,24 @@ pre.code .line:hover { background: color-mix(in srgb, var(--copper-soft) 55%, tr
 .install-steps li { margin: 6px 0; }
 details.build-source { margin-top: 18px; max-width: 46em; }
 details.build-source > summary { cursor: pointer; color: var(--copper); font-weight: 600; padding: 4px 0; }
+
+/* About: a tour of the app, text beside each screenshot, alternating sides. */
+.page-intro { padding: clamp(28px, 5vw, 56px) 0 8px; max-width: 46em; }
+.page-intro h1 { margin: 0 0 14px; }
+.page-intro .lede { font-size: 1.15rem; color: var(--text-muted); margin: 0 0 18px; }
+.tour-nav { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.95rem; }
+.tour-item { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 24px 40px; align-items: center; padding: 48px 0; border-top: 1px solid var(--line); scroll-margin-top: 72px; }
+.tour-item:first-of-type { border-top: 0; }
+.tour-item.flip .tour-text { order: 2; }
+.tour-text h2 { margin: 0 0 12px; }
+.tour-text p { margin: 0 0 12px; }
+.tour-shots { display: grid; gap: 12px; min-width: 0; }
+.shot { margin: 0; }
+.shot img { display: block; width: 100%; height: auto; }
+.shot figcaption { font-size: 0.85rem; color: var(--text-muted); text-align: center; margin-top: 4px; }
+.tour-end { border-top: 1px solid var(--line); padding: 40px 0 8px; }
+.tour-end h2 { margin: 0 0 8px; }
+@media (max-width: 820px) {
+  .tour-item { grid-template-columns: minmax(0, 1fr); padding: 36px 0; }
+  .tour-item.flip .tour-text { order: 0; }
+}
