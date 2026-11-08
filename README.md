@@ -116,7 +116,7 @@ Open this folder in VS Code and install the recommended Swift extension (`swiftl
 
 ## Releases
 
-Signed, notarized disk images are published on the [Releases](https://github.com/nullfx/distiller/releases) page by GitHub Actions. The version lives in the `VERSION` file: when a pull request that changes it (`Scripts/bump-version.sh patch|minor|major`) is merged, the workflow tags and releases that version after a maintainer approves it. Each release has `Distiller-<version>.dmg` and the same image as `Distiller.dmg`, so [github.com/nullfx/distiller/releases/latest/download/Distiller.dmg](https://github.com/nullfx/distiller/releases/latest/download/Distiller.dmg) always downloads the newest release. [RELEASING.md](RELEASING.md) explains how releases are signed and how to set up the signing secrets in a fork.
+Signed, notarized disk images are published on the [Releases](https://github.com/nullfx/distiller/releases) page by GitHub Actions. Versions are major.minor.revision: `VERSION` holds the major and minor, and each release (run by hand from Actions ▸ Release, then approved) takes the next revision. Each release has `Distiller-<version>.dmg` and the same image as `Distiller.dmg`, so [github.com/nullfx/distiller/releases/latest/download/Distiller.dmg](https://github.com/nullfx/distiller/releases/latest/download/Distiller.dmg) always downloads the newest release. [RELEASING.md](RELEASING.md) explains how releases are signed and how to set up the signing secrets in a fork.
 
 ## Contributing
 

@@ -1,15 +1,20 @@
 # Releasing Distiller
 
-The version lives in the **`VERSION`** file at the top of the repository. Local builds (`Scripts/bundle-app.sh`), the app's About box, `distiller --version` and releases all read it.
+Versions are **major.minor.revision** (`1.0.3`).
 
-Releases are built by GitHub Actions (`.github/workflows/release.yml`). When a change to `VERSION` reaches `main`, and the owner approves the run, the workflow does the following:
+- **`VERSION`**, at the top of the repository, holds the major and minor version (`1.0.0`). You change it by hand, in a pull request, only to start a new major or minor version: `Scripts/bump-version.sh minor` (1.0.x → 1.1.0) or `major` (1.x → 2.0.0).
+- **The revision** goes up by one with every release. It isn't written in a file. The release tags (`v1.0.0`, `v1.0.1`, …) record it, and `Scripts/next-version.sh` works out the next one: one past the newest `v<major>.<minor>.<n>` tag, or `VERSION`'s own revision (normally 0) for the first release of a new major.minor.
 
-1. Builds `Distiller.app` for Apple silicon. The version comes from `VERSION`, and the build number is the workflow's run number. A suffix (`0.2.0-beta.1`) is kept in the app's `DistillerVersion` key and dropped from `CFBundleShortVersionString`, which macOS needs to be plain numbers.
+Local builds (`Scripts/bundle-app.sh`) use `VERSION` as it stands. Released builds carry their release version, which the app's About box, `distiller --version` and the MCP server report.
+
+Releases are built by GitHub Actions (`.github/workflows/release.yml`) when you run the workflow by hand on `main` and approve it. The workflow does the following:
+
+1. Works out the version (`Scripts/next-version.sh`) and builds `Distiller.app` for Apple silicon with it. The build number is the workflow's run number.
 2. Signs the app and its `distiller` helper with a **Developer ID Application** certificate, using the hardened runtime and a secure timestamp.
 3. Notarizes the app with Apple and staples the ticket to it.
-4. Packs it in a disk image (`Distiller-0.2.0.dmg`) with an Applications shortcut, then signs, notarizes and staples the image too.
+4. Packs it in a disk image (`Distiller-1.0.3.dmg`) with an Applications shortcut, then signs, notarizes and staples the image too.
 5. Tags the commit `v<version>`. This happens only after a successful build, so a rejected or failed run leaves no tag.
-6. Publishes a GitHub Release with the disk image twice, as `Distiller-0.2.0.dmg` and as `Distiller.dmg`, plus `SHA256SUMS.txt`. The release notes start with install instructions, followed by notes generated from the merged pull requests. A version with a suffix (`0.2.0-beta.1`) becomes a pre-release and isn't marked as the latest.
+6. Publishes a GitHub Release with the disk image twice, as `Distiller-1.0.3.dmg` and as `Distiller.dmg`, plus `SHA256SUMS.txt`. The release notes start with install instructions, followed by notes generated from the merged pull requests.
 
 The website and README link to `https://github.com/nullfx/distiller/releases/latest/download/Distiller.dmg`. GitHub redirects that address to `Distiller.dmg` in the newest release that isn't a pre-release, so the links never need updating. Keep the file name `Distiller.dmg`.
 
@@ -99,20 +104,17 @@ Leave **creations** unrestricted: the release workflow creates the tag itself af
 
 ## Making a release
 
-1. In a branch, bump the version and open a pull request:
+1. Open **Actions ▸ Release ▸ Run workflow**, keep the branch as `main`, and click **Run workflow**. The run's summary shows the version it will release.
+2. Approve it under **Review deployments ▸ release**. Notarization usually takes a few minutes. If Apple rejects a build, the step prints Apple's log with the reason.
+3. The release appears under Releases, and the website's Download button serves it.
 
-   ```sh
-   Scripts/bump-version.sh minor      # or patch, major, or an exact version such as 0.3.0-beta.1
-   git commit -am "Version 0.3.0" && git push -u origin HEAD
-   ```
+From a terminal: `gh workflow run release.yml --ref main`.
 
-   The bump can also ride along in any other pull request.
-2. Merge it. The **Release** workflow starts, because `VERSION` changed on `main`.
-3. Approve the run under **Actions ▸ Release ▸ Review deployments**. Notarization usually takes a few minutes. If Apple rejects a build, the step prints Apple's log with the reason.
+**Dry run:** tick **Dry run** in the Run workflow form. It does the same build, sign and notarization, keeps the disk image as a workflow artifact for a week, and creates no tag or release.
 
-A merge that doesn't change `VERSION` doesn't release anything. If `VERSION` names a version that's already tagged, the workflow says so and stops.
+**A new major or minor version:** in a pull request, run `Scripts/bump-version.sh minor` (or `major`, or an exact `2.1.0`), commit `VERSION`, and merge. Merging doesn't release anything; the next Release run releases `1.1.0`.
 
-You can still push a tag by hand (`git tag -a v0.3.0 -m "Distiller 0.3.0" && git push origin v0.3.0`), but only if it matches `VERSION` at that commit; a mismatched tag is refused. Don't do both for the same version: whichever runs first releases it.
+Tags are created only by the workflow. Don't push `v*` tags by hand: a stray tag would shift the next revision.
 
 ## Building a signed copy locally
 
@@ -120,8 +122,8 @@ You can still push a tag by hand (`git tag -a v0.3.0 -m "Distiller 0.3.0" && git
 
 ```sh
 DISTILLER_SIGN_IDENTITY="Developer ID Application: …" DISTILLER_HARDENED=1 \
-DISTILLER_VERSION=0.2.0 Scripts/bundle-app.sh release
-Scripts/make-dmg.sh dist/Distiller.app dist/Distiller-0.2.0.dmg "Developer ID Application: …"
-NOTARY_KEY=AuthKey.p8 KEY_ID=… ISSUER_ID=… Scripts/notarize.sh dist/Distiller-0.2.0.dmg
-Scripts/staple.sh dist/Distiller-0.2.0.dmg
+DISTILLER_VERSION=1.0.3 Scripts/bundle-app.sh release
+Scripts/make-dmg.sh dist/Distiller.app dist/Distiller-1.0.3.dmg "Developer ID Application: …"
+NOTARY_KEY=AuthKey.p8 KEY_ID=… ISSUER_ID=… Scripts/notarize.sh dist/Distiller-1.0.3.dmg
+Scripts/staple.sh dist/Distiller-1.0.3.dmg
 ```
