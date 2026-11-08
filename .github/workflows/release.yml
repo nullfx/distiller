@@ -4,6 +4,9 @@ name: Release
 # packs it in a signed and notarized disk image, and publishes a GitHub Release.
 #
 #   Push a tag v<major>.<minor>.<patch> (optionally -beta.1 and the like) to release it.
+#   Each release has Distiller-<version>.dmg and the same image as Distiller.dmg, so
+#   https://github.com/nullfx/distiller/releases/latest/download/Distiller.dmg always gets the
+#   newest release (pre-releases excluded). The website and README link there: keep that name.
 #   Run the workflow by hand ("Run workflow") for a dry run: the same build, kept as a
 #   workflow artifact for a week instead of a release.
 #
@@ -160,8 +163,10 @@ jobs:
           Scripts/notarize.sh "$DMG"
           Scripts/staple.sh "$DMG"
           spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG"
-          (cd dist && shasum -a 256 "$(basename "$DMG")" > "$(basename "$DMG").sha256")
-          cat "$DMG.sha256"
+          # The same image under a name that never changes, for the "latest" download link.
+          cp "$DMG" dist/Distiller.dmg
+          (cd dist && shasum -a 256 "$(basename "$DMG")" Distiller.dmg > SHA256SUMS.txt)
+          cat dist/SHA256SUMS.txt
 
       - name: Publish the release
         if: github.ref_type == 'tag'
@@ -169,9 +174,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DMG: dist/${{ steps.version.outputs.dmg }}
         run: |
-          flags=(--verify-tag --title "Distiller ${{ steps.version.outputs.full }}" --generate-notes)
-          if [[ "${{ steps.version.outputs.prerelease }}" == "true" ]]; then flags+=(--prerelease); fi
-          gh release create "$GITHUB_REF_NAME" "$DMG" "$DMG.sha256" "${flags[@]}"
+          notes="**Install:** download \`Distiller.dmg\`, open it and drag Distiller to Applications. Needs an Apple silicon Mac with macOS 14 or later. The app and the disk image are signed with a Developer ID and notarized by Apple; \`SHA256SUMS.txt\` has their checksums."
+          flags=(--verify-tag --title "Distiller ${{ steps.version.outputs.full }}" --notes "$notes" --generate-notes)
+          if [[ "${{ steps.version.outputs.prerelease }}" == "true" ]]; then flags+=(--prerelease --latest=false); fi
+          gh release create "$GITHUB_REF_NAME" "$DMG" dist/Distiller.dmg dist/SHA256SUMS.txt "${flags[@]}"
 
       - name: Keep the dry run's disk image
         if: github.ref_type != 'tag'
@@ -180,7 +186,7 @@ jobs:
           name: ${{ steps.version.outputs.dmg }}
           path: |
             dist/${{ steps.version.outputs.dmg }}
-            dist/${{ steps.version.outputs.dmg }}.sha256
+            dist/SHA256SUMS.txt
           retention-days: 7
 
       - name: Remove the signing material

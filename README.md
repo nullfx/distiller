@@ -6,10 +6,14 @@ A native SwiftUI launcher for running Windows games on Apple silicon Macs with W
 
 > **Status: early development.** Games install and run from recipes on real Macs, recipes can be created in the app, proven with a community check and submitted to the community catalogue. Expect rough edges.
 
+## Install
+
+**[Download Distiller](https://github.com/nullfx/distiller/releases/latest/download/Distiller.dmg)** (the latest release, signed and notarized), open `Distiller.dmg` and drag Distiller to Applications. [All releases](https://github.com/nullfx/distiller/releases) have notes and checksums.
+
 ## Requirements
 
 - An Apple silicon Mac with macOS 14 or later (macOS 27 recommended for Game Porting Toolkit 4).
-- Xcode 16 or later installed (it provides the Swift toolchain and macOS SDK, even when you edit in VS Code).
+- To build from source: Xcode 16 or later (it provides the Swift toolchain and macOS SDK, even when you edit in VS Code).
 - Rosetta for x86_64 Wine builds, Wine, winetricks and cabextract. The app's **Setup Assistant** (or `distiller setup install --all`) installs these; see below.
 
 ## Build and test
@@ -112,7 +116,7 @@ Open this folder in VS Code and install the recommended Swift extension (`swiftl
 
 ## Releases
 
-Signed, notarized disk images are published on the [Releases](https://github.com/nullfx/distiller/releases) page by GitHub Actions when a maintainer pushes a version tag. [RELEASING.md](RELEASING.md) explains how releases are signed and how to set up the signing secrets in a fork.
+Signed, notarized disk images are published on the [Releases](https://github.com/nullfx/distiller/releases) page by GitHub Actions when a maintainer pushes a version tag. Each release has `Distiller-<version>.dmg` and the same image as `Distiller.dmg`, so [github.com/nullfx/distiller/releases/latest/download/Distiller.dmg](https://github.com/nullfx/distiller/releases/latest/download/Distiller.dmg) always downloads the newest release. [RELEASING.md](RELEASING.md) explains how releases are signed and how to set up the signing secrets in a fork.
 
 ## Contributing
 

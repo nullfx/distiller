@@ -82,11 +82,24 @@
     <section class="section" id="get">
       <div class="wrap">
         <h2>Get Distiller</h2>
-        <p class="intro">Signed, notarized downloads are on the way. Until then, build it from source: you need an Apple silicon Mac with macOS 14 or later and Xcode 16 or later.</p>
+        <p class="intro">For Apple silicon Macs with macOS 14 or later. Signed with a Developer ID and notarized by Apple.</p>
+        <div class="button-row">
+          <a class="button primary" href="https://github.com/nullfx/distiller/releases/latest/download/Distiller.dmg">Download Distiller</a>
+          <a class="button" href="https://github.com/nullfx/distiller/releases">All releases and notes</a>
+        </div>
+        <ol class="install-steps">
+          <li>Open <code>Distiller.dmg</code> and drag Distiller to Applications.</li>
+          <li>Open Distiller. The Setup Assistant installs Wine, winetricks and the open-source graphics layers, and imports D3DMetal from your own Game Porting Toolkit download.</li>
+          <li><a href="games/">Pick a game</a> and choose <strong>Install in Distiller</strong>, or add one you already have.</li>
+        </ol>
+        <details class="build-source">
+          <summary>Build it from source instead</summary>
+          <p>You need Xcode 16 or later.</p>
 <pre><code>git clone https://github.com/nullfx/distiller.git
 cd distiller
 Scripts/bundle-app.sh release
 open dist/Distiller.app</code></pre>
+        </details>
         <p class="muted">The <a href="docs/">docs</a> walk through the first run, installing games and sharing recipes.</p>
       </div>
     </section>

@@ -265,3 +265,9 @@ pre.code .line:hover { background: color-mix(in srgb, var(--copper-soft) 55%, tr
 .tok-comment { color: var(--code-comment); font-style: italic; }
 .tok-punct { color: var(--code-punct); }
 #examples .code-details { border-top: 1px solid var(--line); padding-top: 8px; }
+
+/* Get Distiller: download, install steps, and building from source folded away. */
+.install-steps { margin: 20px 0 0; padding-left: 1.3em; max-width: 46em; }
+.install-steps li { margin: 6px 0; }
+details.build-source { margin-top: 18px; max-width: 46em; }
+details.build-source > summary { cursor: pointer; color: var(--copper); font-weight: 600; padding: 4px 0; }
