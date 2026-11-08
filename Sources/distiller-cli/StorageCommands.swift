@@ -202,7 +202,7 @@ struct McpCommand: AsyncParsableCommand {
         // Standard output carries protocol messages only; anything else goes to standard error.
         let engine = try makeEngine()
         let root = engine.paths.root
-        let server = MCPServer(tools: AssistantTools(engine: engine), version: "0.1.0") {
+        let server = MCPServer(tools: AssistantTools(engine: engine), version: DistillerVersion.current) {
             StorageSettings.load(fromSupportFolder: root).isAssistantEnabled
         }
         let state = StorageSettings.load(fromSupportFolder: root).isAssistantEnabled ? "on" : "turned off in Settings"

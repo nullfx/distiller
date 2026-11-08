@@ -9,7 +9,8 @@
 # else the first "Apple Development" identity in the keychain, else ad hoc as a last resort.
 #
 # Release builds (.github/workflows/release.yml) also set:
-#   DISTILLER_VERSION   CFBundleShortVersionString (default 0.1.0)
+#   DISTILLER_VERSION   the version (default: the VERSION file); a suffix such as -beta.1 is
+#                       kept in DistillerVersion and dropped from CFBundleShortVersionString
 #   DISTILLER_BUILD     CFBundleVersion (default 1)
 #   DISTILLER_OUT       the folder for Distiller.app (default dist)
 #   DISTILLER_HARDENED=1  sign with the hardened runtime and a secure timestamp, as
@@ -18,7 +19,12 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 CONFIG="${1:-release}"
-VERSION="${DISTILLER_VERSION:-0.1.0}"
+VERSION="${DISTILLER_VERSION:-$(tr -d '[:space:]' < VERSION)}"
+if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+  echo "'$VERSION' isn't a version like 1.2.3 or 1.2.3-beta.1 (see VERSION)." >&2
+  exit 1
+fi
+SHORT_VERSION="${VERSION%%-*}"
 BUILD="${DISTILLER_BUILD:-1}"
 swift build -c "$CONFIG" --product DistillerApp
 swift build -c "$CONFIG" --product distiller
@@ -46,7 +52,8 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleExecutable</key><string>Distiller</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>$VERSION</string>
+  <key>CFBundleShortVersionString</key><string>$SHORT_VERSION</string>
+  <key>DistillerVersion</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$BUILD</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.games</string>

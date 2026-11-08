@@ -9,6 +9,7 @@ struct Distiller: AsyncParsableCommand {
         commandName: "distiller",
         abstract: "Install and run Windows games on macOS with Wine.",
         discussion: "Set DISTILLER_HOME to keep test data away from your real library.",
+        version: DistillerVersion.current,
         subcommands: [
             HardwareCommand.self,
             SetupCommand.self,

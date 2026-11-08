@@ -3,7 +3,10 @@ name: Release
 # Builds Distiller.app, signs it with the maintainer's Developer ID, notarizes and staples it,
 # packs it in a signed and notarized disk image, and publishes a GitHub Release.
 #
-#   Push a tag v<major>.<minor>.<patch> (optionally -beta.1 and the like) to release it.
+#   The VERSION file is the version. When a change to it reaches main (Scripts/bump-version.sh
+#   in a pull request), this workflow tags v<version> and releases it, after the owner
+#   approves the run. A VERSION with a suffix (0.2.0-beta.1) makes a pre-release.
+#   Pushing a v<version> tag by hand also releases, but only if it matches VERSION at that commit.
 #   Each release has Distiller-<version>.dmg and the same image as Distiller.dmg, so
 #   https://github.com/nullfx/distiller/releases/latest/download/Distiller.dmg always gets the
 #   newest release (pre-releases excluded). The website and README link there: keep that name.
@@ -27,6 +30,8 @@ name: Release
 
 on:
   push:
+    branches: [main]
+    paths: [VERSION]     # path filters don't apply to tag pushes
     tags: ["v*"]
   workflow_dispatch:
 
@@ -38,12 +43,69 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Works out the version and whether there's anything to release, without the secrets.
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      publish: ${{ steps.plan.outputs.publish }}
+      create_tag: ${{ steps.plan.outputs.create_tag }}
+      tag: ${{ steps.plan.outputs.tag }}
+      version: ${{ steps.plan.outputs.version }}
+      full: ${{ steps.plan.outputs.full }}
+      prerelease: ${{ steps.plan.outputs.prerelease }}
+      dmg: ${{ steps.plan.outputs.dmg }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Plan
+        id: plan
+        run: |
+          full="$(tr -d '[:space:]' < VERSION)"
+          if [[ ! "$full" =~ ^([0-9]+\.[0-9]+\.[0-9]+)(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error file=VERSION::VERSION holds '$full', not a version like 1.2.3 or 1.2.3-beta.1."
+            exit 1
+          fi
+          version="${BASH_REMATCH[1]}"
+          prerelease=$([[ -n "${BASH_REMATCH[2]}" ]] && echo true || echo false)
+          tag="v$full"
+          release=true publish=true create_tag=false
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            # A dry run: the same build, kept as an artifact.
+            full="$full-dev.${GITHUB_SHA::7}" prerelease=true publish=false
+          elif [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            if [[ "$GITHUB_REF_NAME" != "$tag" ]]; then
+              echo "::error::The tag $GITHUB_REF_NAME doesn't match VERSION ($full) at that commit. Change VERSION with Scripts/bump-version.sh instead of tagging by hand."
+              exit 1
+            fi
+          elif git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+            echo "::notice::$tag already exists, so there's nothing to release. Bump VERSION to release again."
+            release=false
+          else
+            create_tag=true
+          fi
+          {
+            echo "release=$release"
+            echo "publish=$publish"
+            echo "create_tag=$create_tag"
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "full=$full"
+            echo "prerelease=$prerelease"
+            echo "dmg=Distiller-$full.dmg"
+          } >> "$GITHUB_OUTPUT"
+          echo "Plan: release=$release publish=$publish tag=$tag full=$full create_tag=$create_tag"
+
   release:
+    needs: plan
+    if: needs.plan.outputs.release == 'true'
     runs-on: macos-15
     timeout-minutes: 60
     environment: release
     permissions:
-      contents: write   # to create the release
+      contents: write   # to create the tag and the release
+    env:
+      TAG: ${{ needs.plan.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
 
@@ -55,27 +117,13 @@ jobs:
       - name: Version
         id: version
         run: |
-          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
-            tag="$GITHUB_REF_NAME"
-            if [[ ! "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(-[0-9A-Za-z.]+)?$ ]]; then
-              echo "::error::Release tags look like v1.2.3 or v1.2.3-beta.1, not $tag"
-              exit 1
-            fi
-            version="${BASH_REMATCH[1]}"
-            full="${tag#v}"
-            prerelease=$([[ -n "${BASH_REMATCH[2]}" ]] && echo true || echo false)
-          else
-            version="0.0.0"
-            full="0.0.0-dev.${GITHUB_SHA::7}"
-            prerelease=true
-          fi
           {
-            echo "version=$version"
-            echo "full=$full"
-            echo "prerelease=$prerelease"
-            echo "dmg=Distiller-$full.dmg"
+            echo "version=${{ needs.plan.outputs.version }}"
+            echo "full=${{ needs.plan.outputs.full }}"
+            echo "prerelease=${{ needs.plan.outputs.prerelease }}"
+            echo "dmg=${{ needs.plan.outputs.dmg }}"
           } >> "$GITHUB_OUTPUT"
-          echo "Building $full (bundle version $version, build $GITHUB_RUN_NUMBER)"
+          echo "Building ${{ needs.plan.outputs.full }} (bundle version ${{ needs.plan.outputs.version }}, build $GITHUB_RUN_NUMBER)"
 
       - name: Toolchain
         run: |
@@ -121,7 +169,7 @@ jobs:
       - name: Build and sign the app
         env:
           DISTILLER_SIGN_IDENTITY: ${{ steps.identity.outputs.sha1 }}
-          DISTILLER_VERSION: ${{ steps.version.outputs.version }}
+          DISTILLER_VERSION: ${{ steps.version.outputs.full }}
           DISTILLER_BUILD: ${{ github.run_number }}
           DISTILLER_HARDENED: "1"
         run: |
@@ -168,8 +216,17 @@ jobs:
           (cd dist && shasum -a 256 "$(basename "$DMG")" Distiller.dmg > SHA256SUMS.txt)
           cat dist/SHA256SUMS.txt
 
+      - name: Tag the release
+        if: needs.plan.outputs.create_tag == 'true'
+        run: |
+          # Only now, after approval and a successful build, so a rejected or failed run leaves no tag.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "Distiller ${{ steps.version.outputs.full }}" "$GITHUB_SHA"
+          git push origin "refs/tags/$TAG"
+
       - name: Publish the release
-        if: github.ref_type == 'tag'
+        if: needs.plan.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           DMG: dist/${{ steps.version.outputs.dmg }}
@@ -177,10 +234,10 @@ jobs:
           notes="**Install:** download \`Distiller.dmg\`, open it and drag Distiller to Applications. Needs an Apple silicon Mac with macOS 14 or later. The app and the disk image are signed with a Developer ID and notarized by Apple; \`SHA256SUMS.txt\` has their checksums."
           flags=(--verify-tag --title "Distiller ${{ steps.version.outputs.full }}" --notes "$notes" --generate-notes)
           if [[ "${{ steps.version.outputs.prerelease }}" == "true" ]]; then flags+=(--prerelease --latest=false); fi
-          gh release create "$GITHUB_REF_NAME" "$DMG" dist/Distiller.dmg dist/SHA256SUMS.txt "${flags[@]}"
+          gh release create "$TAG" "$DMG" dist/Distiller.dmg dist/SHA256SUMS.txt "${flags[@]}"
 
       - name: Keep the dry run's disk image
-        if: github.ref_type != 'tag'
+        if: needs.plan.outputs.publish != 'true'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.version.outputs.dmg }}
