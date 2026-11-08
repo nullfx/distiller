@@ -1,0 +1,318 @@
+{
+  "schema": 2,
+  "repository": "https://github.com/nullfx/distiller-recipes",
+  "slug": "example-dx11-game",
+  "title": "Example DX11 Game",
+  "publisher": "Example Studio",
+  "developer": "Example Studio",
+  "release_year": 2021,
+  "genres": [
+    "action",
+    "rpg"
+  ],
+  "description": "A made-up DirectX 11 game that shows how a game file, its recipes and their reports fit together.",
+  "detail": "games/example-dx11-game.json",
+  "icon": "media/example-dx11-game/icon.png",
+  "recipes": [
+    {
+      "id": "d3dmetal",
+      "path": "recipes/example-dx11-game/d3dmetal.yaml",
+      "graphics": "d3dmetal",
+      "runner_family": "crossover",
+      "summary": {
+        "reports": 3,
+        "score": 3,
+        "tier": "gold",
+        "median_fps": 58
+      },
+      "by_hardware": {
+        "M1-Base-8gpu-8gb-macos26": {
+          "reports": 1,
+          "score": 2,
+          "tier": "silver",
+          "median_fps": 34
+        },
+        "M3-Pro-18gpu-18gb-macos27": {
+          "reports": 2,
+          "score": 3.5,
+          "tier": "platinum",
+          "median_fps": 59.0
+        }
+      },
+      "name": "D3DMetal, default settings",
+      "screenshots": [
+        "media/example-dx11-game/d3dmetal/1.jpg",
+        "media/example-dx11-game/d3dmetal/2.jpg"
+      ],
+      "recipe": {
+        "schema": 1,
+        "id": "d3dmetal",
+        "name": "D3DMetal, default settings",
+        "authors": [
+          "distiller-maintainers"
+        ],
+        "notes": "A DirectX 11 game installed from an installer the player already owns. Shows user_file, run_windows, winetricks, registry and two hardware overlays.\n",
+        "game": {
+          "title": "Example DX11 Game",
+          "slug": "example-dx11-game",
+          "publisher": "Example Studio"
+        },
+        "stack": {
+          "runner": {
+            "family": "crossover",
+            "min_version": "24.0"
+          },
+          "graphics": "d3dmetal",
+          "sync": "msync"
+        },
+        "prefix": {
+          "windows": "win10",
+          "retina": true,
+          "winetricks": [
+            "vcrun2022",
+            "d3dcompiler_47"
+          ],
+          "dll_overrides": {
+            "xinput1_3": "builtin"
+          },
+          "registry": [
+            {
+              "key": "HKCU\\Software\\Wine\\Mac Driver",
+              "values": {
+                "CaptureDisplaysForFullscreen": "y"
+              }
+            }
+          ]
+        },
+        "install": [
+          {
+            "user_file": {
+              "id": "installer",
+              "prompt": "Choose the game's Windows installer (setup.exe)",
+              "to": "cache/setup.exe"
+            }
+          },
+          {
+            "run_windows": {
+              "path": "cache/setup.exe",
+              "args": [
+                "/S"
+              ],
+              "wait": true
+            }
+          }
+        ],
+        "env": {
+          "MTL_HUD_ENABLED": "0"
+        },
+        "launch": {
+          "exe": "C:\\Games\\Example DX11 Game\\Game.exe",
+          "args": [
+            "-windowed"
+          ]
+        },
+        "overlays": [
+          {
+            "when": {
+              "memory_gb": "<16"
+            },
+            "note": "Medium textures on Macs with less than 16 GB of memory",
+            "args": [
+              "-windowed",
+              "-textures=medium"
+            ]
+          },
+          {
+            "when": {
+              "chip_family": "M1"
+            },
+            "note": "Uses DXMT capped at 30 FPS on M1 Macs",
+            "stack": {
+              "graphics": "dxmt"
+            },
+            "env": {
+              "DXMT_CONFIG": "d3d11.preferredMaxFrameRate=30;"
+            }
+          }
+        ]
+      },
+      "reports": [
+        {
+          "schema": 1,
+          "game": "example-dx11-game",
+          "recipe": "d3dmetal",
+          "tier": "gold",
+          "fps_avg": 58,
+          "resolution": "2560x1600",
+          "hardware": {
+            "chip": "Apple M3 Pro",
+            "chip_family": "M3",
+            "chip_tier": "Pro",
+            "gpu_cores": 18,
+            "memory_gb": 18,
+            "macos": "27.1",
+            "rosetta": true
+          },
+          "components": {
+            "wine": "crossover@24.0.7",
+            "graphics": "d3dmetal@4.0"
+          },
+          "date": "2026-11-01",
+          "notes": "Example only.",
+          "hardware_key": "M3-Pro-18gpu-18gb-macos27"
+        },
+        {
+          "schema": 1,
+          "game": "example-dx11-game",
+          "recipe": "d3dmetal",
+          "tier": "platinum",
+          "fps_avg": 60,
+          "hardware": {
+            "chip": "Apple M3 Pro",
+            "chip_family": "M3",
+            "chip_tier": "Pro",
+            "gpu_cores": 18,
+            "memory_gb": 18,
+            "macos": "27.0",
+            "rosetta": true
+          },
+          "date": "2026-10-20",
+          "hardware_key": "M3-Pro-18gpu-18gb-macos27"
+        },
+        {
+          "schema": 1,
+          "game": "example-dx11-game",
+          "recipe": "d3dmetal",
+          "tier": "silver",
+          "fps_avg": 34,
+          "hardware": {
+            "chip": "Apple M1",
+            "chip_family": "M1",
+            "chip_tier": "Base",
+            "gpu_cores": 8,
+            "memory_gb": 8,
+            "macos": "26.4",
+            "rosetta": true
+          },
+          "date": "2026-10-12",
+          "notes": "Example only.",
+          "hardware_key": "M1-Base-8gpu-8gb-macos26"
+        }
+      ]
+    },
+    {
+      "id": "dxmt-low-memory",
+      "path": "recipes/example-dx11-game/dxmt-low-memory.yaml",
+      "graphics": "dxmt",
+      "runner_family": "any",
+      "summary": {
+        "reports": 1,
+        "score": 3,
+        "tier": "gold",
+        "median_fps": 30
+      },
+      "by_hardware": {
+        "M1-Base-8gpu-8gb-macos26": {
+          "reports": 1,
+          "score": 3,
+          "tier": "gold",
+          "median_fps": 30
+        }
+      },
+      "name": "DXMT for 8 GB Macs",
+      "forked_from": "example-dx11-game/d3dmetal",
+      "recipe": {
+        "schema": 1,
+        "id": "dxmt-low-memory",
+        "name": "DXMT for 8 GB Macs",
+        "forked_from": "example-dx11-game/d3dmetal",
+        "authors": [
+          "distiller-maintainers"
+        ],
+        "game": {
+          "title": "Example DX11 Game",
+          "slug": "example-dx11-game"
+        },
+        "stack": {
+          "runner": {
+            "family": "any",
+            "min_version": "11.0"
+          },
+          "graphics": "dxmt"
+        },
+        "prefix": {
+          "windows": "win10",
+          "winetricks": [
+            "vcrun2022"
+          ]
+        },
+        "install": [
+          {
+            "user_file": {
+              "id": "installer",
+              "prompt": "Choose the game's Windows installer (setup.exe)",
+              "to": "cache/setup.exe"
+            }
+          },
+          {
+            "run_windows": {
+              "path": "cache/setup.exe",
+              "args": [
+                "/S"
+              ]
+            }
+          }
+        ],
+        "env": {
+          "DXMT_CONFIG": "d3d11.preferredMaxFrameRate=30;"
+        },
+        "launch": {
+          "exe": "C:\\Games\\Example DX11 Game\\Game.exe",
+          "args": [
+            "-windowed",
+            "-textures=low"
+          ]
+        },
+        "overlays": [
+          {
+            "when": {
+              "memory_gb": ">=16"
+            },
+            "note": "Medium textures when memory allows",
+            "args": [
+              "-windowed",
+              "-textures=medium"
+            ]
+          }
+        ]
+      },
+      "reports": [
+        {
+          "schema": 1,
+          "game": "example-dx11-game",
+          "recipe": "dxmt-low-memory",
+          "tier": "gold",
+          "fps_avg": 30,
+          "hardware": {
+            "chip": "Apple M1",
+            "chip_family": "M1",
+            "chip_tier": "Base",
+            "gpu_cores": 8,
+            "memory_gb": 8,
+            "macos": "26.4",
+            "rosetta": true
+          },
+          "date": "2026-10-14",
+          "hardware_key": "M1-Base-8gpu-8gb-macos26"
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "reports": 4,
+    "score": 3,
+    "tier": "gold",
+    "median_fps": 46.0
+  },
+  "generated_at": "2026-11-08T06:05:41Z"
+}

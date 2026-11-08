@@ -15,7 +15,8 @@ struct SubmitRecipeView: View {
     @State private var fpsText = ""
     @State private var reportNotes = ""
     @State private var confirmsOwnership = false
-    @State private var confirmsLicense = false
+    /// Shared recipes are MIT-licensed by default, like the rest of the repository.
+    @State private var confirmsLicense = true
     @State private var isSubmitting = false
     @State private var status: SubmissionStatus?
     @State private var target: SubmissionTarget?
@@ -114,7 +115,7 @@ struct SubmitRecipeView: View {
 
             Section {
                 Toggle("This recipe only downloads the publisher's official installer", isOn: $confirmsOwnership)
-                Toggle("I license this contribution under the repository's MIT license", isOn: $confirmsLicense)
+                Toggle("Share it under the MIT license, like the rest of the repository (pictures stay the publisher's)", isOn: $confirmsLicense)
             }
         }
         .formStyle(.grouped)
