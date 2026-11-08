@@ -25,9 +25,20 @@ enum TestMachO {
         let rootOffset = 0, aOffset = 16, bOffset = 64, leaf1 = 112, leaf2 = 120, leaf3 = 128
         var trie = [UInt8](repeating: 0, count: 136)
         func put(_ bytes: [UInt8], at offset: Int) { trie.replaceSubrange(offset..<offset + bytes.count, with: bytes) }
-        put([0, 1] + Array("_".utf8) + [0] + uleb(aOffset), at: rootOffset)
-        put([0, 2] + Array((withMacDriver ? "macdrv_" : "xacdrv_").utf8) + [0] + uleb(bOffset) + Array("wine_call".utf8) + [0] + uleb(leaf3), at: aOffset)
-        put([0, 2] + Array("get_view".utf8) + [0] + uleb(leaf1) + Array("view_create".utf8) + [0] + uleb(leaf2), at: bOffset)
+        // A node with no terminal info: size 0, the edge count, then each edge's label and child offset.
+        // Built step by step: long array-literal chains time out older compilers' type checkers.
+        func node(_ edges: [(label: String, child: Int)]) -> [UInt8] {
+            var bytes: [UInt8] = [0, UInt8(edges.count)]
+            for edge in edges {
+                bytes += Array(edge.label.utf8)
+                bytes.append(0)
+                bytes += uleb(edge.child)
+            }
+            return bytes
+        }
+        put(node([("_", aOffset)]), at: rootOffset)
+        put(node([(withMacDriver ? "macdrv_" : "xacdrv_", bOffset), ("wine_call", leaf3)]), at: aOffset)
+        put(node([("get_view", leaf1), ("view_create", leaf2)]), at: bOffset)
         put(leaf, at: leaf1); put(leaf, at: leaf2); put(leaf, at: leaf3)
 
         var macho = Data(count: 256)
