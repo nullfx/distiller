@@ -93,10 +93,9 @@ gh variable set APPLE_TEAM_ID --env release --body XXXXXXXXXX
 
 ### 5. Protect release tags (recommended)
 
-Under **Settings ▸ Rules ▸ Rulesets ▸ New tag ruleset**, target `v*` and restrict creations, updates and deletions. Allow two bypasses:
+Under **Settings ▸ Rules ▸ Rulesets ▸ New tag ruleset**, target `v*` and restrict **updates** and **deletions**, with the repository admin role allowed to bypass. A published release's tag then can't be moved or removed.
 
-- **Repository admin**, so you can tag by hand if you ever need to.
-- **GitHub Actions** ("Add bypass ▸ Apps ▸ GitHub Actions"), so the release workflow can create the tag after you approve it. Only workflows already in the repository can use it, and changing them needs a reviewed pull request.
+Leave **creations** unrestricted: the release workflow creates the tag itself after you approve the run. A personal-account repository can't give GitHub Actions a bypass, so a creation rule would block it. Creating a tag still needs write access to the repository.
 
 ## Making a release
 
