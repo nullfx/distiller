@@ -1,6 +1,6 @@
 # AGENTS.md: working on Distiller
 
-This file is for AI coding agents and the people who direct them. It explains what Distiller is, how the code is organised, how to build and test it, and the rules every change must follow. Human contributors should read it too; `README.md` covers using the app.
+This file is for AI coding agents and the people who direct them. It explains what Distiller is, how the code is organised, how to build and test it, and the rules every change must follow. Human contributors should read it too; `README.md` covers using the app, `CONTRIBUTING.md` the contribution process (with the issue and pull request templates in `.github/`), `SECURITY.md` what counts as a vulnerability and how it's reported, and `CODE_OF_CONDUCT.md` how everyone is expected to behave. Keep `SECURITY.md`'s list of security promises in step with the rules below.
 
 The maintainer keeps local, untracked documents in `docs/` (the design notes, and `docs/HANDOFF.md` with session notes: what was built recently, what's being verified on real hardware, open decisions). If `docs/HANDOFF.md` exists, read it at the start of a session and update it at the end. **Never commit anything in `docs/`** (it's in `.gitignore`), and never copy its private details (people's hardware, file paths on their drives, account or certificate names) into tracked files.
 
