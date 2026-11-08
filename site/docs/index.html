@@ -140,7 +140,8 @@ overlays:
 
         <section id="assistant">
           <h2>Troubleshooting assistant</h2>
-          <p><code>distiller mcp</code> serves read-only troubleshooting tools over the Model Context Protocol, so an AI assistant you already use can read a game's launch logs, inspect its program and describe your setup. It can't change anything, and only reads a game's own folders. Settings has a switch to turn it off, and can connect it to a desktop assistant for you.</p>
+          <p>Distiller has a built-in MCP server: <code>distiller mcp</code> serves read-only troubleshooting tools over the Model Context Protocol, so an AI assistant you already use can read a game's launch logs, inspect its program and describe your setup. That's most useful while you build a recipe for a new game: when it crashes at start, shows a black screen or runs slowly, ask the assistant to look at the latest launch log and suggest settings to try (a different graphics layer, a winetricks component, a DLL override or a launch option), then change them in the recipe workshop and play again.</p>
+          <p>The assistant can't change anything itself, and only reads a game's own folders. <strong>Settings ▸ AI Assistant</strong> has a switch to turn it off, and can connect it to a desktop assistant for you.</p>
         </section>
 
         <section id="safety">
