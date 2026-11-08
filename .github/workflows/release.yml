@@ -1,0 +1,190 @@
+name: Release
+
+# Builds Distiller.app, signs it with the maintainer's Developer ID, notarizes and staples it,
+# packs it in a signed and notarized disk image, and publishes a GitHub Release.
+#
+#   Push a tag v<major>.<minor>.<patch> (optionally -beta.1 and the like) to release it.
+#   Run the workflow by hand ("Run workflow") for a dry run: the same build, kept as a
+#   workflow artifact for a week instead of a release.
+#
+# Signing material lives only in the "release" environment's secrets (Settings ▸ Environments),
+# which needs the owner's approval for every run and only accepts main and v* tags. The
+# certificate goes into a temporary keychain that's deleted when the job ends. Nothing here
+# runs for pull requests.
+#
+# Secrets (environment "release"):
+#   DEVELOPER_ID_P12_BASE64    the "Developer ID Application" certificate and private key, as a
+#                              password-protected .p12, base64-encoded
+#   DEVELOPER_ID_P12_PASSWORD  that .p12's password
+#   NOTARY_KEY_P8_BASE64       an App Store Connect API key (.p8), base64-encoded
+#   NOTARY_KEY_ID              its Key ID
+#   NOTARY_ISSUER_ID           its Issuer ID
+# Variable (environment "release"):
+#   APPLE_TEAM_ID              the team the certificate must belong to
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 60
+    environment: release
+    permissions:
+      contents: write   # to create the release
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Paths for the signing material
+        run: |
+          echo "KEYCHAIN=$RUNNER_TEMP/distiller-signing.keychain-db" >> "$GITHUB_ENV"
+          echo "NOTARY_KEY=$RUNNER_TEMP/notary-key.p8" >> "$GITHUB_ENV"
+
+      - name: Version
+        id: version
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            tag="$GITHUB_REF_NAME"
+            if [[ ! "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)(-[0-9A-Za-z.]+)?$ ]]; then
+              echo "::error::Release tags look like v1.2.3 or v1.2.3-beta.1, not $tag"
+              exit 1
+            fi
+            version="${BASH_REMATCH[1]}"
+            full="${tag#v}"
+            prerelease=$([[ -n "${BASH_REMATCH[2]}" ]] && echo true || echo false)
+          else
+            version="0.0.0"
+            full="0.0.0-dev.${GITHUB_SHA::7}"
+            prerelease=true
+          fi
+          {
+            echo "version=$version"
+            echo "full=$full"
+            echo "prerelease=$prerelease"
+            echo "dmg=Distiller-$full.dmg"
+          } >> "$GITHUB_OUTPUT"
+          echo "Building $full (bundle version $version, build $GITHUB_RUN_NUMBER)"
+
+      - name: Toolchain
+        run: |
+          sw_vers
+          swift --version
+
+      - name: Import the signing certificate
+        id: identity
+        env:
+          P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+        run: |
+          if [[ -z "$P12_BASE64" || -z "$P12_PASSWORD" ]]; then
+            echo "::error::The release environment needs DEVELOPER_ID_P12_BASE64 and DEVELOPER_ID_P12_PASSWORD."
+            exit 1
+          fi
+          keychain_password="$(uuidgen)"
+          p12="$RUNNER_TEMP/developer-id.p12"
+          echo "$P12_BASE64" | base64 --decode > "$p12"
+          security create-keychain -p "$keychain_password" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$keychain_password" "$KEYCHAIN"
+          security import "$p12" -k "$KEYCHAIN" -P "$P12_PASSWORD" -f pkcs12 -T /usr/bin/codesign
+          rm -f "$p12"
+          # Apple's Developer ID intermediate certificates, so the identity's chain is complete.
+          for ca in DeveloperIDCA DeveloperIDG2CA; do
+            curl -fsSL --retry 3 "https://www.apple.com/certificateauthority/$ca.cer" -o "$RUNNER_TEMP/$ca.cer"
+            security import "$RUNNER_TEMP/$ca.cer" -k "$KEYCHAIN" >/dev/null 2>&1 || true
+          done
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          # By SHA-1, and only a Developer ID Application identity from the expected team.
+          line="$(security find-identity -v -p codesigning "$KEYCHAIN" | grep '"Developer ID Application:' | grep "(${TEAM_ID:-}" | head -1)"
+          if [[ -z "$line" ]]; then
+            echo "::error::No Developer ID Application identity${TEAM_ID:+ for team $TEAM_ID} in the .p12."
+            security find-identity -v -p codesigning "$KEYCHAIN"
+            exit 1
+          fi
+          echo "sha1=$(awk '{ print $2 }' <<< "$line")" >> "$GITHUB_OUTPUT"
+          echo "Signing with: $(sed -E 's/^.*"(.*)"$/\1/' <<< "$line")"
+
+      - name: Build and sign the app
+        env:
+          DISTILLER_SIGN_IDENTITY: ${{ steps.identity.outputs.sha1 }}
+          DISTILLER_VERSION: ${{ steps.version.outputs.version }}
+          DISTILLER_BUILD: ${{ github.run_number }}
+          DISTILLER_HARDENED: "1"
+        run: |
+          Scripts/bundle-app.sh release
+          codesign --verify --strict --deep --verbose=2 dist/Distiller.app
+          codesign -dv dist/Distiller.app 2>&1 | grep -q 'flags=.*runtime' || { echo "::error::The app isn't signed with the hardened runtime."; exit 1; }
+          lipo -archs dist/Distiller.app/Contents/MacOS/Distiller
+
+      - name: Prepare the notary key
+        env:
+          P8_BASE64: ${{ secrets.NOTARY_KEY_P8_BASE64 }}
+          KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          if [[ -z "$P8_BASE64" || -z "$KEY_ID" || -z "$ISSUER_ID" ]]; then
+            echo "::error::The release environment needs NOTARY_KEY_P8_BASE64, NOTARY_KEY_ID and NOTARY_ISSUER_ID."
+            exit 1
+          fi
+          echo "$P8_BASE64" | base64 --decode > "$NOTARY_KEY"
+          chmod 600 "$NOTARY_KEY"
+
+      - name: Notarize and staple the app
+        env:
+          KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          ditto -c -k --keepParent dist/Distiller.app "$RUNNER_TEMP/Distiller.zip"
+          Scripts/notarize.sh "$RUNNER_TEMP/Distiller.zip"
+          xcrun stapler staple dist/Distiller.app
+          spctl --assess --type execute --verbose=2 dist/Distiller.app
+
+      - name: Make, sign, notarize and staple the disk image
+        env:
+          KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          DMG: dist/${{ steps.version.outputs.dmg }}
+        run: |
+          Scripts/make-dmg.sh dist/Distiller.app "$DMG" "${{ steps.identity.outputs.sha1 }}"
+          Scripts/notarize.sh "$DMG"
+          xcrun stapler staple "$DMG"
+          spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG"
+          (cd dist && shasum -a 256 "$(basename "$DMG")" > "$(basename "$DMG").sha256")
+          cat "$DMG.sha256"
+
+      - name: Publish the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DMG: dist/${{ steps.version.outputs.dmg }}
+        run: |
+          flags=(--verify-tag --title "Distiller ${{ steps.version.outputs.full }}" --generate-notes)
+          if [[ "${{ steps.version.outputs.prerelease }}" == "true" ]]; then flags+=(--prerelease); fi
+          gh release create "$GITHUB_REF_NAME" "$DMG" "$DMG.sha256" "${flags[@]}"
+
+      - name: Keep the dry run's disk image
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.version.outputs.dmg }}
+          path: |
+            dist/${{ steps.version.outputs.dmg }}
+            dist/${{ steps.version.outputs.dmg }}.sha256
+          retention-days: 7
+
+      - name: Remove the signing material
+        if: always()
+        run: |
+          security delete-keychain "$KEYCHAIN" 2>/dev/null || true
+          rm -f "$NOTARY_KEY" "$RUNNER_TEMP/developer-id.p12" "$RUNNER_TEMP/Distiller.zip"

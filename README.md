@@ -102,6 +102,10 @@ The companion repository [distiller-recipes](https://github.com/nullfx/distiller
 
 Open this folder in VS Code and install the recommended Swift extension (`swiftlang.swift-vscode`). It builds, tests and debugs SwiftPM packages using the toolchain from your Xcode install.
 
+## Releases
+
+Signed, notarized disk images are published on the [Releases](https://github.com/nullfx/distiller/releases) page by GitHub Actions when a maintainer pushes a version tag. [RELEASING.md](RELEASING.md) explains how releases are signed and how to set up the signing secrets in a fork.
+
 ## Contributing
 
 Changes arrive as pull requests; `main` is protected, a maintainer reviews every pull request, and the test workflow must pass. [AGENTS.md](AGENTS.md) explains the architecture and the rules every change follows (licensing, the recipe security model, what may be shared); it's written for AI coding agents and people alike (`CLAUDE.md` simply imports it).

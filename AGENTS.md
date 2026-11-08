@@ -19,7 +19,7 @@ This file is the shared reference for the architecture and the rules; the recipe
 | `Sources/distiller-cli` | The `distiller` command: everything the app does, from a terminal. |
 | `Sources/DistillerApp` | The SwiftUI app. Keep it thin: it calls `DistillerEngine` and `DistillerCommunity`. |
 | `Tests/DistillerCoreTests` | XCTest unit tests and fixtures. |
-| `Scripts/` | `bundle-app.sh` (builds and signs `dist/Distiller.app`), `make-icon.sh` and `render-svg.swift` (the app icon). |
+| `Scripts/` | `bundle-app.sh` (builds and signs `dist/Distiller.app`), `make-dmg.sh` and `notarize.sh` (release packaging, used by `.github/workflows/release.yml`; see `RELEASING.md`), `make-icon.sh` and `render-svg.swift` (the app icon). |
 | `Design/` | The app icon source (`AppIcon.svg`), the generated `.icns`, and mockups. |
 | `site/` | The website, published to GitHub Pages by `.github/workflows/pages.yml`: plain HTML, CSS and JavaScript modules, no build step. It reads the catalogue from distiller-recipes' Pages at run time. |
 | `docs/` | The maintainer's local notes. Not in git. |
@@ -33,6 +33,7 @@ This file is the shared reference for the architecture and the rules; the recipe
 - Website: `node --test site/tests/*.test.mjs` tests its data module; preview with `python3 -m http.server --directory site` (it fetches the live catalogue).
 - Isolate experiments: `export DISTILLER_HOME=/tmp/distiller-dev` gives the engine its own support folder and `settings.json`, so experiments never touch a real library or real bottles.
 - App icon: edit `Design/AppIcon.svg`, then run `Scripts/make-icon.sh`.
+- Releases: pushing a `v*` tag runs `.github/workflows/release.yml` (Developer ID signing, notarization, a disk image, a GitHub Release) after the owner approves it. `RELEASING.md` explains the setup.
 
 Shells that run under Rosetta (an x86_64 shell, for example one started from an Intel-only Homebrew bash) can't load the arm64 test bundle ("doesn't contain a version for the current architecture"). Run `arch -arm64 swift test` there; `uname -m` shows `x86_64` in an affected shell.
 
@@ -99,6 +100,7 @@ Shells that run under Rosetta (an x86_64 shell, for example one started from an 
 
 - **Wine is not a sandbox.** Windows programs run with the player's permissions. Never describe Wine or a bottle as isolation or protection in UI text or docs.
 - **No telemetry, analytics or crash upload** without an explicit, off-by-default opt-in. Compatibility reports are sent only when the player submits one, and contain only what the report form shows.
+- **Release signing stays in the `release` environment.** The Developer ID certificate and the notary API key exist only as that environment's secrets, which need the owner's approval and accept only `main` and `v*` tags. Never add a `pull_request`, `pull_request_target` or other untrusted trigger to a workflow that uses them, never echo or upload them, and keep the temporary keychain's cleanup step running `if: always()`.
 - **Secrets never enter the repository**: no tokens, passwords, private keys, signing certificates, provisioning profiles or API keys, not even in tests (use obvious fakes like `gho_test`). The GitHub OAuth client ID is public by design and may be committed; there is no client secret.
 - **The MCP server's standard output carries protocol messages only.** Never `print` in code the server reaches; log to standard error.
 - **Assistant tools stay read-only and confined** to the game's own folders, text only, size-capped, with the home folder shown as `~`.
