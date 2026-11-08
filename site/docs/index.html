@@ -140,8 +140,193 @@ overlays:
 
         <section id="assistant">
           <h2>Troubleshooting assistant</h2>
-          <p>Distiller has a built-in MCP server: <code>distiller mcp</code> serves read-only troubleshooting tools over the Model Context Protocol, so an AI assistant you already use can read a game's launch logs, inspect its program and describe your setup. That's most useful while you build a recipe for a new game: when it crashes at start, shows a black screen or runs slowly, ask the assistant to look at the latest launch log and suggest settings to try (a different graphics layer, a winetricks component, a DLL override or a launch option), then change them in the recipe workshop and play again.</p>
-          <p>The assistant can't change anything itself, and only reads a game's own folders. <strong>Settings ▸ AI Assistant</strong> has a switch to turn it off, and can connect it to a desktop assistant for you.</p>
+          <p>Distiller has a built-in MCP server. <code>distiller mcp</code> serves read-only troubleshooting tools over the <a href="https://modelcontextprotocol.io/">Model Context Protocol</a>, so an AI assistant you already use (Claude, ChatGPT, or a model running on your Mac in LM Studio or Ollama) can read a game's setup, launch logs, crash dumps and program details, and suggest recipe settings. It's most useful while you build a recipe for a new game and don't yet know which graphics layer, Windows version, winetricks components or DLL overrides it needs.</p>
+          <p>The assistant can't change, run or delete anything. It only reads a game's own folder and bottle, its answers are text and size-capped, and paths in your home folder are shown as <code>~</code>.</p>
+
+          <h3 id="assistant-on">Turn it on</h3>
+          <p>The assistant is <strong>off until you turn it on</strong>. In <strong>Distiller ▸ Settings ▸ AI Assistant</strong>, switch on <strong>Let AI assistants troubleshoot games</strong>. The <strong>Connect an AI Assistant</strong> window opens with the steps and settings for each client below, filled in with the path on your Mac and ready to copy. It's also under <strong>Connection Guide…</strong> in the same section. From a terminal:</p>
+<pre data-copy><code>distiller assistant on
+distiller assistant setup lm-studio   # or claude-desktop, claude-code, chatgpt, ollama, other</code></pre>
+          <p>Your assistant starts the server itself when it needs it. The server talks over standard input and output (stdio) and never listens on the network. In an app installed in Applications, the command is:</p>
+<pre data-copy><code>/Applications/Distiller.app/Contents/Helpers/distiller mcp</code></pre>
+          <p>Turn the switch off once your games run and you just want to play. Connected assistants lose access at once, without being restarted.</p>
+
+          <h3 id="assistant-tools">What it can read</h3>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Tool</th><th>What the assistant uses it for</th></tr></thead>
+              <tbody>
+                <tr><td><code>list_games</code></td><td>Your library: each game's ID, recipe, graphics layer, whether it can be played and why not.</td></tr>
+                <tr><td><code>get_game</code></td><td>A game's recipe and the settings resolved for your Mac: graphics layer, Windows version, winetricks, DLL overrides, environment, launch command, bottle and Wine build.</td></tr>
+                <tr><td><code>read_launch_log</code></td><td>The Wine output saved from a launch, filtered (for example to <code>err:</code> lines) and with repeated lines merged.</td></tr>
+                <tr><td><code>list_game_logs</code></td><td>Logs and crash dumps the game writes itself, in its folder and in the bottle's AppData.</td></tr>
+                <tr><td><code>read_game_file</code></td><td>One of those logs, or a text config file, from the game's folder or bottle.</td></tr>
+                <tr><td><code>inspect_program</code></td><td>A program's headers, without running it: 32- or 64-bit, imported DLLs, DirectX version, engine (Unity, Unreal, .NET), and Distiller's suggested settings.</td></tr>
+                <tr><td><code>get_environment</code></td><td>Your Mac (chip, GPU cores, memory, macOS, Rosetta) and the installed Wine builds and graphics layers.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="callout"><strong>Where your data goes:</strong> Claude and ChatGPT send what the tools return (log lines, file contents, your Mac's setup) to their service, under that service's privacy terms. With a model in LM Studio or Ollama, everything stays on your Mac. Your assistant asks before each tool call, so you can see what's read.</p>
+
+          <h3 id="assistant-connect">Connect your assistant</h3>
+          <p>Each client below needs the same two things: the command (the path above) and the single argument <code>mcp</code>. Change the path if Distiller isn't in Applications.</p>
+
+          <details class="connect" open>
+            <summary>Claude Desktop</summary>
+            <ol>
+              <li>In Distiller's connection guide (or Settings ▸ AI Assistant), click <strong>Connect</strong>. Distiller adds itself to Claude Desktop's settings, backs the file up first, and leaves everything else in it alone.</li>
+              <li>Or add it yourself: in Claude, choose <strong>Settings ▸ Developer ▸ Edit Config</strong> and add this to <code>claude_desktop_config.json</code> (merge it with any <code>mcpServers</code> you already have):</li>
+            </ol>
+<pre data-copy><code>{
+  "mcpServers": {
+    "distiller": {
+      "command": "/Applications/Distiller.app/Contents/Helpers/distiller",
+      "args": ["mcp"]
+    }
+  }
+}</code></pre>
+            <p>Quit and reopen Claude. Distiller's tools appear in the tools menu of a new chat.</p>
+          </details>
+
+          <details class="connect">
+            <summary>Claude Code</summary>
+<pre data-copy><code>claude mcp add --scope user distiller -- /Applications/Distiller.app/Contents/Helpers/distiller mcp</code></pre>
+            <p><code>--scope user</code> makes it available in every project. Start <code>claude</code> and run <code>/mcp</code> to check it's connected.</p>
+          </details>
+
+          <details class="connect">
+            <summary>ChatGPT</summary>
+            <p>The ChatGPT desktop app can start local (STDIO) MCP servers: open <strong>Settings ▸ MCP servers</strong>, add a server named <code>distiller</code> of type <strong>STDIO</strong>, with the command above and the argument <code>mcp</code>. The app shares this list with Codex, which keeps it in <code>~/.codex/config.toml</code>, so you can add it there instead:</p>
+<pre data-copy><code>[mcp_servers.distiller]
+command = "/Applications/Distiller.app/Contents/Helpers/distiller"
+args = ["mcp"]</code></pre>
+            <p>ChatGPT on the web, and versions of the app that only offer remote (HTTPS) servers, can't use Distiller: its server runs on your Mac and isn't reachable from the internet. We don't recommend exposing it through a tunnel.</p>
+          </details>
+
+          <details class="connect">
+            <summary>LM Studio</summary>
+            <ol>
+              <li>Open the <strong>Program</strong> tab in the right-hand sidebar and choose <strong>Install ▸ Edit mcp.json</strong>.</li>
+              <li>Add the <code>distiller</code> entry inside <code>mcpServers</code> and save:</li>
+            </ol>
+<pre data-copy><code>{
+  "mcpServers": {
+    "distiller": {
+      "command": "/Applications/Distiller.app/Contents/Helpers/distiller",
+      "args": ["mcp"]
+    }
+  }
+}</code></pre>
+            <p>Load a model that supports tool use (a recent Qwen or gpt-oss model works well), and set its context length to at least 32K tokens: recipes and logs are long, and a short context makes the model forget what it read. LM Studio asks before each tool call.</p>
+          </details>
+
+          <details class="connect">
+            <summary>Ollama</summary>
+            <p>Ollama runs models but doesn't start MCP servers itself, so pair it with an MCP client that talks to Ollama. One is <a href="https://github.com/jonigl/mcp-client-for-ollama">mcp-client-for-ollama</a> (<code>ollmcp</code>), a chat app for the terminal. Save the JSON above as <code>distiller-mcp.json</code>, then:</p>
+<pre data-copy><code>pip install ollmcp
+OLLAMA_CONTEXT_LENGTH=32768 ollama serve      # in another terminal, if Ollama isn't running
+ollama pull qwen3:14b
+ollmcp --servers-json distiller-mcp.json --model qwen3:14b</code></pre>
+            <p>Any model with tool calling works; bigger ones follow logs better. Other desktop chat apps that support both Ollama and MCP servers use the same <code>command</code> and <code>args</code>.</p>
+          </details>
+
+          <details class="connect">
+            <summary>Other MCP clients</summary>
+            <p>Any client that can start a local (stdio) MCP server can use Distiller. Most read an <code>mcpServers</code> block like the one above; others ask for the command and its arguments separately:</p>
+<pre data-copy><code>/Applications/Distiller.app/Contents/Helpers/distiller mcp</code></pre>
+            <p>The server speaks JSON-RPC 2.0, one message per line, and writes its status to standard error. To test it by hand, run the command and type <code>{"jsonrpc":"2.0","id":1,"method":"tools/list"}</code>.</p>
+          </details>
+
+          <h3 id="assistant-settings">From Wine settings to recipe fields</h3>
+          <p>The assistant suggests changes in Wine's terms. This is where each one goes in a recipe, and in the recipe workshop:</p>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Suggestion</th><th>Recipe field</th><th>Example</th></tr></thead>
+              <tbody>
+                <tr><td>A different graphics layer (DirectX translation)</td><td><code>stack.graphics</code></td><td><code>graphics: dxmt</code> (or <code>d3dmetal</code>, <code>dxvk</code>, <code>wined3d</code>)</td></tr>
+                <tr><td>winecfg's Windows version</td><td><code>prefix.windows</code></td><td><code>windows: win10</code></td></tr>
+                <tr><td>winecfg's Libraries tab (DLL overrides)</td><td><code>prefix.dll_overrides</code></td><td><code>dll_overrides: { xinput1_3: native }</code></td></tr>
+                <tr><td>winetricks components (runtimes, fonts)</td><td><code>prefix.winetricks</code></td><td><code>winetricks: [vcrun2022, d3dcompiler_47]</code></td></tr>
+                <tr><td>Registry settings</td><td><code>prefix.registry</code></td><td><code>{ key: 'HKCU\Software\Wine\…', values: { … } }</code></td></tr>
+                <tr><td>Environment variables (graphics-layer tuning)</td><td><code>env</code></td><td><code>DXMT_METALFX_SPATIAL_SWAPCHAIN: "1"</code></td></tr>
+                <tr><td>Launch options</td><td><code>launch.args</code></td><td><code>args: ["-dx11"]</code></td></tr>
+                <tr><td>Something only some Macs need</td><td><code>overlays</code></td><td><code>when: { memory_gb: "&lt;16" }</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Recipes can only use the winetricks components and environment variables on the recipes repository's allowlist; the workshop shows what's allowed.</p>
+
+          <h3 id="assistant-example">Example: a recipe from scratch</h3>
+          <p>An illustration of a typical session. <em>Lantern Keep</em> is a made-up Unreal Engine game; the log lines are the kind Wine and Unreal really write.</p>
+
+          <ol class="walkthrough">
+            <li>
+              <h4>Start with Distiller's guess</h4>
+              <p>Choose <strong>Create Recipe…</strong>, give it the publisher's installer, and pick the game's program once it's installed. Distiller reads the program's DLL imports and suggests a starting point; here, DXMT, Windows 10 and no winetricks. Click <strong>Play</strong>. The game closes straight away, with no window.</p>
+            </li>
+            <li>
+              <h4>Ask the assistant</h4>
+              <p>With the assistant on and connected, start a new chat:</p>
+<pre data-copy class="prompt"><code>Use the Distiller tools to work out why Lantern Keep won't start. Look at its setup and its latest launch log, check the game's own logs and crash dumps, and inspect its program. Then tell me which recipe settings to change and why.</code></pre>
+              <p>The assistant calls <code>list_games</code> to find the game, <code>get_game</code> for its setup, and <code>read_launch_log</code> filtered to <code>err:</code> lines:</p>
+<pre><code>err:module:import_dll Library VCRUNTIME140_1.dll (needed by L"C:\\Program Files\\Lantern Keep\\LanternKeep\\Binaries\\Win64\\LanternKeep-Win64-Shipping.exe") not found
+err:module:loader_init Importing dlls for L"C:\\Program Files\\Lantern Keep\\LanternKeep\\Binaries\\Win64\\LanternKeep-Win64-Shipping.exe" failed, status c0000135</code></pre>
+              <p class="reply"><strong>Assistant:</strong> The game can't load <code>VCRUNTIME140_1.dll</code>, part of the Microsoft Visual C++ 2015–2022 runtime. Its installer normally adds the runtime, but it didn't in this bottle. Add the <code>vcrun2022</code> winetricks component.</p>
+            </li>
+            <li>
+              <h4>Apply it and play again</h4>
+              <p>In the recipe workshop, add <code>vcrun2022</code> under winetricks and play. This time a window opens and then closes. Ask the assistant to compare the new launch with the last one. It calls <code>list_game_logs</code>, which finds the game's own log and a crash folder in the bottle:</p>
+<pre><code>~/…/drive_c/users/you/AppData/Local/LanternKeep/Saved/Logs/LanternKeep.log
+~/…/drive_c/users/you/AppData/Local/LanternKeep/Saved/Crashes/UECC-Windows-…/CrashContext.runtime-xml</code></pre>
+              <p>It reads the log with <code>read_game_file</code> and checks the program with <code>inspect_program</code>:</p>
+<pre><code>LogD3D12RHI: Error: D3D12CreateDevice failed
+LogRHI: Error: No compatible D3D12 adapter found
+inspect_program: 64-bit · Unreal Engine · imports d3d12.dll, d3d11.dll, dxgi.dll</code></pre>
+              <p class="reply"><strong>Assistant:</strong> The game starts in DirectX 12 mode, and DXMT only translates DirectX 10 and 11. Unreal Engine games accept <code>-dx11</code>, so add that launch argument and keep DXMT. If the game has no DirectX 11 mode, switch the graphics layer to D3DMetal, which handles DirectX 12 (you import it from Apple's Game Porting Toolkit in Components).</p>
+            </li>
+            <li>
+              <h4>Tune it for your Mac</h4>
+              <p>With <code>-dx11</code>, the game reaches its menu. On an 8 GB MacBook Air it stutters in busy scenes, so you ask for help. The assistant calls <code>get_environment</code>, sees 8 GB of memory and an 8-core GPU, and suggests two options from the workshop's <strong>Performance &amp; display</strong> list: MetalFX upscaling, and steady 30 fps frame pacing. It also suggests applying them only to Macs with less than 16 GB, so players with more memory keep full resolution.</p>
+            </li>
+            <li>
+              <h4>The finished recipe</h4>
+<pre data-copy><code>schema: 1
+id: dxmt
+name: DXMT, DirectX 11 mode
+game:
+  title: Lantern Keep
+  slug: lantern-keep
+  installer:
+    url: https://downloads.example-publisher.com/LanternKeepSetup.exe
+stack:
+  runner: { family: any, min_version: "11.0" }
+  graphics: dxmt
+prefix:
+  windows: win10
+  winetricks: [vcrun2022]
+install:
+  - download: { url: https://downloads.example-publisher.com/LanternKeepSetup.exe, sha256: "…", to: cache/LanternKeepSetup.exe }
+  - run_windows: { path: cache/LanternKeepSetup.exe, wait: true }
+launch:
+  exe: 'C:\Program Files\Lantern Keep\LanternKeep\Binaries\Win64\LanternKeep-Win64-Shipping.exe'
+  args: ["-dx11"]
+overlays:
+  - when: { memory_gb: "&lt;16" }
+    note: MetalFX upscaling and 30 fps pacing on Macs with less than 16 GB
+    env:
+      DXMT_METALFX_SPATIAL_SWAPCHAIN: "1"
+      DXMT_CONFIG: "d3d11.preferredMaxFrameRate=30;"</code></pre>
+              <p>Then run the <a href="#sharing">community check</a> and share it. Mention what you tried in the pull request; it helps reviewers and the next player.</p>
+            </li>
+          </ol>
+
+          <h3 id="assistant-tips">Tips</h3>
+          <ul>
+            <li><strong>Change one thing at a time</strong>, play again, and ask the assistant to compare the new launch log with the previous one (<code>read_launch_log</code> keeps several).</li>
+            <li><strong>Turn on the Metal performance HUD</strong> (Performance &amp; display) to confirm the game draws through Metal and to give the assistant frame rates to work with.</li>
+            <li><strong>Ask for the reason, not just the setting.</strong> A good suggestion points at a log line or an imported DLL; a guess doesn't.</li>
+            <li><strong>Wine's own debug output is off by default.</strong> The launch log mostly shows errors, and that's usually what's needed.</li>
+          </ul>
         </section>
 
         <section id="safety">

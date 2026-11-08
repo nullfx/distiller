@@ -1,6 +1,23 @@
-// Lists the catalogue's example recipes (examples.json) in the recipe format section.
+// Adds Copy buttons to the docs' code samples, and lists the catalogue's example recipes
+// (examples.json) in the recipe format section.
 import { graphicsName } from "./catalogue-data.js";
 import { el, fetchCatalogue, recipeViewer } from "./site.js";
+
+for (const pre of document.querySelectorAll("pre[data-copy]")) {
+  const button = el("button", { class: "button small copy", type: "button", text: "Copy" });
+  button.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(pre.textContent);
+      button.textContent = "Copied";
+    } catch {
+      button.textContent = "Couldn't copy";
+    }
+    setTimeout(() => { button.textContent = "Copy"; }, 1600);
+  });
+  const wrap = el("div", { class: "copy-wrap" });
+  pre.replaceWith(wrap);
+  wrap.append(pre, button);
+}
 
 const examples = document.getElementById("examples");
 

@@ -109,18 +109,23 @@ struct UnavailableStorageBanner: View {
 }
 
 
-/// Settings ▸ AI Assistant: whether `distiller mcp` serves its troubleshooting tools, and the
-/// Claude Desktop connection.
+/// Settings ▸ AI Assistant: whether `distiller mcp` serves its troubleshooting tools (off until
+/// the player turns it on), the Claude Desktop connection, and the connection guide.
 struct AssistantSettingsSection: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Section {
             Toggle("Let AI assistants troubleshoot games", isOn: Binding(
                 get: { model.assistantEnabled },
-                set: { model.setAssistantEnabled($0) }
+                set: { enabled in
+                    let turningOn = enabled && !model.assistantEnabled
+                    model.setAssistantEnabled(enabled)
+                    if turningOn { openWindow(id: AssistantConnectView.windowID) }
+                }
             ))
-            Text("When on, an assistant you connect (such as Claude Desktop) can read your games' setup, recipes and logs to help fix problems. It can't change anything. Turn it off once your games run and you just want to play; an assistant that's already connected loses access at once.")
+            Text("When on, an assistant you connect (Claude, ChatGPT, or a model in LM Studio or Ollama) can read your games' setup, recipes, logs and crash dumps to help you build a recipe or fix a game. It can't change anything. Turn it off once your games run and you just want to play; an assistant that's already connected loses access at once.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             LabeledContent("Claude Desktop") {
@@ -135,10 +140,13 @@ struct AssistantSettingsSection: View {
                     }
                 }
             }
+            LabeledContent("Other assistants") {
+                Button("Connection Guide…") { openWindow(id: AssistantConnectView.windowID) }
+            }
         } header: {
             Text("AI Assistant")
         } footer: {
-            Text("Restart Claude Desktop after connecting or disconnecting. Other assistants can run: distiller mcp")
+            Text("Restart Claude Desktop after connecting or disconnecting. The guide shows the settings for Claude Code, ChatGPT, LM Studio, Ollama and other MCP clients.")
         }
     }
 }

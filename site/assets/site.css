@@ -221,6 +221,20 @@ dialog.lightbox form { position: absolute; top: 10px; right: 10px; }
 .docs article section:first-of-type h2 { border-top: 0; }
 .docs article li { margin: 4px 0; }
 .docs .callout { border-left: 3px solid var(--copper); background: var(--bg-raised); padding: 12px 16px; border-radius: 0 10px 10px 0; }
+.docs article h3 { margin-top: 28px; }
+.docs article h4 { margin: 0 0 6px; font-size: 1rem; }
+.docs details.connect { border: 1px solid var(--line); border-radius: 10px; padding: 0 16px; margin: 10px 0; background: var(--bg-raised); }
+.docs details.connect > summary { cursor: pointer; font-weight: 600; padding: 12px 0; }
+.docs details.connect[open] > summary { border-bottom: 1px solid var(--line); margin-bottom: 12px; }
+.docs details.connect > :last-child { margin-bottom: 14px; }
+.docs ol.walkthrough { padding-left: 1.4em; }
+.docs ol.walkthrough > li { margin: 18px 0; }
+.docs ol.walkthrough > li::marker { color: var(--copper); font-weight: 700; }
+.docs .reply { border-left: 3px solid var(--copper); padding: 4px 0 4px 14px; }
+.docs pre.prompt { white-space: pre-wrap; }
+.copy-wrap { position: relative; }
+.copy-wrap > pre { padding-right: 76px; }
+.copy-wrap > .copy { position: absolute; top: 8px; right: 8px; }
 
 /* Recipe files, shown like a code block in a Markdown viewer */
 .code-details { margin-top: 14px; }

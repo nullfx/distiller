@@ -212,11 +212,11 @@ final class AssistantSwitchTests: XCTestCase {
     func testSettingSurvivesAStorageMove() async throws {
         let paths = DistillerPaths(root: work.appendingPathComponent("support"), storage: StorageSettings())
         try paths.ensureDirectories()
-        XCTAssertTrue(StorageSettings.load(fromSupportFolder: paths.root).isAssistantEnabled, "On by default")
-        try StorageSettings(assistantEnabled: false).save(toSupportFolder: paths.root)
-        // `paths` still holds the settings from before the switch was turned off.
+        XCTAssertFalse(StorageSettings.load(fromSupportFolder: paths.root).isAssistantEnabled, "Off by default")
+        try StorageSettings(assistantEnabled: true).save(toSupportFolder: paths.root)
+        // `paths` still holds the settings from before the switch was turned on.
         try await DistillerEngine.moveStorage(.bottles, to: work.appendingPathComponent("elsewhere"), paths: paths)
-        XCTAssertFalse(StorageSettings.load(fromSupportFolder: paths.root).isAssistantEnabled)
+        XCTAssertTrue(StorageSettings.load(fromSupportFolder: paths.root).isAssistantEnabled)
     }
 
     func testClaudeDesktopConfigKeepsEverythingElse() throws {

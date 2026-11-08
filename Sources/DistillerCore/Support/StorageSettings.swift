@@ -16,8 +16,8 @@ public struct StorageSettings: Codable, Equatable, Sendable {
     public var bottlesLocation: String?
     /// Set once the player has confirmed locations, so setup asks only on first run.
     public var locationsConfirmed: Bool?
-    /// Whether `distiller mcp` serves its troubleshooting tools to AI assistants. On unless
-    /// the player turns it off (for example once everything works and they just play).
+    /// Whether `distiller mcp` serves its troubleshooting tools to AI assistants. Off until the
+    /// player turns it on (Settings ▸ AI Assistant, or `distiller assistant on`).
     public var assistantEnabled: Bool?
 
     enum CodingKeys: String, CodingKey {
@@ -34,7 +34,7 @@ public struct StorageSettings: Codable, Equatable, Sendable {
         self.assistantEnabled = assistantEnabled
     }
 
-    public var isAssistantEnabled: Bool { assistantEnabled ?? true }
+    public var isAssistantEnabled: Bool { assistantEnabled ?? false }
 
     public static let fileName = "settings.json"
 
