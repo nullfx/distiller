@@ -33,7 +33,7 @@ This file is the shared reference for the architecture and the rules; the recipe
 - Website: `node --test site/tests/*.test.mjs` tests its data module; preview with `python3 -m http.server --directory site` (it fetches the live catalogue).
 - Isolate experiments: `export DISTILLER_HOME=/tmp/distiller-dev` gives the engine its own support folder and `settings.json`, so experiments never touch a real library or real bottles.
 - App icon: edit `Design/AppIcon.svg`, then run `Scripts/make-icon.sh`.
-- Releases: pushing a `v*` tag runs `.github/workflows/release.yml` (Developer ID signing, notarization, a disk image, a GitHub Release) after the owner approves it. `RELEASING.md` explains the setup.
+- Releases: every release attaches the disk image as `Distiller.dmg` too, and the website and README download it from `releases/latest/download/Distiller.dmg`; don't rename it. Pushing a `v*` tag runs `.github/workflows/release.yml` (Developer ID signing, notarization, a disk image, a GitHub Release) after the owner approves it. `RELEASING.md` explains the setup.
 
 Shells that run under Rosetta (an x86_64 shell, for example one started from an Intel-only Homebrew bash) can't load the arm64 test bundle ("doesn't contain a version for the current architecture"). Run `arch -arm64 swift test` there; `uname -m` shows `x86_64` in an affected shell.
 

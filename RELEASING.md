@@ -6,7 +6,9 @@ Releases are built by GitHub Actions (`.github/workflows/release.yml`). Pushing 
 2. Signs the app and its `distiller` helper with a **Developer ID Application** certificate, using the hardened runtime and a secure timestamp.
 3. Notarizes the app with Apple and staples the ticket to it.
 4. Packs it in a disk image (`Distiller-0.2.0.dmg`) with an Applications shortcut, then signs, notarizes and staples the image too.
-5. Publishes a GitHub Release with the disk image and its SHA-256, and notes generated from the merged pull requests. A tag with a suffix (`v0.2.0-beta.1`) becomes a pre-release.
+5. Publishes a GitHub Release with the disk image twice, as `Distiller-0.2.0.dmg` and as `Distiller.dmg`, plus `SHA256SUMS.txt`. The release notes start with install instructions, followed by notes generated from the merged pull requests. A tag with a suffix (`v0.2.0-beta.1`) becomes a pre-release and isn't marked as the latest.
+
+The website and README link to `https://github.com/nullfx/distiller/releases/latest/download/Distiller.dmg`. GitHub redirects that address to `Distiller.dmg` in the newest release that isn't a pre-release, so the links never need updating. Keep the file name `Distiller.dmg`.
 
 To do a **dry run**, open Actions ▸ Release ▸ Run workflow on `main`. It does the same build, but keeps the disk image as a workflow artifact for a week instead of publishing a release.
 
