@@ -4,7 +4,7 @@ import DistillerCore
 /// The AI troubleshooting assistant switch, and the Claude Desktop connection.
 extension AppModel {
     var assistantEnabled: Bool {
-        guard let engine else { return true }
+        guard let engine else { return false }
         return StorageSettings.load(fromSupportFolder: engine.paths.root).isAssistantEnabled
     }
 

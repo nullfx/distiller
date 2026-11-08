@@ -57,5 +57,12 @@ struct DistillerApp: App {
             SettingsView()
                 .environment(model)
         }
+
+        Window("Connect an AI Assistant", id: AssistantConnectView.windowID) {
+            AssistantConnectView()
+                .environment(model)
+        }
+        .defaultSize(width: 640, height: 640)
+        .windowResizability(.contentMinSize)
     }
 }

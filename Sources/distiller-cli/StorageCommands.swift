@@ -188,7 +188,9 @@ struct McpCommand: AsyncParsableCommand {
         abstract: "Run a Model Context Protocol server so an assistant can help troubleshoot games.",
         discussion: """
             Speaks MCP over standard input and output; an MCP client starts it. The tools only read: \
-            games, recipes, launch logs, the game's own logs, program inspection and this Mac's setup.
+            games, recipes, launch logs, the game's own logs, program inspection and this Mac's setup. \
+            The assistant is off until you turn it on (distiller assistant on); \
+            `distiller assistant setup` shows how to connect other clients.
 
             Claude Code:     claude mcp add distiller -- <path to distiller> mcp
             Claude Desktop:  add to claude_desktop_config.json under "mcpServers":
@@ -220,33 +222,62 @@ struct AssistantCommand: ParsableCommand {
         abstract: "Turn the AI troubleshooting assistant (distiller mcp) on or off, or connect it to Claude Desktop.",
         discussion: """
             on / off take effect at once, even for an assistant that's already connected.
+            The assistant is off until you turn it on.
             connect-claude / disconnect-claude add or remove Distiller in Claude Desktop's settings
             (restart Claude Desktop afterwards).
+            setup [client] prints how to connect an MCP client, with this command's path:
+            \(MCPClient.allCases.map(\.rawValue).joined(separator: ", ")).
             """
     )
 
-    @Argument(help: "status, on, off, connect-claude or disconnect-claude.")
+    @Argument(help: "status, on, off, connect-claude, disconnect-claude or setup.")
     var action: String = "status"
+
+    @Argument(help: "For setup: the client to explain (default: all of them).")
+    var client: String?
 
     func run() throws {
         let root = DistillerPaths().root
         var settings = StorageSettings.load(fromSupportFolder: root)
         let claude = ClaudeDesktopConfig()
+        let executable = URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL.resolvingSymlinksInPath()
         switch action {
         case "on", "off":
             settings.assistantEnabled = action == "on"
             try settings.save(toSupportFolder: root)
         case "connect-claude":
-            try claude.connect(serverExecutable: URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL.resolvingSymlinksInPath())
+            try claude.connect(serverExecutable: executable)
         case "disconnect-claude":
             try claude.disconnect()
         case "status":
             break
+        case "setup":
+            try printSetup(MCPClientSetup(serverPath: executable.path), enabled: settings.isAssistantEnabled)
+            return
         default:
-            throw ValidationError("Choose status, on, off, connect-claude or disconnect-claude.")
+            throw ValidationError("Choose status, on, off, connect-claude, disconnect-claude or setup.")
         }
         print("Assistant: \(settings.isAssistantEnabled ? "on" : "off")")
         print("Claude Desktop: \(claude.configuredCommand().map { "connected (\($0) mcp)" } ?? (claude.claudeDesktopPresent ? "not connected" : "not installed"))")
+    }
+
+    private func printSetup(_ setup: MCPClientSetup, enabled: Bool) throws {
+        let clients: [MCPClient]
+        if let client {
+            guard let match = MCPClient(rawValue: client) else {
+                throw ValidationError("Choose one of: \(MCPClient.allCases.map(\.rawValue).joined(separator: ", ")).")
+            }
+            clients = [match]
+        } else {
+            clients = MCPClient.allCases
+        }
+        if !enabled { print("The assistant is off; turn it on first with: distiller assistant on\n") }
+        for client in clients {
+            print("== \(client.name) ==")
+            for (index, step) in setup.steps(for: client).enumerated() { print("\(index + 1). \(step)") }
+            for snippet in setup.snippets(for: client) { print("\n\(snippet.label) (\(snippet.language)):\n\(snippet.text)") }
+            print()
+        }
     }
 }
 
