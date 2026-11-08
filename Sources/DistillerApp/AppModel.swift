@@ -35,6 +35,8 @@ final class AppModel {
     var communityQuery = ""
     /// The Community tab's navigation: the slugs of the game pages open, innermost last.
     var communityPath: [String] = []
+    /// The Community list's genre, graphics layer, rating and order, like the website's.
+    var communityFilter = CatalogueFilter()
     var pendingLink: DistillerLink?
     var linkInstall: LinkInstallRequest?
 

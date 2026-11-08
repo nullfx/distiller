@@ -24,22 +24,32 @@ private struct CommunityGameList: View {
 
     var body: some View {
         @Bindable var model = model
-        let query = model.communityQuery
         return Group {
             if let index = model.index {
-                let games = index.games.filter { game in
-                    query.isEmpty || [game.title, game.publisher, game.developer, game.description]
-                        .compactMap { $0 }
-                        .contains { $0.localizedCaseInsensitiveContains(query) }
-                }
-                if games.isEmpty {
-                    ContentUnavailableView.search(text: query)
-                } else {
-                    List(games) { game in
-                        NavigationLink(value: game.slug) {
-                            CommunityGameRow(game: game)
+                let games = CatalogueBrowser.games(index.games, query: model.communityQuery, filter: model.communityFilter)
+                Group {
+                    if games.isEmpty {
+                        if model.communityFilter.isNarrowing {
+                            ContentUnavailableView {
+                                Label("No matching games", systemImage: "line.3.horizontal.decrease.circle")
+                            } description: {
+                                Text("No games match these filters\(model.communityQuery.isEmpty ? "" : " and “\(model.communityQuery)”").")
+                            } actions: {
+                                Button("Clear Filters") { model.communityFilter = CatalogueFilter(sort: model.communityFilter.sort) }
+                            }
+                        } else {
+                            ContentUnavailableView.search(text: model.communityQuery)
+                        }
+                    } else {
+                        List(games) { game in
+                            NavigationLink(value: game.slug) {
+                                CommunityGameRow(game: game)
+                            }
                         }
                     }
+                }
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    CommunityFilterBar(facets: CatalogueBrowser.facets(index.games), shown: games.count, total: index.games.count)
                 }
             } else {
                 ContentUnavailableView {
@@ -52,7 +62,7 @@ private struct CommunityGameList: View {
             }
         }
         .navigationTitle("Community")
-        .searchable(text: $model.communityQuery, prompt: "Search games")
+        .searchable(text: $model.communityQuery, prompt: "Search games, publishers, descriptions")
         .toolbar {
             Button {
                 model.refreshCommunity()
@@ -61,6 +71,98 @@ private struct CommunityGameList: View {
             }
             .help("Download the latest recipes and reports")
         }
+    }
+}
+
+/// Genre, graphics layer, rating and order, as on the website's games page. The menus sit in
+/// a row when there's room, and fold into one Filter menu when the window is narrow.
+private struct CommunityFilterBar: View {
+    @Environment(AppModel.self) private var model
+    let facets: (genres: [String], graphics: [String])
+    let shown: Int
+    let total: Int
+
+    var body: some View {
+        @Bindable var model = model
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 8) {
+                        genrePicker.fixedSize()
+                        graphicsPicker.fixedSize()
+                        ratingPicker.fixedSize()
+                        sortPicker.fixedSize()
+                    }
+                    HStack(spacing: 8) {
+                        Menu {
+                            genrePicker
+                            graphicsPicker
+                            ratingPicker
+                        } label: {
+                            Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
+                        }
+                        .fixedSize()
+                        sortPicker.fixedSize()
+                    }
+                }
+                Spacer(minLength: 8)
+                if model.communityFilter.isNarrowing {
+                    Button("Clear") { model.communityFilter = CatalogueFilter(sort: model.communityFilter.sort) }
+                        .controlSize(.small)
+                }
+                Text(shown == total ? (total == 1 ? "1 game" : "\(total) games") : "\(shown) of \(total) games")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .fixedSize()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            Divider()
+        }
+        .background(.bar)
+    }
+
+    private var filter: Binding<CatalogueFilter> {
+        Binding(get: { model.communityFilter }, set: { model.communityFilter = $0 })
+    }
+
+    private var genrePicker: some View {
+        Picker("Genre", selection: filter.genre) {
+            Text("All genres").tag(String?.none)
+            ForEach(facets.genres, id: \.self) { Text(CatalogueText.genre($0)).tag(String?.some($0)) }
+        }
+        .labelsHidden()
+        .help("Genre")
+    }
+
+    private var graphicsPicker: some View {
+        Picker("Graphics layer", selection: filter.graphics) {
+            Text("Any graphics layer").tag(String?.none)
+            ForEach(facets.graphics, id: \.self) { Text(CatalogueText.graphics($0)).tag(String?.some($0)) }
+        }
+        .labelsHidden()
+        .help("Graphics layer")
+    }
+
+    private var ratingPicker: some View {
+        Picker("Rating", selection: filter.minimumTier) {
+            Text("Any rating").tag(PlayabilityTier?.none)
+            Text("Platinum").tag(PlayabilityTier?.some(.platinum))
+            Text("Gold or better").tag(PlayabilityTier?.some(.gold))
+            Text("Silver or better").tag(PlayabilityTier?.some(.silver))
+            Text("Bronze or better").tag(PlayabilityTier?.some(.bronze))
+        }
+        .labelsHidden()
+        .help("Rating")
+    }
+
+    private var sortPicker: some View {
+        Picker("Sort", selection: filter.sort) {
+            ForEach(CatalogueSort.allCases) { Text("Sort: \($0.displayName)").tag($0) }
+        }
+        .labelsHidden()
+        .help("Order")
     }
 }
 
@@ -77,7 +179,7 @@ private struct CommunityGameRow: View {
             .frame(width: 40, height: 40)
             VStack(alignment: .leading, spacing: 3) {
                 Text(game.title).font(.headline)
-                let facts = [game.publisher, game.releaseYear.map(String.init), game.genres.map { $0.map(\.capitalized).joined(separator: ", ") }].compactMap { $0 }
+                let facts = [game.publisher, game.releaseYear.map(String.init), game.genres.map { $0.map(CatalogueText.genre).joined(separator: ", ") }].compactMap { $0 }
                 if !facts.isEmpty {
                     Text(facts.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
@@ -159,7 +261,7 @@ struct CommunityGameView: View {
                     game.publisher.map { "Published by \($0)" },
                     game.developer.flatMap { $0 == game.publisher ? nil : "Developed by \($0)" },
                     game.releaseYear.map(String.init),
-                    game.genres.map { $0.map(\.capitalized).joined(separator: ", ") },
+                    game.genres.map { $0.map(CatalogueText.genre).joined(separator: ", ") },
                 ].compactMap { $0 }
                 if !facts.isEmpty {
                     Text(facts.joined(separator: " · ")).foregroundStyle(.secondary)
