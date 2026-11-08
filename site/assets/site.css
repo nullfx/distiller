@@ -127,7 +127,10 @@ pre code { background: none; padding: 0; }
 .hero p.lede { font-size: 1.2rem; color: var(--text-muted); margin: 0 0 28px; max-width: 34em; }
 .hero-icon { width: 72px; height: 72px; margin: 0 0 18px; filter: drop-shadow(0 8px 14px rgba(120, 60, 20, 0.16)); }
 /* The app's window, captured with its own shadow on a transparent background. */
-.hero-shot { justify-self: center; width: 100%; max-width: 688px; height: auto; }
+/* The figure is the grid item, not the image: some browsers (Safari) stretch an image that
+   is itself a grid item without scaling its height. The image keeps its own proportions. */
+.hero-shot { justify-self: center; width: 100%; max-width: 688px; min-width: 0; margin: 0; }
+.hero-shot img { width: 100%; height: auto; aspect-ratio: 688 / 434; object-fit: contain; }
 @media (max-width: 760px) { .hero .wrap { grid-template-columns: minmax(0, 1fr); } .hero-shot { max-width: 520px; } }
 .section { padding: 40px 0; }
 .section h2 { font-size: 1.7rem; margin: 0 0 8px; }
