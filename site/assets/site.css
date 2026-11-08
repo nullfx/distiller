@@ -95,6 +95,8 @@ pre code { background: none; padding: 0; }
 .site-nav a { color: var(--text-muted); text-decoration: none; padding: 6px 12px; border-radius: 8px; font-weight: 520; }
 .site-nav a:hover { color: var(--text); background: var(--bg-sunk); }
 .site-nav a[aria-current="page"] { color: var(--copper-strong); background: var(--copper-soft); }
+.nav-github { display: inline-flex; align-items: center; gap: 7px; }
+.nav-icon { width: 16px; height: 16px; flex: none; }
 .site-footer { border-top: 1px solid var(--line); margin-top: 72px; padding: 28px 0 calc(28px + env(safe-area-inset-bottom, 0px)); color: var(--text-muted); font-size: 0.9rem; }
 .site-footer .wrap { display: flex; gap: 12px 28px; flex-wrap: wrap; justify-content: space-between; }
 
@@ -121,11 +123,10 @@ pre code { background: none; padding: 0; }
 .tier-none { color: var(--tier-none); }
 
 /* Home */
-.hero { padding: clamp(48px, 9vw, 104px) 0 48px; }
+.hero { padding: clamp(28px, 5vw, 56px) 0 48px; }
 .hero .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: center; }
 .hero h1 { font-size: clamp(2.2rem, 5vw, 3.5rem); margin: 0 0 16px; }
 .hero p.lede { font-size: 1.2rem; color: var(--text-muted); margin: 0 0 28px; max-width: 34em; }
-.hero-icon { width: 72px; height: 72px; margin: 0 0 18px; filter: drop-shadow(0 8px 14px rgba(120, 60, 20, 0.16)); }
 /* The app's window, captured with its own shadow on a transparent background. */
 /* The figure is the grid item, not the image: some browsers (Safari) stretch an image that
    is itself a grid item without scaling its height. The image keeps its own proportions. */
