@@ -147,7 +147,7 @@ jobs:
         run: |
           ditto -c -k --keepParent dist/Distiller.app "$RUNNER_TEMP/Distiller.zip"
           Scripts/notarize.sh "$RUNNER_TEMP/Distiller.zip"
-          xcrun stapler staple dist/Distiller.app
+          Scripts/staple.sh dist/Distiller.app
           spctl --assess --type execute --verbose=2 dist/Distiller.app
 
       - name: Make, sign, notarize and staple the disk image
@@ -158,7 +158,7 @@ jobs:
         run: |
           Scripts/make-dmg.sh dist/Distiller.app "$DMG" "${{ steps.identity.outputs.sha1 }}"
           Scripts/notarize.sh "$DMG"
-          xcrun stapler staple "$DMG"
+          Scripts/staple.sh "$DMG"
           spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG"
           (cd dist && shasum -a 256 "$(basename "$DMG")" > "$(basename "$DMG").sha256")
           cat "$DMG.sha256"

@@ -109,5 +109,5 @@ DISTILLER_SIGN_IDENTITY="Developer ID Application: …" DISTILLER_HARDENED=1 \
 DISTILLER_VERSION=0.2.0 Scripts/bundle-app.sh release
 Scripts/make-dmg.sh dist/Distiller.app dist/Distiller-0.2.0.dmg "Developer ID Application: …"
 NOTARY_KEY=AuthKey.p8 KEY_ID=… ISSUER_ID=… Scripts/notarize.sh dist/Distiller-0.2.0.dmg
-xcrun stapler staple dist/Distiller-0.2.0.dmg
+Scripts/staple.sh dist/Distiller-0.2.0.dmg
 ```
