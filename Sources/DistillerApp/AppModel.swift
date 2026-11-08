@@ -30,6 +30,12 @@ final class AppModel {
     /// The launch program each game's icon was last read from, so it's read again only when that changes.
     var iconSources: [String: String] = [:]
 
+    // Navigation, and links from the catalogue website. See AppModel+Links.swift.
+    var sidebarSelection: SidebarItem? = .library
+    var communityQuery = ""
+    var pendingLink: DistillerLink?
+    var linkInstall: LinkInstallRequest?
+
     /// Shown in the status bar while long work runs.
     var busyMessage: String?
     var errorMessage: String?
@@ -67,6 +73,7 @@ final class AppModel {
             await restoreGitHubSession()
             await refreshCommunityQuietly()
             offerToRemoveOrphanedCheckBottles()
+            await handlePendingLink()
         } catch {
             errorMessage = error.localizedDescription
         }

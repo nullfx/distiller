@@ -33,7 +33,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <dict>
   <key>CFBundleName</key><string>Distiller</string>
   <key>CFBundleDisplayName</key><string>Distiller</string>
-  <key>CFBundleIdentifier</key><string>com.example.distiller</string>
+  <key>CFBundleIdentifier</key><string>com.nullfx.distiller</string>
   <key>CFBundleExecutable</key><string>Distiller</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
@@ -42,6 +42,14 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.games</string>
   <key>NSHighResolutionCapable</key><true/>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key><string>Distiller catalogue link</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>CFBundleURLSchemes</key><array><string>distiller</string></array>
+    </dict>
+  </array>
 </dict>
 </plist>
 PLIST

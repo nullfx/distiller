@@ -1,0 +1,88 @@
+// Run with: node --test site/tests/
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import {
+  CATALOGUE_BASE, chipFamily, coverPath, describeHardwareKey, describeRecipe, facets, filterGames,
+  installLink, mediaURL, openLink, rankRecipes, recipeSourceURL, safeHttpsURL, sortGames, tierInfo,
+} from "../assets/catalogue-data.js";
+
+const games = [
+  {
+    slug: "guild-wars-2", title: "Guild Wars 2", publisher: "ArenaNet", genres: ["mmo", "rpg"],
+    graphics: ["dxvk"], summary: { tier: "gold", reports: 1 }, updated: "2026-11-07",
+    recipes: [
+      { id: "dxvk", summary: { tier: "gold", reports: 1 }, screenshots: ["media/guild-wars-2/dxvk/1.jpg"] },
+      { id: "wined3d", summary: { tier: null, reports: 0 } },
+    ],
+  },
+  { slug: "another-game", title: "another Game", genres: ["puzzle"], graphics: ["d3dmetal"], summary: { tier: "platinum", reports: 3 }, updated: "2026-10-01", recipes: [] },
+  { slug: "old-game", title: "Zebra Quest", description: "A quest with zebras.", genres: ["rpg"], graphics: ["wined3d"], summary: { tier: null, reports: 0 }, recipes: [] },
+];
+
+test("links to Distiller only for valid slugs", () => {
+  assert.equal(installLink("guild-wars-2", "dxvk"), "distiller://install?game=guild-wars-2&recipe=dxvk");
+  assert.equal(installLink("Guild Wars", "dxvk"), null);
+  assert.equal(installLink("guild-wars-2", "x&game=evil"), null);
+  assert.equal(openLink("guild-wars-2"), "distiller://game/guild-wars-2");
+  assert.equal(openLink("../x"), null);
+});
+
+test("only https links and catalogue pictures are followed", () => {
+  assert.equal(safeHttpsURL("https://www.guildwars2.com/"), "https://www.guildwars2.com/");
+  assert.equal(safeHttpsURL("javascript:alert(1)"), null);
+  assert.equal(safeHttpsURL("http://example.com"), null);
+  assert.equal(safeHttpsURL("data:text/html,hi"), null);
+  assert.equal(mediaURL("media/guild-wars-2/icon.png"), CATALOGUE_BASE + "media/guild-wars-2/icon.png");
+  assert.equal(mediaURL("media/../index.json"), null);
+  assert.equal(mediaURL("https://evil.example/x.png"), null);
+  assert.equal(mediaURL(undefined), null);
+  assert.equal(recipeSourceURL("recipes/guild-wars-2/dxvk.yaml"), "https://github.com/nullfx/distiller-recipes/blob/main/recipes/guild-wars-2/dxvk.yaml");
+  assert.equal(recipeSourceURL("scripts/build_index.py"), null);
+});
+
+test("describes Macs from report hardware keys", () => {
+  assert.equal(describeHardwareKey("M3-Pro-18gpu-36gb-macos27"), "M3 Pro · 18-core GPU · 36 GB · macOS 27");
+  assert.equal(describeHardwareKey("M1-Base-8gpu-8gb-macos26"), "M1 · 8-core GPU · 8 GB · macOS 26");
+  assert.equal(describeHardwareKey("something-else"), "something-else");
+  assert.equal(chipFamily("M4-Max-40gpu-64gb-macos27"), "M4");
+});
+
+test("filters by text, genre, graphics layer and rating", () => {
+  const titles = (list) => list.map((game) => game.title);
+  assert.deepEqual(titles(filterGames(games, { query: "guild" })), ["Guild Wars 2"]);
+  assert.deepEqual(titles(filterGames(games, { query: "zebras" })), ["Zebra Quest"], "descriptions are searched");
+  assert.deepEqual(titles(filterGames(games, { query: "arena guild" })), ["Guild Wars 2"], "every word must match");
+  assert.deepEqual(titles(filterGames(games, { genre: "rpg" })), ["Guild Wars 2", "Zebra Quest"]);
+  assert.deepEqual(titles(filterGames(games, { graphics: "d3dmetal" })), ["another Game"]);
+  assert.deepEqual(titles(filterGames(games, { minTier: "gold" })), ["Guild Wars 2", "another Game"]);
+  assert.deepEqual(facets(games), { genres: ["mmo", "puzzle", "rpg"], graphics: ["d3dmetal", "dxvk", "wined3d"] });
+});
+
+test("sorts by title, rating and newest report", () => {
+  const titles = (list) => list.map((game) => game.title);
+  assert.deepEqual(titles(sortGames(games, "title")), ["another Game", "Guild Wars 2", "Zebra Quest"]);
+  assert.deepEqual(titles(sortGames(games, "rating")), ["another Game", "Guild Wars 2", "Zebra Quest"]);
+  assert.deepEqual(titles(sortGames(games, "updated")), ["Guild Wars 2", "another Game", "Zebra Quest"]);
+});
+
+test("ranks recipes and picks a cover", () => {
+  assert.deepEqual(rankRecipes(games[0].recipes).map((recipe) => recipe.id), ["dxvk", "wined3d"]);
+  assert.equal(coverPath(games[0]), "media/guild-wars-2/dxvk/1.jpg");
+  assert.equal(coverPath(games[1]), null);
+  assert.equal(tierInfo("gold").label, "Gold");
+  assert.equal(tierInfo(null).label, "Not rated");
+});
+
+test("summarises a recipe", () => {
+  const lines = Object.fromEntries(describeRecipe({
+    stack: { runner: { family: "winehq", min_version: "11.0" }, graphics: "dxvk", sync: "msync" },
+    prefix: { windows: "win11", winetricks: ["corefonts"] },
+    env: { DXVK_ASYNC: "1" },
+    launch: { exe: "C:\\Program Files\\Guild Wars 2\\Gw2-64.exe", args: ["-mapLoadinfo"] },
+  }));
+  assert.equal(lines.Wine, "WineHQ 11.0 or later");
+  assert.equal(lines.Graphics, "DXVK");
+  assert.equal(lines["Windows version"], "Windows 11");
+  assert.equal(lines.Environment, "DXVK_ASYNC=1");
+  assert.equal(lines.Arguments, "-mapLoadinfo");
+});

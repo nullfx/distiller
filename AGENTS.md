@@ -21,7 +21,7 @@ This file is the shared reference for the architecture and the rules; the recipe
 | `Tests/DistillerCoreTests` | XCTest unit tests and fixtures. |
 | `Scripts/` | `bundle-app.sh` (builds and signs `dist/Distiller.app`), `make-icon.sh` and `render-svg.swift` (the app icon). |
 | `Design/` | The app icon source (`AppIcon.svg`), the generated `.icns`, and mockups. |
-| `site/` | The website (GitHub Pages), when present. |
+| `site/` | The website, published to GitHub Pages by `.github/workflows/pages.yml`: plain HTML, CSS and JavaScript modules, no build step. It reads the catalogue from distiller-recipes' Pages at run time. |
 | `docs/` | The maintainer's local notes. Not in git. |
 
 ## Commands
@@ -30,6 +30,7 @@ This file is the shared reference for the architecture and the rules; the recipe
 - Test: `swift test` (about a minute; the disk-image importer tests make real disk images with `hdiutil`).
 - CLI: `swift run distiller <command>`; `swift run distiller --help` lists them (hardware, setup, components, bottles, run, recipe …, install, games, launch, community, github, storage, mcp, assistant).
 - App without bundling: `swift run DistillerApp`. As a bundle: `Scripts/bundle-app.sh [debug|release]` builds `dist/Distiller.app` with its icon.
+- Website: `node --test site/tests/*.test.mjs` tests its data module; preview with `python3 -m http.server --directory site` (it fetches the live catalogue).
 - Isolate experiments: `export DISTILLER_HOME=/tmp/distiller-dev` gives the engine its own support folder and `settings.json`, so experiments never touch a real library or real bottles.
 - App icon: edit `Design/AppIcon.svg`, then run `Scripts/make-icon.sh`.
 
@@ -64,6 +65,7 @@ Shells that run under Rosetta (an x86_64 shell, for example one started from an 
 - **Pictures.** `CommunityMedia` normalises icons (square PNG, at most 256 px) and screenshots (JPEG, at most 1600 px wide and 600 KB, no metadata). A recipe shares up to three screenshots (the first is the cover) and the game's icon.
 - **Community catalogue.** `CommunityRepository.default` points at the published catalogue (`index.json`, per-game detail files, `media/`). `CommunityMatch` compares the player's games with it (new game, new recipe, changed, in review, published).
 - **Submission** (`DistillerCommunity/GitHub`, `Submission`). GitHub device-flow sign-in with the `public_repo` scope; the token lives in the keychain. `RecipeSubmitter` commits the recipe, an optional report, the game's catalogue file (first recipe only) and pictures to a new branch, then opens a pull request: on the contributor's fork, or on the repository itself for maintainers.
+- **Links from the website** (`DistillerCommunity/DistillerLink.swift`, `AppModel+Links.swift`): `distiller://install?game=<slug>&recipe=<id>` and `distiller://game/<slug>`, registered in the bundle's Info.plist by `Scripts/bundle-app.sh`. A link only names a catalogue game and recipe; the app looks both up in the catalogue itself (downloading it again if needed) and shows a confirmation sheet. **Never act on a link without the player's confirmation, never accept anything but validated slugs, and never add link actions that take paths, URLs, commands or recipe content.**
 - **Troubleshooting assistant.** `AssistantTools` are read-only tools (list games, read launch logs, read files in a game's folder or bottle, inspect a program, describe the environment), confined to the game's own folders, text only, size-capped, with the home folder shown as `~`. `MCPServer` serves them over stdio (JSON-RPC 2.0, one message per line) as `distiller mcp`, for MCP-capable assistants. Players can switch the assistant off (`settings.json` `assistant_enabled`); the server re-reads the switch on every request.
 
 ## Rules that must hold
@@ -101,6 +103,12 @@ Shells that run under Rosetta (an x86_64 shell, for example one started from an 
 - **The MCP server's standard output carries protocol messages only.** Never `print` in code the server reaches; log to standard error.
 - **Assistant tools stay read-only and confined** to the game's own folders, text only, size-capped, with the home folder shown as `~`.
 - **Respect the player's machine.** Never write outside the support folder, the chosen storage locations and the player's bottles; never create folders on a disconnected drive; ask before deleting anything that isn't disposable (bottles, games, rescued screenshots).
+
+### The website
+
+- Catalogue data is written by the community: put it on the page only as text (`el()` in `site/assets/site.js` sets `textContent`), never as HTML. Follow only `https:` links and pictures under the catalogue's `media/` (the checks in `catalogue-data.js`), and build `distiller://` links only from validated slugs.
+- No trackers, analytics, cookies or third-party scripts and fonts. Keep it static: no build step, no framework.
+- Keep `catalogue-data.js` in step with the index format (`CommunityIndex.swift`, `build_index.py`), with tests in `site/tests/`.
 
 ### User interface
 
