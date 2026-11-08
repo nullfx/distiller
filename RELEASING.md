@@ -1,12 +1,15 @@
 # Releasing Distiller
 
-Releases are built by GitHub Actions (`.github/workflows/release.yml`). Pushing a tag such as `v0.2.0` (after the owner approves the run) does the following:
+The version lives in the **`VERSION`** file at the top of the repository. Local builds (`Scripts/bundle-app.sh`), the app's About box, `distiller --version` and releases all read it.
 
-1. Builds `Distiller.app` for Apple silicon. The version comes from the tag, and the build number is the workflow's run number.
+Releases are built by GitHub Actions (`.github/workflows/release.yml`). When a change to `VERSION` reaches `main`, and the owner approves the run, the workflow does the following:
+
+1. Builds `Distiller.app` for Apple silicon. The version comes from `VERSION`, and the build number is the workflow's run number. A suffix (`0.2.0-beta.1`) is kept in the app's `DistillerVersion` key and dropped from `CFBundleShortVersionString`, which macOS needs to be plain numbers.
 2. Signs the app and its `distiller` helper with a **Developer ID Application** certificate, using the hardened runtime and a secure timestamp.
 3. Notarizes the app with Apple and staples the ticket to it.
 4. Packs it in a disk image (`Distiller-0.2.0.dmg`) with an Applications shortcut, then signs, notarizes and staples the image too.
-5. Publishes a GitHub Release with the disk image twice, as `Distiller-0.2.0.dmg` and as `Distiller.dmg`, plus `SHA256SUMS.txt`. The release notes start with install instructions, followed by notes generated from the merged pull requests. A tag with a suffix (`v0.2.0-beta.1`) becomes a pre-release and isn't marked as the latest.
+5. Tags the commit `v<version>`. This happens only after a successful build, so a rejected or failed run leaves no tag.
+6. Publishes a GitHub Release with the disk image twice, as `Distiller-0.2.0.dmg` and as `Distiller.dmg`, plus `SHA256SUMS.txt`. The release notes start with install instructions, followed by notes generated from the merged pull requests. A version with a suffix (`0.2.0-beta.1`) becomes a pre-release and isn't marked as the latest.
 
 The website and README link to `https://github.com/nullfx/distiller/releases/latest/download/Distiller.dmg`. GitHub redirects that address to `Distiller.dmg` in the newest release that isn't a pre-release, so the links never need updating. Keep the file name `Distiller.dmg`.
 
@@ -90,17 +93,26 @@ gh variable set APPLE_TEAM_ID --env release --body XXXXXXXXXX
 
 ### 5. Protect release tags (recommended)
 
-Under **Settings ▸ Rules ▸ Rulesets ▸ New tag ruleset**, target `v*` and restrict creations, updates and deletions, with the repository admin role allowed to bypass. Only you can then start a release.
+Under **Settings ▸ Rules ▸ Rulesets ▸ New tag ruleset**, target `v*` and restrict **updates** and **deletions**, with the repository admin role allowed to bypass. A published release's tag then can't be moved or removed.
+
+Leave **creations** unrestricted: the release workflow creates the tag itself after you approve the run. A personal-account repository can't give GitHub Actions a bypass, so a creation rule would block it. Creating a tag still needs write access to the repository.
 
 ## Making a release
 
-```sh
-git checkout main && git pull
-git tag -a v0.2.0 -m "Distiller 0.2.0"
-git push origin v0.2.0
-```
+1. In a branch, bump the version and open a pull request:
 
-Approve the run under Actions ▸ Release. Notarization usually takes a few minutes. If Apple rejects a build, the step prints Apple's log with the reason.
+   ```sh
+   Scripts/bump-version.sh minor      # or patch, major, or an exact version such as 0.3.0-beta.1
+   git commit -am "Version 0.3.0" && git push -u origin HEAD
+   ```
+
+   The bump can also ride along in any other pull request.
+2. Merge it. The **Release** workflow starts, because `VERSION` changed on `main`.
+3. Approve the run under **Actions ▸ Release ▸ Review deployments**. Notarization usually takes a few minutes. If Apple rejects a build, the step prints Apple's log with the reason.
+
+A merge that doesn't change `VERSION` doesn't release anything. If `VERSION` names a version that's already tagged, the workflow says so and stops.
+
+You can still push a tag by hand (`git tag -a v0.3.0 -m "Distiller 0.3.0" && git push origin v0.3.0`), but only if it matches `VERSION` at that commit; a mismatched tag is refused. Don't do both for the same version: whichever runs first releases it.
 
 ## Building a signed copy locally
 
