@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Distiller app icon: a copper pot still (dome with sight-glass door, cone neck, swan neck).
+       Source for Scripts/make-icon.sh, which renders Design/AppIcon.icns. Outside the tile is transparent. -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#eceef1"/>
+    </linearGradient>
+    <radialGradient id="belly" cx="0.34" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#ffd6a8"/><stop offset="0.2" stop-color="#ec9d5e"/>
+      <stop offset="0.6" stop-color="#b9682c"/><stop offset="1" stop-color="#6a3312"/>
+    </radialGradient>
+    <radialGradient id="helmet" cx="0.35" cy="0.4" r="0.8">
+      <stop offset="0" stop-color="#ffd2a2"/><stop offset="0.3" stop-color="#e2924f"/>
+      <stop offset="1" stop-color="#7a3d17"/>
+    </radialGradient>
+    <linearGradient id="tube" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7a3d17"/><stop offset="0.3" stop-color="#eda466"/>
+      <stop offset="0.6" stop-color="#c0743a"/><stop offset="1" stop-color="#6a3313"/>
+    </linearGradient>
+    <linearGradient id="cone" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6e3714"/><stop offset="0.3" stop-color="#e59a5c"/>
+      <stop offset="0.42" stop-color="#ffd0a0"/><stop offset="0.62" stop-color="#c77a3a"/>
+      <stop offset="1" stop-color="#5e2d10"/>
+    </linearGradient>
+    <radialGradient id="dome" cx="0.4" cy="0.25" r="0.9">
+      <stop offset="0" stop-color="#ffd0a0"/><stop offset="0.25" stop-color="#e2924f"/>
+      <stop offset="0.7" stop-color="#a95b25"/><stop offset="1" stop-color="#5e2d10"/>
+    </radialGradient>
+    <linearGradient id="brass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6dc8e"/><stop offset="0.5" stop-color="#c79a3c"/><stop offset="1" stop-color="#8a6420"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4f5f7"/><stop offset="0.5" stop-color="#b9bec6"/><stop offset="1" stop-color="#868c95"/>
+    </linearGradient>
+    <radialGradient id="glass" cx="0.4" cy="0.35" r="0.7">
+      <stop offset="0" stop-color="#5b6b74"/><stop offset="1" stop-color="#1c2328"/>
+    </radialGradient>
+    <clipPath id="squircle"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+
+      </defs>
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)" stroke="#c9ccd1" stroke-width="3"/>
+      <g clip-path="url(#squircle)">
+        <!-- swan neck leaving to the right -->
+        <path d="M512 250 L 512 210 C 512 150, 580 130, 630 180 L 1010 560" fill="none" stroke="#5a2a0f" stroke-width="60" stroke-linecap="butt"/>
+        <path d="M512 250 L 512 210 C 512 150, 580 130, 630 180 L 1010 560" fill="none" stroke="url(#tube)" stroke-width="44" stroke-linecap="butt"/>
+        <rect x="685" y="267" width="80" height="16" rx="4" fill="url(#steel)" stroke="#6b7079" stroke-width="3" transform="rotate(-45 725 275)"/>
+        <!-- steel skirt -->
+        <rect x="120" y="800" width="784" height="140" fill="url(#steel)"/>
+        <g fill="#7d838c">
+          <circle cx="190" cy="812" r="6"/><circle cx="270" cy="812" r="6"/><circle cx="350" cy="812" r="6"/><circle cx="430" cy="812" r="6"/>
+          <circle cx="512" cy="812" r="6"/><circle cx="594" cy="812" r="6"/><circle cx="674" cy="812" r="6"/><circle cx="754" cy="812" r="6"/><circle cx="834" cy="812" r="6"/>
+        </g>
+        <!-- wide copper dome -->
+        <path d="M130 805 C 130 680, 300 600, 512 600 C 724 600, 894 680, 894 805 Z" fill="url(#dome)" stroke="#5a2a0f" stroke-width="10"/>
+        <!-- sight-glass door on the front -->
+        <circle cx="512" cy="715" r="62" fill="url(#glass)" stroke="url(#brass)" stroke-width="18"/>
+        <g fill="#6b4a14">
+          <circle cx="512" cy="642" r="5"/><circle cx="512" cy="788" r="5"/><circle cx="439" cy="715" r="5"/><circle cx="585" cy="715" r="5"/>
+          <circle cx="460" cy="663" r="5"/><circle cx="564" cy="663" r="5"/><circle cx="460" cy="767" r="5"/><circle cx="564" cy="767" r="5"/>
+        </g>
+        <!-- neck base ring -->
+        <rect x="392" y="585" width="240" height="24" rx="6" fill="url(#steel)" stroke="#6b7079" stroke-width="4"/>
+        <!-- cone neck with a rounded foot -->
+        <path d="M402 588 C 372 548, 388 500, 428 470 L 470 255 L 554 255 L 596 470 C 636 500, 652 548, 622 588 Z"
+              fill="url(#cone)" stroke="#5a2a0f" stroke-width="9"/>
+        <!-- small porthole on the neck -->
+        <circle cx="512" cy="395" r="26" fill="url(#glass)" stroke="url(#brass)" stroke-width="9"/>
+        <!-- top ring -->
+        <rect x="462" y="243" width="100" height="18" rx="5" fill="url(#steel)" stroke="#6b7079" stroke-width="4"/>
+      </g>
+    </svg>

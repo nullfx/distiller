@@ -1,0 +1,105 @@
+import AppKit
+import SwiftUI
+import UniformTypeIdentifiers
+import DistillerCore
+
+enum SidebarItem: String, CaseIterable, Identifiable, Hashable {
+    case library = "Library"
+    case community = "Community"
+    case bottles = "Bottles"
+    case components = "Components"
+
+    var id: Self { self }
+
+    var symbol: String {
+        switch self {
+        case .library: return "gamecontroller"
+        case .community: return "person.2"
+        case .bottles: return "shippingbox"
+        case .components: return "square.stack.3d.up"
+        }
+    }
+}
+
+struct ContentView: View {
+    @Environment(AppModel.self) private var model
+    @State private var selection: SidebarItem? = .library
+
+    var body: some View {
+        @Bindable var model = model
+
+        NavigationSplitView {
+            List(SidebarItem.allCases, selection: $selection) { item in
+                Label(item.rawValue, systemImage: item.symbol).tag(item)
+            }
+            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
+            .safeAreaInset(edge: .bottom) {
+                if let hardware = model.hardware {
+                    Text(hardware.summary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .help("Report key: \(hardware.hardwareKey)")
+                }
+            }
+        } detail: {
+            switch selection ?? .library {
+            case .library: LibraryView()
+            case .community: CommunityView()
+            case .bottles: BottlesView()
+            case .components: ComponentsView()
+            }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            UnavailableStorageBanner()
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                GitHubToolbarButton()
+            }
+        }
+        // Notice drives being connected or disconnected, and changes made outside the app.
+        .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didMountNotification)) { _ in model.reload() }
+        .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didUnmountNotification)) { _ in model.reload() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in model.reload() }
+        .safeAreaInset(edge: .bottom) {
+            if let message = model.busyMessage {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(message).lineLimit(1)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(.bar)
+            }
+        }
+        .alert(
+            "That didn't work",
+            isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })
+        ) {
+            Button("OK") {}
+        } message: {
+            Text(model.errorMessage ?? "")
+        }
+        .fileImporter(isPresented: $model.isImportingRecipe, allowedContentTypes: [.yaml]) { result in
+            if case .success(let url) = result { model.addGame(fromRecipeFile: url) }
+        }
+        .sheet(item: $model.gameToReport) { game in
+            ReportSheet(game: game)
+        }
+        .sheet(isPresented: $model.isShowingSetup) {
+            SetupAssistantView()
+        }
+        .sheet(isPresented: $model.isCreatingRecipe) {
+            RecipeBuilderView()
+        }
+        .sheet(item: $model.gameInWorkshop) { game in
+            RecipeWorkshopView(gameID: game.id)
+        }
+        .sheet(item: $model.gameToSubmit) { game in
+            SubmitRecipeView(gameID: game.id)
+        }
+    }
+}

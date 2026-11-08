@@ -1,0 +1,9 @@
+.build/
+.swiftpm/
+dist/
+DerivedData/
+*.xcodeproj/xcuserdata/
+.DS_Store
+
+# The maintainer's local documents (design notes, session handoff); never committed. See AGENTS.md.
+docs/

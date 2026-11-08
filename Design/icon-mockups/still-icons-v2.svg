@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="2400" height="1900" viewBox="0 0 2400 1900">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#eceef1"/>
+    </linearGradient>
+    <radialGradient id="belly" cx="0.34" cy="0.3" r="0.8">
+      <stop offset="0" stop-color="#ffd6a8"/><stop offset="0.2" stop-color="#ec9d5e"/>
+      <stop offset="0.6" stop-color="#b9682c"/><stop offset="1" stop-color="#6a3312"/>
+    </radialGradient>
+    <radialGradient id="helmet" cx="0.35" cy="0.4" r="0.8">
+      <stop offset="0" stop-color="#ffd2a2"/><stop offset="0.3" stop-color="#e2924f"/>
+      <stop offset="1" stop-color="#7a3d17"/>
+    </radialGradient>
+    <linearGradient id="tube" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7a3d17"/><stop offset="0.3" stop-color="#eda466"/>
+      <stop offset="0.6" stop-color="#c0743a"/><stop offset="1" stop-color="#6a3313"/>
+    </linearGradient>
+    <linearGradient id="cone" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6e3714"/><stop offset="0.3" stop-color="#e59a5c"/>
+      <stop offset="0.42" stop-color="#ffd0a0"/><stop offset="0.62" stop-color="#c77a3a"/>
+      <stop offset="1" stop-color="#5e2d10"/>
+    </linearGradient>
+    <radialGradient id="dome" cx="0.4" cy="0.25" r="0.9">
+      <stop offset="0" stop-color="#ffd0a0"/><stop offset="0.25" stop-color="#e2924f"/>
+      <stop offset="0.7" stop-color="#a95b25"/><stop offset="1" stop-color="#5e2d10"/>
+    </radialGradient>
+    <linearGradient id="brass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6dc8e"/><stop offset="0.5" stop-color="#c79a3c"/><stop offset="1" stop-color="#8a6420"/>
+    </linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4f5f7"/><stop offset="0.5" stop-color="#b9bec6"/><stop offset="1" stop-color="#868c95"/>
+    </linearGradient>
+    <radialGradient id="glass" cx="0.4" cy="0.35" r="0.7">
+      <stop offset="0" stop-color="#5b6b74"/><stop offset="1" stop-color="#1c2328"/>
+    </radialGradient>
+    <clipPath id="squircle"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+
+    <!-- D: alembic with condenser -->
+    <symbol id="iconD" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)" stroke="#c9ccd1" stroke-width="3"/>
+      <g clip-path="url(#squircle)">
+        <!-- stands -->
+        <g stroke="#8a9099" stroke-width="12" stroke-linecap="round">
+          <line x1="285" y1="790" x2="255" y2="870"/><line x1="495" y1="790" x2="525" y2="870"/>
+          <line x1="665" y1="690" x2="665" y2="870"/><line x1="765" y1="690" x2="765" y2="870"/>
+        </g>
+        <!-- swan neck: helmet tip arching to the condenser -->
+        <path d="M390 238 C 395 165, 520 150, 610 230 C 680 292, 705 360, 712 418" fill="none" stroke="#5a2a0f" stroke-width="28" stroke-linecap="round"/>
+        <path d="M390 238 C 395 165, 520 150, 610 230 C 680 292, 705 360, 712 418" fill="none" stroke="url(#tube)" stroke-width="16" stroke-linecap="round"/>
+        <!-- condenser drum -->
+        <rect x="630" y="410" width="168" height="270" rx="14" fill="url(#tube)" stroke="#5a2a0f" stroke-width="8"/>
+        <rect x="622" y="404" width="184" height="22" rx="8" fill="url(#brass)"/>
+        <rect x="630" y="640" width="168" height="10" fill="#8a4a1e" opacity="0.7"/>
+        <path d="M690 680 L 690 745 Q 690 760 705 760 L 725 760" fill="none" stroke="url(#tube)" stroke-width="16" stroke-linecap="round"/>
+        <!-- belly -->
+        <circle cx="390" cy="620" r="205" fill="url(#belly)" stroke="#5a2a0f" stroke-width="10"/>
+        <!-- mash lid on the shoulder -->
+        <ellipse cx="300" cy="470" rx="52" ry="20" fill="url(#steel)" stroke="#6b7079" stroke-width="5" transform="rotate(-24 300 470)"/>
+        <!-- collar and onion helmet -->
+        <rect x="335" y="398" width="110" height="34" rx="6" fill="url(#brass)" stroke="#6b4a14" stroke-width="5"/>
+        <path d="M330 402 C 286 370, 292 300, 352 270 C 376 258, 386 246, 390 228 C 394 246, 404 258, 428 270 C 488 300, 494 370, 450 402 Z"
+              fill="url(#helmet)" stroke="#5a2a0f" stroke-width="9"/>
+        <!-- gauge -->
+        <circle cx="414" cy="345" r="22" fill="#f7f7f5" stroke="#3a3a3a" stroke-width="6"/>
+        <line x1="414" y1="345" x2="424" y2="333" stroke="#c0392b" stroke-width="4"/>
+        <!-- stand ring -->
+        <ellipse cx="390" cy="800" rx="150" ry="18" fill="none" stroke="#8a9099" stroke-width="12"/>
+      </g>
+    </symbol>
+
+    <!-- E: alembic only -->
+    <symbol id="iconE" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)" stroke="#c9ccd1" stroke-width="3"/>
+      <g clip-path="url(#squircle)">
+        <g stroke="#8a9099" stroke-width="14" stroke-linecap="round">
+          <line x1="380" y1="830" x2="345" y2="900"/><line x1="644" y1="830" x2="679" y2="900"/>
+        </g>
+        <path d="M512 215 C 520 140, 660 120, 760 210 C 830 274, 870 330, 940 380" fill="none" stroke="#5a2a0f" stroke-width="34" stroke-linecap="round"/>
+        <path d="M512 215 C 520 140, 660 120, 760 210 C 830 274, 870 330, 940 380" fill="none" stroke="url(#tube)" stroke-width="20" stroke-linecap="round"/>
+        <circle cx="512" cy="625" r="245" fill="url(#belly)" stroke="#5a2a0f" stroke-width="12"/>
+        <ellipse cx="400" cy="440" rx="62" ry="24" fill="url(#steel)" stroke="#6b7079" stroke-width="6" transform="rotate(-22 400 440)"/>
+        <rect x="446" y="372" width="132" height="40" rx="8" fill="url(#brass)" stroke="#6b4a14" stroke-width="6"/>
+        <path d="M440 378 C 386 340, 392 255, 466 218 C 494 204, 507 190, 512 168 C 517 190, 530 204, 558 218 C 632 255, 638 340, 584 378 Z"
+              fill="url(#helmet)" stroke="#5a2a0f" stroke-width="10"/>
+        <circle cx="542" cy="300" r="27" fill="#f7f7f5" stroke="#3a3a3a" stroke-width="7"/>
+        <line x1="542" y1="300" x2="554" y2="286" stroke="#c0392b" stroke-width="5"/>
+        <ellipse cx="512" cy="840" rx="175" ry="20" fill="none" stroke="#8a9099" stroke-width="14"/>
+      </g>
+    </symbol>
+
+    <!-- F: pot still: wide dome with sight-glass door, cone neck, swan neck -->
+    <symbol id="iconF" viewBox="0 0 1024 1024">
+      <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)" stroke="#c9ccd1" stroke-width="3"/>
+      <g clip-path="url(#squircle)">
+        <!-- swan neck leaving to the right -->
+        <path d="M512 250 L 512 210 C 512 150, 580 130, 630 180 L 1010 560" fill="none" stroke="#5a2a0f" stroke-width="60" stroke-linecap="butt"/>
+        <path d="M512 250 L 512 210 C 512 150, 580 130, 630 180 L 1010 560" fill="none" stroke="url(#tube)" stroke-width="44" stroke-linecap="butt"/>
+        <rect x="685" y="267" width="80" height="16" rx="4" fill="url(#steel)" stroke="#6b7079" stroke-width="3" transform="rotate(-45 725 275)"/>
+        <!-- steel skirt -->
+        <rect x="120" y="800" width="784" height="140" fill="url(#steel)"/>
+        <g fill="#7d838c">
+          <circle cx="190" cy="812" r="6"/><circle cx="270" cy="812" r="6"/><circle cx="350" cy="812" r="6"/><circle cx="430" cy="812" r="6"/>
+          <circle cx="512" cy="812" r="6"/><circle cx="594" cy="812" r="6"/><circle cx="674" cy="812" r="6"/><circle cx="754" cy="812" r="6"/><circle cx="834" cy="812" r="6"/>
+        </g>
+        <!-- wide copper dome -->
+        <path d="M130 805 C 130 680, 300 600, 512 600 C 724 600, 894 680, 894 805 Z" fill="url(#dome)" stroke="#5a2a0f" stroke-width="10"/>
+        <!-- sight-glass door on the front -->
+        <circle cx="512" cy="715" r="62" fill="url(#glass)" stroke="url(#brass)" stroke-width="18"/>
+        <g fill="#6b4a14">
+          <circle cx="512" cy="642" r="5"/><circle cx="512" cy="788" r="5"/><circle cx="439" cy="715" r="5"/><circle cx="585" cy="715" r="5"/>
+          <circle cx="460" cy="663" r="5"/><circle cx="564" cy="663" r="5"/><circle cx="460" cy="767" r="5"/><circle cx="564" cy="767" r="5"/>
+        </g>
+        <!-- neck base ring -->
+        <rect x="392" y="585" width="240" height="24" rx="6" fill="url(#steel)" stroke="#6b7079" stroke-width="4"/>
+        <!-- cone neck with a rounded foot -->
+        <path d="M402 588 C 372 548, 388 500, 428 470 L 470 255 L 554 255 L 596 470 C 636 500, 652 548, 622 588 Z"
+              fill="url(#cone)" stroke="#5a2a0f" stroke-width="9"/>
+        <!-- small porthole on the neck -->
+        <circle cx="512" cy="395" r="26" fill="url(#glass)" stroke="url(#brass)" stroke-width="9"/>
+        <!-- top ring -->
+        <rect x="462" y="243" width="100" height="18" rx="5" fill="url(#steel)" stroke="#6b7079" stroke-width="4"/>
+      </g>
+    </symbol>
+  </defs>
+
+  <rect width="2400" height="1900" fill="#ffffff"/>
+  <g font-family="-apple-system, Helvetica, Arial" font-size="40" fill="#222">
+    <text x="60" y="80">D · alembic + condenser</text>
+    <text x="860" y="80">E · alembic</text>
+    <text x="1660" y="80">F · pot still (dome + cone)</text>
+  </g>
+  <use xlink:href="#iconD" x="40" y="110" width="680" height="680"/>
+  <use xlink:href="#iconE" x="840" y="110" width="680" height="680"/>
+  <use xlink:href="#iconF" x="1640" y="110" width="680" height="680"/>
+  <g font-family="-apple-system, Helvetica, Arial" font-size="26" fill="#555">
+    <text x="60" y="860">128 · 64 · 32 · 16 pt</text><text x="860" y="860">128 · 64 · 32 · 16 pt</text><text x="1660" y="860">128 · 64 · 32 · 16 pt</text>
+  </g>
+  <use xlink:href="#iconD" x="60" y="890" width="128" height="128"/><use xlink:href="#iconD" x="210" y="922" width="64" height="64"/>
+  <use xlink:href="#iconD" x="296" y="938" width="32" height="32"/><use xlink:href="#iconD" x="350" y="946" width="16" height="16"/>
+  <use xlink:href="#iconE" x="860" y="890" width="128" height="128"/><use xlink:href="#iconE" x="1010" y="922" width="64" height="64"/>
+  <use xlink:href="#iconE" x="1096" y="938" width="32" height="32"/><use xlink:href="#iconE" x="1150" y="946" width="16" height="16"/>
+  <use xlink:href="#iconF" x="1660" y="890" width="128" height="128"/><use xlink:href="#iconF" x="1810" y="922" width="64" height="64"/>
+  <use xlink:href="#iconF" x="1896" y="938" width="32" height="32"/><use xlink:href="#iconF" x="1950" y="946" width="16" height="16"/>
+  <rect x="40" y="1080" width="2320" height="380" rx="40" fill="#1e1e1e"/>
+  <g font-family="-apple-system, Helvetica, Arial" font-size="26" fill="#bbb"><text x="70" y="1125">In a dark Dock (128 pt)</text></g>
+  <use xlink:href="#iconD" x="300" y="1170" width="256" height="256"/>
+  <use xlink:href="#iconE" x="1072" y="1170" width="256" height="256"/>
+  <use xlink:href="#iconF" x="1844" y="1170" width="256" height="256"/>
+  <rect x="40" y="1480" width="2320" height="380" rx="40" fill="#e6e6e8"/>
+  <g font-family="-apple-system, Helvetica, Arial" font-size="26" fill="#555"><text x="70" y="1525">In a light Dock (128 pt)</text></g>
+  <use xlink:href="#iconD" x="300" y="1570" width="256" height="256"/>
+  <use xlink:href="#iconE" x="1072" y="1570" width="256" height="256"/>
+  <use xlink:href="#iconF" x="1844" y="1570" width="256" height="256"/>
+</svg>

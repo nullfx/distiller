@@ -1,0 +1,131 @@
+{
+  "schema": 2,
+  "generated_at": "2026-11-07T22:31:32Z",
+  "repository": "https://github.com/nullfx/distiller-recipes",
+  "games": [
+    {
+      "slug": "example-dx11-game",
+      "title": "Example DX11 Game",
+      "publisher": "Example Studio",
+      "developer": "Example Studio",
+      "release_year": 2021,
+      "genres": [
+        "action",
+        "rpg"
+      ],
+      "description": "A made-up DirectX 11 game that shows how a game file, its recipes and their reports fit together.",
+      "detail": "games/example-dx11-game.json",
+      "icon": "media/example-dx11-game/icon.png",
+      "recipes": [
+        {
+          "id": "d3dmetal",
+          "path": "recipes/example-dx11-game/d3dmetal.yaml",
+          "graphics": "d3dmetal",
+          "runner_family": "crossover",
+          "summary": {
+            "reports": 3,
+            "score": 3,
+            "tier": "gold",
+            "median_fps": 58
+          },
+          "by_hardware": {
+            "M1-Base-8gpu-8gb-macos26": {
+              "reports": 1,
+              "score": 2,
+              "tier": "silver",
+              "median_fps": 34
+            },
+            "M3-Pro-18gpu-18gb-macos27": {
+              "reports": 2,
+              "score": 3.5,
+              "tier": "platinum",
+              "median_fps": 59.0
+            }
+          },
+          "name": "D3DMetal, default settings",
+          "screenshots": [
+            "media/example-dx11-game/d3dmetal/1.jpg",
+            "media/example-dx11-game/d3dmetal/2.jpg"
+          ]
+        },
+        {
+          "id": "dxmt-low-memory",
+          "path": "recipes/example-dx11-game/dxmt-low-memory.yaml",
+          "graphics": "dxmt",
+          "runner_family": "any",
+          "summary": {
+            "reports": 1,
+            "score": 3,
+            "tier": "gold",
+            "median_fps": 30
+          },
+          "by_hardware": {
+            "M1-Base-8gpu-8gb-macos26": {
+              "reports": 1,
+              "score": 3,
+              "tier": "gold",
+              "median_fps": 30
+            }
+          },
+          "name": "DXMT for 8 GB Macs",
+          "forked_from": "example-dx11-game/d3dmetal"
+        }
+      ],
+      "summary": {
+        "reports": 4,
+        "score": 3,
+        "tier": "gold",
+        "median_fps": 46.0
+      },
+      "graphics": [
+        "d3dmetal",
+        "dxmt"
+      ],
+      "updated": "2026-11-01"
+    },
+    {
+      "slug": "example-legacy-dx9-game",
+      "title": "Example Legacy DX9 Game",
+      "publisher": "Example Studio",
+      "release_year": 2008,
+      "genres": [
+        "strategy"
+      ],
+      "description": "A made-up DirectX 9 game, run with WineD3D, to show a simple single-recipe game.",
+      "detail": "games/example-legacy-dx9-game.json",
+      "recipes": [
+        {
+          "id": "wined3d",
+          "path": "recipes/example-legacy-dx9-game/wined3d.yaml",
+          "graphics": "wined3d",
+          "runner_family": "any",
+          "summary": {
+            "reports": 1,
+            "score": 1,
+            "tier": "bronze",
+            "median_fps": null
+          },
+          "by_hardware": {
+            "M2-Max-30gpu-32gb-macos27": {
+              "reports": 1,
+              "score": 1,
+              "tier": "bronze",
+              "median_fps": null
+            }
+          },
+          "name": "WineD3D with the 1.1 patch"
+        }
+      ],
+      "summary": {
+        "reports": 1,
+        "score": 1,
+        "tier": "bronze",
+        "median_fps": null
+      },
+      "graphics": [
+        "wined3d"
+      ],
+      "updated": "2026-10-30"
+    }
+  ]
+}

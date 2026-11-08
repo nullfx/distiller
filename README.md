@@ -1,0 +1,108 @@
+# Distiller
+
+A native SwiftUI launcher for running Windows games on Apple silicon Macs with Wine, built around shareable, hardware-aware **recipes**.
+
+> **Status: early development.** Games install and run from recipes on real Macs, recipes can be created in the app, proven with a community check and submitted to the community catalogue. Expect rough edges.
+
+## Requirements
+
+- An Apple silicon Mac with macOS 14 or later (macOS 27 recommended for Game Porting Toolkit 4).
+- Xcode 16 or later installed (it provides the Swift toolchain and macOS SDK, even when you edit in VS Code).
+- Rosetta for x86_64 Wine builds, Wine, winetricks and cabextract. The app's **Setup Assistant** (or `distiller setup install --all`) installs these; see below.
+
+## Build and test
+
+```sh
+swift build
+swift test
+swift run distiller hw            # prints this Mac's hardware fingerprint
+swift run DistillerApp            # opens the app without bundling it
+Scripts/bundle-app.sh           # builds dist/Distiller.app
+```
+
+Set `DISTILLER_HOME=/tmp/distiller-dev` while experimenting to keep test bottles out of `~/Library/Application Support/Distiller`.
+
+## First-run setup
+
+The app opens the **Setup Assistant** when something required is missing (it's also under **Distiller → Setup Assistant…** and in Components). It checks for, and installs:
+
+| Item | How |
+| --- | --- |
+| Rosetta | `softwareupdate --install-rosetta`, after macOS asks for an administrator password. |
+| Wine | The latest Wine Staging (or Devel) build from [Gcenx/macOS_Wine_builds](https://github.com/Gcenx/macOS_Wine_builds) releases, checked against GitHub's SHA-256 digest. |
+| winetricks | The `winetricks` script from the latest [Winetricks](https://github.com/Winetricks/winetricks) release. |
+| cabextract | `brew install cabextract`, if Homebrew is installed. |
+| D3DMetal | Not downloadable for you: Apple's license requires you to download the Game Porting Toolkit yourself. The assistant links to Apple's download page and imports the disk image. |
+
+From a terminal: `swift run distiller setup` shows the status and `swift run distiller setup install --all` installs what's missing.
+
+## Creating recipes
+
+**Create Recipe…** in the Library (⌘N) walks through three starting points:
+
+- **A game already on this Mac**: choose its folder and the program to launch. Distiller reads the program's imports to suggest a graphics layer, Windows version and winetricks. The recipe asks each player for their own copy of the folder (a `user_folder` step); you can copy the folder into the bottle (an instant APFS clone on the same drive) or use it where it is.
+- **A Windows installer**: Distiller runs it in a new bottle, then you pick the program it installed.
+- **An empty bottle**: set up the bottle yourself. Installers you run from Distiller are added to the recipe.
+
+Every authored game opens in the **recipe workshop**: choose the program, adjust settings, edit the YAML directly or in your own editor (`recipe.yaml` in the bottle folder; choose **Reload from File** afterwards), run installers and Wine tools, and play to test. Changes to the Windows version, registry, graphics layer or winetricks are applied to the bottle when you save.
+
+The CLI has the same steps: `distiller recipe inspect`, `recipe create`, `recipe programs`, `recipe set-launch`, `recipe edit`, `recipe reload` and `recipe run-installer`.
+
+## Submitting recipes
+
+Shared recipes must install the game from its publisher's official installer. Before submitting, run the **community check**: in a fresh bottle Distiller downloads that installer, applies your recipe, runs the installer and starts the game; you capture a few screenshots (a floating panel, or ⌃⌥⌘S from inside the game) and confirm it reached its login screen or menu.
+
+**Submit to Community…** (in the workshop or a game's context menu) then sends the checked recipe to [distiller-recipes](https://github.com/nullfx/distiller-recipes) as a pull request: you sign in to GitHub with a one-time code (the toolbar's GitHub button, or Settings), the app forks the repository to your account (maintainers get a branch in the repository itself), commits the recipe, the game's catalogue entry if it's new, your chosen screenshots and the game's icon, and optionally a report from your Mac, and opens the pull request. A maintainer reviews it; once merged it appears in the catalogue and the app's Community tab. Submitting again while the pull request is open updates it. Browsing and installing community recipes don't need an account.
+
+From a terminal: `distiller github login`, `distiller recipe community-check <game-id>`, then `distiller recipe submit <game-id> --tier gold --confirm`. A fork of Distiller that uses its own catalogue sets `CommunityRepository.default` in `Sources/DistillerCommunity/CommunityClient.swift` (its repository and the client ID of a GitHub OAuth app with Device Flow enabled).
+
+## Phase 0: run Notepad
+
+The phase 0 gate is running a Windows program from the CLI.
+
+1. **Get a Wine build.** `swift run distiller setup install wine winetricks` downloads one. To use a build you downloaded yourself, import its folder or archive (an app bundle such as `Wine Staging.app` works; Distiller finds the `bin/wine` inside):
+
+   ```sh
+   swift run distiller components import "/path/to/wine" --kind wine --id winehq --family winehq --version 11.0
+   ```
+
+2. **Create a bottle and run Notepad.** The first bottle per Wine build takes a minute while Wine builds a template prefix; later bottles are APFS clones and take seconds.
+
+   ```sh
+   swift run distiller bottles create "Test"
+   swift run distiller bottles                    # copy the bottle ID
+   swift run distiller run <bottle-id> notepad
+   ```
+
+3. **Optional: D3DMetal.** Download the Game Porting Toolkit from developer.apple.com, then:
+
+   ```sh
+   swift run distiller components import-gptk ~/Downloads/<GPTK disk image>.dmg
+   ```
+
+4. **Optional: winetricks.** Download the `winetricks` script and import its folder with `--kind winetricks --arch universal`.
+
+## Layout
+
+| Path | Contents |
+| --- | --- |
+| `Sources/DistillerCore` | Engine: hardware probe, components, recipes, bottles, Wine process handling. No UI. |
+| `Sources/DistillerCommunity` | Reads the community index and recipes; builds report links. |
+| `Sources/distiller-cli` | The `distiller` command. Everything the app does, from a terminal. |
+| `Sources/DistillerApp` | SwiftUI app. |
+| `Tests/DistillerCoreTests` | Unit tests. Fixtures come from the distiller-recipes repository. |
+| `Scripts/bundle-app.sh` | Wraps the build into a signed `dist/Distiller.app` (your Apple Development identity, or `DISTILLER_SIGN_IDENTITY`). |
+
+The companion repository [distiller-recipes](https://github.com/nullfx/distiller-recipes) holds the recipe, game and report schemas, the community's recipes, reports and pictures, and the scripts and GitHub workflows that validate them and publish the catalogue.
+
+## Working in VS Code
+
+Open this folder in VS Code and install the recommended Swift extension (`swiftlang.swift-vscode`). It builds, tests and debugs SwiftPM packages using the toolchain from your Xcode install.
+
+## Contributing
+
+Changes arrive as pull requests; `main` is protected, a maintainer reviews every pull request, and the test workflow must pass. [AGENTS.md](AGENTS.md) explains the architecture and the rules every change follows (licensing, the recipe security model, what may be shared); it's written for AI coding agents and people alike (`CLAUDE.md` simply imports it).
+
+## License
+
+MIT. Distiller is a clean-room implementation: other game launchers, including GPL-licensed ones, informed its design, but no code was copied from them. Wine and the graphics layers are downloaded as separate components under their own licences. D3DMetal is never bundled; players import it from their own Game Porting Toolkit download.
