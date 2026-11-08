@@ -120,7 +120,7 @@ Signed, notarized disk images are published on the [Releases](https://github.com
 
 ## Contributing
 
-Changes arrive as pull requests; `main` is protected, a maintainer reviews every pull request, and the test workflow must pass. [AGENTS.md](AGENTS.md) explains the architecture and the rules every change follows (licensing, the recipe security model, what may be shared); it's written for AI coding agents and people alike (`CLAUDE.md` simply imports it).
+Changes arrive as pull requests; `main` is protected, a maintainer reviews every pull request, and the test workflow must pass. Start with [CONTRIBUTING.md](CONTRIBUTING.md); everyone follows the [Code of Conduct](CODE_OF_CONDUCT.md), and security problems are reported privately as described in [SECURITY.md](SECURITY.md). [AGENTS.md](AGENTS.md) explains the architecture and the rules every change follows (licensing, the recipe security model, what may be shared); it's written for AI coding agents and people alike (`CLAUDE.md` simply imports it).
 
 ## License
 

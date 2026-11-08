@@ -1,0 +1,12 @@
+# The "New issue" chooser: app bugs and feature requests here; everything else goes elsewhere.
+blank_issues_enabled: false
+contact_links:
+  - name: A game doesn't run, or runs badly
+    url: https://github.com/nullfx/distiller-recipes
+    about: Recipes and compatibility reports live in distiller-recipes. In the app, use Report How It Ran… on the game, or ask for help in Discussions.
+  - name: Questions and help
+    url: https://github.com/nullfx/distiller/discussions
+    about: Setting up, choosing a graphics layer, making a recipe, or anything you're not sure is a bug.
+  - name: Security problem
+    url: https://github.com/nullfx/distiller/security/advisories/new
+    about: Report vulnerabilities privately, never as an issue. See SECURITY.md.
