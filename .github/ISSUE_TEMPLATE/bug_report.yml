@@ -5,7 +5,11 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for reporting. For a game that doesn't run, use [distiller-recipes](https://github.com/nullfx/distiller-recipes) instead, unless Distiller itself is at fault (a crash, a wrong error, a setting that isn't applied). For anything security-related, see [SECURITY.md](https://github.com/nullfx/distiller/blob/main/SECURITY.md) and don't post it here.
+        Thanks for reporting. This repository is for the Distiller app itself: the app, the `distiller` command and the website.
+
+        **A game that doesn't run, or runs badly on your Mac**, belongs in [distiller-recipes](https://github.com/nullfx/distiller-recipes), which collects recipes and how they run on different hardware (in the app: right-click the game ▸ Report How It Ran…). Report it here only if Distiller itself is at fault: it crashes, shows a wrong error, or doesn't apply a recipe's settings.
+
+        For anything security-related, see [SECURITY.md](https://github.com/nullfx/distiller/blob/main/SECURITY.md) and don't post it here.
   - type: textarea
     id: what-happened
     attributes:
@@ -30,7 +34,7 @@ body:
       options:
         - The app
         - The distiller command
-        - Installing or launching a game (Wine, graphics layers, bottles)
+        - Installing, setting up or launching games (Distiller's part, not the game's)
         - Creating, checking or submitting a recipe
         - The AI assistant (distiller mcp)
         - The website
@@ -46,11 +50,10 @@ body:
     validations:
       required: true
   - type: input
-    id: mac
+    id: macos
     attributes:
-      label: Mac and macOS version
-      description: The chip, memory and macOS version are enough. Distiller shows them at the bottom of its sidebar.
-      placeholder: Apple M2 · 16 GB · macOS 26.1
+      label: macOS version
+      placeholder: macOS 26.1
     validations:
       required: true
   - type: textarea
@@ -58,10 +61,10 @@ body:
     attributes:
       label: Logs
       description: |
-        If it's about a game, the relevant part of its launch log (right-click the game ▸ Show Log). Remove anything personal first, such as your user name in paths.
+        Any error text, or the part of a launch log that shows Distiller's error (right-click the game ▸ Show Log). Remove anything personal first, such as your user name in paths.
       render: text
   - type: textarea
     id: more
     attributes:
       label: Anything else
-      description: Screenshots, the recipe you used, or what you've already tried.
+      description: Screenshots, or what you've already tried.

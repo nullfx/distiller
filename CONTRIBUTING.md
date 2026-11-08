@@ -1,6 +1,6 @@
 # Contributing to Distiller
 
-Thanks for helping. Distiller is a Mac app and command-line tool for running Windows games on Apple silicon with Wine, driven by shareable recipes. This guide covers contributing to the app, the command-line tool and the website. Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md).
+Thanks for helping. Distiller is a Mac app and command-line tool for running Windows games on Apple silicon with Wine, driven by shareable recipes. This guide covers contributing to the app, the command-line tool and the website. Recipes, and how games run on different hardware, live in the separate [distiller-recipes](https://github.com/nullfx/distiller-recipes) repository, which has its own guide. Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Where things go
 
