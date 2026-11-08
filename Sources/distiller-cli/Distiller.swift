@@ -512,7 +512,6 @@ struct CommunityCommand: AsyncParsableCommand {
         func run() throws {
             let engine = try makeEngine()
             let entry = try engine.library.game(id: game)
-            let resolved = engine.resolve(entry.recipe, overrides: entry.overrides)
             let stack = try? engine.selectStack(for: entry)
             let url = CommunityClient(paths: engine.paths).reportURL(
                 gameSlug: entry.recipe.game.slug,
