@@ -52,7 +52,7 @@ The CLI has the same steps: `distiller recipe inspect`, `recipe create`, `recipe
 
 ## Browsing community recipes
 
-The **Community** tab lists the games in the [community catalogue](https://nullfx.github.io/distiller/games/). Click one to see its page before installing: screenshots from contributors' test runs, the game's details and links, and each recipe with its rating for Macs like yours, its settings, the recipe file and the reports behind its rating. **Install…** confirms what will be installed and from where.
+The **Community** tab lists the games in the [community catalogue](https://nullfx.github.io/distiller/games/). Search by title, publisher or description, filter by genre, graphics layer and rating, and sort by title, rating or most recently reported, as on the website. Click one to see its page before installing: screenshots from contributors' test runs, the game's details and links, and each recipe with its rating for Macs like yours, its settings, the recipe file and the reports behind its rating. **Install…** confirms what will be installed and from where.
 
 ## Submitting recipes
 
