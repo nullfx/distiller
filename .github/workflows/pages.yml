@@ -28,6 +28,15 @@ jobs:
           node-version: "22"
       - name: Test the site's scripts
         run: node --test site/tests/*.test.mjs
+      - name: Version asset links
+        # Browsers keep Pages files for 10 minutes and modules import each other by name, so a
+        # visitor could otherwise mix old and new scripts after a deployment. Every .js and .css
+        # reference in the published copy (HTML tags and module imports) gets ?v=<commit>.
+        run: |
+          for file in $(find site -path site/tests -prune -o \( -name '*.html' -o -name '*.js' \) -print); do
+            sed -i -E "s#(\.(js|css))\"#\1?v=${GITHUB_SHA::12}\"#g" "$file"
+          done
+          grep -rhoE '[a-z-]+\.(js|css)\?v=[0-9a-f]+' site | sort -u
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
