@@ -30,7 +30,8 @@ struct DistillerApp: App {
         WindowGroup("Distiller") {
             ContentView()
                 .environment(model)
-                .frame(minWidth: 920, minHeight: 580)
+                // Can be made small (about half the opening size); opens at 920 × 580.
+                .frame(minWidth: 440, minHeight: 270)
                 .task { await model.start() }
                 .onAppear { NSApp.activate() }
                 // distiller:// links from the catalogue website; keep them in this window
@@ -39,6 +40,7 @@ struct DistillerApp: App {
                 .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
         }
         .handlesExternalEvents(matching: ["*"])
+        .defaultSize(width: 920, height: 580)
         .commands {
             CommandGroup(after: .newItem) {
                 Button("Create Recipe…") { model.isCreatingRecipe = true }
