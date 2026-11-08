@@ -50,7 +50,7 @@ body:
     attributes:
       label: Mac and macOS version
       description: The chip, memory and macOS version are enough. Distiller shows them at the bottom of its sidebar.
-      placeholder: Apple M3 Pro · 36 GB · macOS 27.2
+      placeholder: Apple M2 · 16 GB · macOS 26.1
     validations:
       required: true
   - type: textarea
