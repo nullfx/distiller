@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 import DistillerCore
 
 enum SidebarItem: String, CaseIterable, Identifiable, Hashable {
-    case library = "Library"
+    case library = "My Library"
     case community = "Community"
     case bottles = "Bottles"
     case components = "Components"

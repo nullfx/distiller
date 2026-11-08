@@ -40,7 +40,7 @@ struct LibraryView: View {
                 }
             }
         }
-        .navigationTitle("Library")
+        .navigationTitle("My Library")
         .toolbar {
             Picker("View", selection: $layout) {
                 Label("List", systemImage: "list.bullet").tag(LibraryLayout.list)

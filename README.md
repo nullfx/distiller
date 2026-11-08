@@ -40,7 +40,7 @@ From a terminal: `swift run distiller setup` shows the status and `swift run dis
 
 ## Creating recipes
 
-**Create Recipe…** in the Library (⌘N) walks through three starting points:
+**Create Recipe…** in My Library (⌘N) walks through three starting points:
 
 - **A game already on this Mac**: choose its folder and the program to launch. Distiller reads the program's imports to suggest a graphics layer, Windows version and winetricks. The recipe asks each player for their own copy of the folder (a `user_folder` step); you can copy the folder into the bottle (an instant APFS clone on the same drive) or use it where it is.
 - **A Windows installer**: Distiller runs it in a new bottle, then you pick the program it installed.
