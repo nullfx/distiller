@@ -4,10 +4,11 @@ import DistillerCore
 
 struct CommunityView: View {
     @Environment(AppModel.self) private var model
-    @State private var query = ""
 
     var body: some View {
-        Group {
+        @Bindable var model = model
+        let query = model.communityQuery
+        return Group {
             if let index = model.index {
                 let games = index.games.filter { query.isEmpty || $0.title.localizedCaseInsensitiveContains(query) }
                 if games.isEmpty {
@@ -36,7 +37,7 @@ struct CommunityView: View {
             }
         }
         .navigationTitle("Community")
-        .searchable(text: $query, prompt: "Search games")
+        .searchable(text: $model.communityQuery, prompt: "Search games")
         .toolbar {
             Button {
                 model.refreshCommunity()

@@ -23,13 +23,12 @@ enum SidebarItem: String, CaseIterable, Identifiable, Hashable {
 
 struct ContentView: View {
     @Environment(AppModel.self) private var model
-    @State private var selection: SidebarItem? = .library
 
     var body: some View {
         @Bindable var model = model
 
         NavigationSplitView {
-            List(SidebarItem.allCases, selection: $selection) { item in
+            List(SidebarItem.allCases, selection: $model.sidebarSelection) { item in
                 Label(item.rawValue, systemImage: item.symbol).tag(item)
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200)
@@ -44,7 +43,7 @@ struct ContentView: View {
                 }
             }
         } detail: {
-            switch selection ?? .library {
+            switch model.sidebarSelection ?? .library {
             case .library: LibraryView()
             case .community: CommunityView()
             case .bottles: BottlesView()
@@ -100,6 +99,9 @@ struct ContentView: View {
         }
         .sheet(item: $model.gameToSubmit) { game in
             SubmitRecipeView(gameID: game.id)
+        }
+        .sheet(item: $model.linkInstall) { request in
+            LinkInstallSheet(request: request)
         }
     }
 }

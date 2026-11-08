@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Docs · Distiller</title>
+  <meta name="description" content="How to install Windows games with Distiller, make recipes and share them.">
+  <meta name="color-scheme" content="light dark">
+  <meta property="og:title" content="Docs · Distiller">
+  <meta property="og:description" content="How to install Windows games with Distiller, make recipes and share them.">
+  <meta property="og:image" content="https://nullfx.github.io/distiller/assets/icon.png">
+  <link rel="icon" type="image/png" href="../assets/favicon.png">
+  <link rel="apple-touch-icon" href="../assets/icon.png">
+  <link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="../"><img src="../assets/favicon.png" alt="" width="30" height="30">Distiller</a>
+      <nav class="site-nav" aria-label="Site">
+        <a href="../">Home</a>
+        <a href="../games/">Games</a>
+        <a href="../docs/" aria-current="page">Docs</a>
+        <a href="https://github.com/nullfx/distiller">GitHub</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <div class="wrap docs-layout docs">
+      <nav class="docs-nav" aria-label="Docs">
+        <a href="#getting-started">Getting started</a>
+        <a href="#first-run">First run</a>
+        <a href="#installing">Installing games</a>
+        <a href="#your-games">Adding your own games</a>
+        <a href="#graphics">Graphics layers and tuning</a>
+        <a href="#sharing">Sharing a recipe</a>
+        <a href="#reports">Reporting how it ran</a>
+        <a href="#recipes">The recipe format</a>
+        <a href="#assistant">Troubleshooting assistant</a>
+        <a href="#safety">Safety and privacy</a>
+        <a href="#contributing">Contributing</a>
+      </nav>
+      <article>
+        <h1>Distiller docs</h1>
+        <p class="muted">How to install games with Distiller, make recipes for your own, and share them.</p>
+
+        <section id="getting-started">
+          <h2>Getting started</h2>
+          <p>Distiller runs on Apple silicon Macs with macOS 14 or later. Signed downloads are coming; for now, <a href="../#get">build it from source</a> with Xcode 16 or later. The same engine is available as the <code>distiller</code> command-line tool: <code>swift run distiller --help</code> lists what it can do.</p>
+        </section>
+
+        <section id="first-run">
+          <h2>First run</h2>
+          <p>The <strong>Setup Assistant</strong> opens when something required is missing. It first asks where to keep Wine builds and bottles: the support folder, or a larger external drive (APFS or Mac OS Extended). Then it checks for and installs:</p>
+          <ul>
+            <li><strong>Rosetta</strong>, which today's Wine builds need (macOS asks for an administrator password).</li>
+            <li><strong>Wine</strong>: a recent Wine build for macOS, downloaded from its publisher's releases and checked against the published checksum.</li>
+            <li><strong>winetricks</strong> and <strong>cabextract</strong>, for Windows components such as fonts and runtimes.</li>
+            <li><strong>DXMT</strong> and <strong>DXVK</strong>, open-source graphics layers.</li>
+            <li><strong>D3DMetal</strong>, Apple's graphics layer, which Distiller never downloads for you: Apple's licence requires you to download the Game Porting Toolkit yourself. The assistant links to Apple's page and imports the disk image you downloaded.</li>
+          </ul>
+        </section>
+
+        <section id="installing">
+          <h2>Installing games</h2>
+          <p>Find a game on the <a href="../games/">Games</a> page or in the app's <strong>Community</strong> tab. Recipes are ranked by how they ran on Macs like yours.</p>
+          <p><strong>Install in Distiller</strong> on a game's page opens Distiller with that recipe. Distiller looks the recipe up in the catalogue itself, shows what it will do (which publisher's installer it downloads, from where) and waits for you to click Install. It then makes a new bottle, applies the recipe's settings and runs the game's official installer. The game appears in your Library; double-click it to play.</p>
+          <p class="callout">Links from the website only ever name a game and a recipe in the catalogue. A link can't make Distiller install anything without your confirmation, or install anything that isn't in the catalogue.</p>
+        </section>
+
+        <section id="your-games">
+          <h2>Adding your own games</h2>
+          <p><strong>Create Recipe…</strong> (⌘N) starts from one of three places:</p>
+          <ul>
+            <li><strong>A game already on your Mac</strong>: choose its folder and the program to launch. Distiller reads the program's imports to suggest a graphics layer, Windows version and components. Big games on an external drive can be used where they are: Distiller gives the drive a Windows letter, so the game updates its own files.</li>
+            <li><strong>A Windows installer</strong>: Distiller runs it in a new bottle, then you pick the program it installed.</li>
+            <li><strong>An empty bottle</strong> that you set up yourself.</li>
+          </ul>
+          <p>Every game you build opens in the <strong>recipe workshop</strong>: choose the program, adjust settings, run installers and Wine tools, edit the recipe's YAML, and play to test.</p>
+        </section>
+
+        <section id="graphics">
+          <h2>Graphics layers and tuning</h2>
+          <p>Windows games draw with Direct3D; a graphics layer translates that for your Mac:</p>
+          <ul>
+            <li><strong>D3DMetal</strong> (Apple, from your Game Porting Toolkit download): Direct3D 9–12 on Metal.</li>
+            <li><strong>DXMT</strong>: Direct3D 10 and 11 on Metal.</li>
+            <li><strong>DXVK</strong>: Direct3D 9–11 on Vulkan, through MoltenVK.</li>
+            <li><strong>WineD3D</strong>: Wine's own, through OpenGL; the most compatible and usually the slowest.</li>
+          </ul>
+          <p>D3DMetal and DXMT need a Wine build that exports the macOS driver's functions; Distiller checks each Wine build and only offers the layers it can run. <strong>Performance &amp; display</strong> in the workshop has curated options, such as asynchronous shader compilation and frame-rate limits for DXVK, MetalFX upscaling for DXMT, and the Metal performance HUD. Each one is a recipe setting, so it's shared with the recipe.</p>
+        </section>
+
+        <section id="sharing">
+          <h2>Sharing a recipe</h2>
+          <p>Shared recipes must install the game from its <strong>publisher's official, public installer</strong> and download nothing else of the game. Before you submit, run the <strong>community check</strong> from the Submit window:</p>
+          <ol>
+            <li>Distiller makes a fresh bottle, downloads the official installer (recording its checksum), applies your recipe's settings and runs the installer.</li>
+            <li>It starts the game. A small panel floats above it: play until the game reaches its login screen or menu, and press <strong>⌃⌥⌘S</strong> (or click Capture) whenever it shows something worth sharing. Screenshots the game saves with its own key are picked up too. Capturing needs Screen Recording permission for Distiller.</li>
+            <li>Tell Distiller whether it works. The test bottle is removed afterwards.</li>
+          </ol>
+          <p>Then <strong>Submit to Community…</strong> signs you in to GitHub with a one-time code (the GitHub button in the toolbar, or Settings), lets you choose up to three screenshots and the cover, and opens a pull request on <a href="https://github.com/nullfx/distiller-recipes">distiller-recipes</a>. A maintainer reviews it; once merged, it's on this site and in everyone's Community tab. Browsing and installing never need an account.</p>
+        </section>
+
+        <section id="reports">
+          <h2>Reporting how it ran</h2>
+          <p>After you play, <strong>Report How It Ran…</strong> opens a pre-filled form on GitHub: a rating from Platinum to Borked, optional frames per second, and notes. Reports include your Mac's chip, GPU cores, memory and macOS version, and nothing else about you. They decide how recipes are ranked for Macs like yours.</p>
+        </section>
+
+        <section id="recipes">
+          <h2>The recipe format</h2>
+          <p>A recipe is YAML. This is the shape of one (abridged):</p>
+<pre><code>schema: 1
+id: dxvk
+game:
+  title: Example Game
+  slug: example-game
+  installer:
+    url: https://cdn.example-publisher.com/ExampleSetup.exe
+stack:
+  runner: { family: winehq, min_version: "11.0" }
+  graphics: dxvk
+prefix:
+  windows: win10
+  winetricks: [corefonts]
+install:
+  - download: { url: https://cdn.example-publisher.com/ExampleSetup.exe, sha256: "…", to: cache/ExampleSetup.exe }
+  - run_windows: { path: cache/ExampleSetup.exe, wait: true }
+env:
+  DXVK_ASYNC: "1"
+launch:
+  exe: 'C:\Program Files\Example\Game.exe'
+overlays:
+  - when: { memory_gb: "&lt;16" }
+    note: Capped at 60 FPS on Macs with less than 16 GB of memory
+    env: { DXVK_FRAME_RATE: "60" }</code></pre>
+          <p>The <a href="https://github.com/nullfx/distiller-recipes/tree/main/schema">schemas</a> define every field, and the repository's <a href="https://github.com/nullfx/distiller-recipes/blob/main/CONTRIBUTING.md">contributing guide</a> explains the rules. These example recipes show the format (they're examples, not real games):</p>
+          <div id="examples" aria-live="polite"><p class="muted">Loading examples…</p></div>
+        </section>
+
+        <section id="assistant">
+          <h2>Troubleshooting assistant</h2>
+          <p><code>distiller mcp</code> serves read-only troubleshooting tools over the Model Context Protocol, so an AI assistant you already use can read a game's launch logs, inspect its program and describe your setup. It can't change anything, and only reads a game's own folders. Settings has a switch to turn it off, and can connect it to a desktop assistant for you.</p>
+        </section>
+
+        <section id="safety">
+          <h2>Safety and privacy</h2>
+          <ul>
+            <li><strong>Wine isn't a sandbox.</strong> Windows programs run with your permissions. Install games you trust.</li>
+            <li><strong>Recipes are data.</strong> They can download files with a checksum, change a bottle's settings and run Windows programs inside Wine, but never run commands on your Mac. Every path stays inside the game's bottle.</li>
+            <li><strong>No tracking.</strong> Distiller sends nothing about you anywhere. Reports and submissions happen only when you send them.</li>
+            <li><strong>Your GitHub sign-in</strong> asks only for access to public repositories, and the token stays in your keychain.</li>
+          </ul>
+        </section>
+
+        <section id="contributing">
+          <h2>Contributing</h2>
+          <p>Distiller and its recipes are developed on GitHub: <a href="https://github.com/nullfx/distiller">nullfx/distiller</a> for the app and this site, <a href="https://github.com/nullfx/distiller-recipes">nullfx/distiller-recipes</a> for recipes and reports. Every change arrives as a pull request reviewed by a maintainer. <a href="https://github.com/nullfx/distiller/blob/main/AGENTS.md">AGENTS.md</a> explains the architecture and the rules, for people and AI coding agents alike.</p>
+        </section>
+      </article>
+    </div>
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <span>Distiller is open source under the <a href="https://github.com/nullfx/distiller/blob/main/LICENSE">MIT licence</a>. Recipes from <a href="https://github.com/nullfx/distiller-recipes">distiller-recipes</a>.</span>
+      <span>Game names, icons and screenshots belong to their publishers.</span>
+    </div>
+  </footer>
+  <script type="module" src="../assets/site.js"></script>
+  <script type="module" src="../assets/docs.js"></script>
+</body>
+</html>

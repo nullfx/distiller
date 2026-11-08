@@ -2,6 +2,8 @@
 
 A native SwiftUI launcher for running Windows games on Apple silicon Macs with Wine, built around shareable, hardware-aware **recipes**.
 
+**Website and game catalogue:** [nullfx.github.io/distiller](https://nullfx.github.io/distiller/). Its **Install in Distiller** buttons are `distiller://install?game=<slug>&recipe=<id>` links: Distiller looks the recipe up in the community catalogue and asks before installing anything.
+
 > **Status: early development.** Games install and run from recipes on real Macs, recipes can be created in the app, proven with a community check and submitted to the community catalogue. Expect rough edges.
 
 ## Requirements
@@ -91,6 +93,7 @@ The phase 0 gate is running a Windows program from the CLI.
 | `Sources/distiller-cli` | The `distiller` command. Everything the app does, from a terminal. |
 | `Sources/DistillerApp` | SwiftUI app. |
 | `Tests/DistillerCoreTests` | Unit tests. Fixtures come from the distiller-recipes repository. |
+| `site/` | The website (GitHub Pages): plain HTML, CSS and JavaScript that read the published catalogue. `node --test site/tests/*.test.mjs` tests its data code. |
 | `Scripts/bundle-app.sh` | Wraps the build into a signed `dist/Distiller.app` (your Apple Development identity, or `DISTILLER_SIGN_IDENTITY`). |
 
 The companion repository [distiller-recipes](https://github.com/nullfx/distiller-recipes) holds the recipe, game and report schemas, the community's recipes, reports and pictures, and the scripts and GitHub workflows that validate them and publish the catalogue.

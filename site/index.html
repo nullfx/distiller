@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Distiller: Windows games on your Mac</title>
+  <meta name="description" content="Install and run Windows games on Apple silicon Macs with Wine, from shareable, hardware-aware recipes proven by other players.">
+  <meta name="color-scheme" content="light dark">
+  <meta property="og:title" content="Distiller: Windows games on your Mac">
+  <meta property="og:description" content="Install and run Windows games on Apple silicon Macs with Wine, from shareable, hardware-aware recipes proven by other players.">
+  <meta property="og:image" content="https://nullfx.github.io/distiller/assets/icon.png">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/icon.png">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href=""><img src="assets/favicon.png" alt="" width="30" height="30">Distiller</a>
+      <nav class="site-nav" aria-label="Site">
+        <a href="" aria-current="page">Home</a>
+        <a href="games/">Games</a>
+        <a href="docs/">Docs</a>
+        <a href="https://github.com/nullfx/distiller">GitHub</a>
+      </nav>
+    </div>
+  </header>
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <div>
+          <h1>Windows games on your Mac, distilled into recipes.</h1>
+          <p class="lede">Distiller installs and runs Windows games on Apple silicon Macs with Wine. Each game comes from a recipe: a shareable, hardware-aware description of exactly what it needs, proven by other players on Macs like yours.</p>
+          <div class="button-row">
+            <a class="button primary" href="games/">Browse games</a>
+            <a class="button" href="#get">Get Distiller</a>
+          </div>
+        </div>
+        <img class="hero-art" src="assets/icon.png" alt="Distiller's icon: a copper pot still" width="320" height="320">
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>What it does</h2>
+        <p class="intro">A native Mac app with a command-line twin. No scripts, no guesswork: recipes are data, and every shared recipe has been installed and played before you see it.</p>
+        <div class="features">
+          <div class="feature"><h3>Recipes, not scripts</h3><p>A recipe names the Wine build, graphics layer, Windows components, settings and launch options a game needs. Recipes can't run commands on your Mac.</p></div>
+          <div class="feature"><h3>Tuned for your Mac</h3><p>Hardware overlays adjust a recipe for your chip, GPU and memory, and ratings show how a recipe ran on Macs like yours.</p></div>
+          <div class="feature"><h3>Proven before it's shared</h3><p>Before a recipe reaches the catalogue, Distiller installs the game from its publisher's official installer in a fresh bottle and the contributor plays it.</p></div>
+          <div class="feature"><h3>Your choice of graphics layer</h3><p>D3DMetal from your own Game Porting Toolkit download, DXMT, DXVK or WineD3D, as swappable, versioned components.</p></div>
+          <div class="feature"><h3>Each game in its own bottle</h3><p>Every game gets its own Wine prefix, cloned instantly on APFS, and big games can stay where they are on an external drive.</p></div>
+          <div class="feature"><h3>Open source</h3><p>MIT-licensed and built in the open. Recipes and reports live in a public repository anyone can review.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>Popular in the catalogue</h2>
+        <p class="intro">Games the community has recipes for. <a href="games/">See them all</a>.</p>
+        <div id="featured" class="game-grid" aria-live="polite"></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>How it works</h2>
+        <ol class="steps">
+          <li><strong>Set up once</strong>Distiller's Setup Assistant installs Wine, winetricks and the open-source graphics layers, and imports D3DMetal from your own download.</li>
+          <li><strong>Pick a game</strong>Find it here or in the app's Community tab and choose Install in Distiller. Distiller shows what it will do and asks first.</li>
+          <li><strong>Play</strong>Distiller downloads the publisher's installer, applies the recipe and puts the game in your library.</li>
+          <li><strong>Share back</strong>Made a recipe for something new? Run the community check and submit it from the app.</li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section" id="get">
+      <div class="wrap">
+        <h2>Get Distiller</h2>
+        <p class="intro">Signed, notarized downloads are on the way. Until then, build it from source: you need an Apple silicon Mac with macOS 14 or later and Xcode 16 or later.</p>
+<pre><code>git clone https://github.com/nullfx/distiller.git
+cd distiller
+Scripts/bundle-app.sh release
+open dist/Distiller.app</code></pre>
+        <p class="muted">The <a href="docs/">docs</a> walk through the first run, installing games and sharing recipes.</p>
+      </div>
+    </section>
+  </main>
+  <footer class="site-footer">
+    <div class="wrap">
+      <span>Distiller is open source under the <a href="https://github.com/nullfx/distiller/blob/main/LICENSE">MIT licence</a>. Recipes from <a href="https://github.com/nullfx/distiller-recipes">distiller-recipes</a>.</span>
+      <span>Game names, icons and screenshots belong to their publishers.</span>
+    </div>
+  </footer>
+  <script type="module" src="assets/site.js"></script>
+  <script type="module" src="assets/home.js"></script>
+</body>
+</html>
