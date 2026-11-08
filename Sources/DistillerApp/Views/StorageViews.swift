@@ -62,18 +62,33 @@ private struct StorageLocationRow: View {
     }
 }
 
-/// Distiller ▸ Settings… (⌘,).
+/// Distiller ▸ Settings… (⌘,): standard toolbar tabs for storage, the GitHub account and the
+/// AI assistant.
 struct SettingsView: View {
+    var body: some View {
+        TabView {
+            SettingsPane { StorageLocationsSection(header: "Storage") }
+                .tabItem { Label("Storage", systemImage: "externaldrive") }
+            SettingsPane { GitHubSettingsSection() }
+                .tabItem { Label { Text("GitHub") } icon: { Image(nsImage: .gitHubMarkTemplate) } }
+            SettingsPane { AssistantSettingsSection() }
+                .tabItem { Label("AI Assistant", systemImage: "sparkles") }
+        }
+        .frame(width: 560)
+    }
+}
+
+/// One Settings tab: a grouped form sized to its content, and the progress of long work
+/// (such as moving storage) under it.
+private struct SettingsPane<Content: View>: View {
     @Environment(AppModel.self) private var model
+    @ViewBuilder var content: Content
 
     var body: some View {
         VStack(spacing: 0) {
-            Form {
-                StorageLocationsSection(header: "Storage")
-                GitHubSettingsSection()
-                AssistantSettingsSection()
-            }
-            .formStyle(.grouped)
+            Form { content }
+                .formStyle(.grouped)
+                .scrollDisabled(true)
             if let message = model.busyMessage {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -83,7 +98,6 @@ struct SettingsView: View {
                 .padding(12)
             }
         }
-        .frame(width: 560)
         .fixedSize(horizontal: false, vertical: true)
     }
 }
@@ -110,10 +124,15 @@ struct UnavailableStorageBanner: View {
 
 
 /// Settings ▸ AI Assistant: whether `distiller mcp` serves its troubleshooting tools (off until
-/// the player turns it on), the Claude Desktop connection, and the connection guide.
+/// the player turns it on), and how an AI app connects. Distiller never edits other apps'
+/// settings: the player adds the server command to their AI app, which starts it when needed.
 struct AssistantSettingsSection: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openWindow) private var openWindow
+
+    private var serverCommand: String {
+        "\(model.bundledServer?.path ?? MCPClientSetup.defaultServerPath) mcp"
+    }
 
     var body: some View {
         Section {
@@ -125,28 +144,32 @@ struct AssistantSettingsSection: View {
                     if turningOn { openWindow(id: AssistantConnectView.windowID) }
                 }
             ))
-            Text("When on, an assistant you connect (Claude, ChatGPT, or a model in LM Studio or Ollama) can read your games' setup, recipes, logs and crash dumps to help you build a recipe or fix a game. It can't change anything. Turn it off once your games run and you just want to play; an assistant that's already connected loses access at once.")
+            Text("When on, an AI app you connect (Claude, ChatGPT, or a model in LM Studio or Ollama) can read your games' setup, recipes, logs and crash dumps to help you build a recipe or fix a game. It can't change anything. Turn it off once your games run and you just want to play; a connected app loses access at once.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            LabeledContent("Claude Desktop") {
-                HStack {
-                    let command = model.claudeDesktopCommand
-                    Text(command == nil ? "Not connected" : "Connected").foregroundStyle(.secondary)
-                    if command == nil {
-                        Button("Connect") { model.connectClaudeDesktop(true) }
-                            .disabled(model.bundledServer == nil)
-                    } else {
-                        Button("Disconnect") { model.connectClaudeDesktop(false) }
-                    }
-                }
-            }
-            LabeledContent("Other assistants") {
-                Button("Connection Guide…") { openWindow(id: AssistantConnectView.windowID) }
-            }
         } header: {
             Text("AI Assistant")
+        }
+        Section {
+            LabeledContent("Server command") {
+                HStack(spacing: 8) {
+                    Text(serverCommand)
+                        .font(.caption.monospaced())
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                    CopyButton(text: serverCommand)
+                }
+            }
+            HStack {
+                Button("Connection Steps…") { openWindow(id: AssistantConnectView.windowID) }
+                Spacer()
+                Link("Read the guide online", destination: MCPClientSetup.docsURL)
+            }
+        } header: {
+            Text("Connecting an AI app")
         } footer: {
-            Text("Restart Claude Desktop after connecting or disconnecting. The guide shows the settings for Claude Code, ChatGPT, LM Studio, Ollama and other MCP clients.")
+            Text("Distiller doesn't change other apps' settings. Add the command above to your AI app's MCP servers and the app starts Distiller's server when it needs it. Any app that supports local (stdio) MCP servers can connect.")
         }
     }
 }

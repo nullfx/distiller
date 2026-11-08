@@ -218,31 +218,6 @@ final class AssistantSwitchTests: XCTestCase {
         try await DistillerEngine.moveStorage(.bottles, to: work.appendingPathComponent("elsewhere"), paths: paths)
         XCTAssertTrue(StorageSettings.load(fromSupportFolder: paths.root).isAssistantEnabled)
     }
-
-    func testClaudeDesktopConfigKeepsEverythingElse() throws {
-        let file = work.appendingPathComponent("Claude/claude_desktop_config.json")
-        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try #"{"preferences":{"theme":"dark"},"mcpServers":{"other":{"command":"/bin/other"}}}"#.write(to: file, atomically: true, encoding: .utf8)
-        let config = ClaudeDesktopConfig(file: file)
-        XCTAssertNil(config.configuredCommand())
-
-        try config.connect(serverExecutable: URL(fileURLWithPath: "/Applications/Distiller.app/Contents/Helpers/distiller"))
-        XCTAssertEqual(config.configuredCommand(), "/Applications/Distiller.app/Contents/Helpers/distiller")
-        let saved = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
-        XCTAssertEqual((saved["preferences"] as? [String: String])?["theme"], "dark")
-        XCTAssertNotNil((saved["mcpServers"] as? [String: Any])?["other"])
-        XCTAssertEqual(((saved["mcpServers"] as? [String: Any])?["distiller"] as? [String: Any])?["args"] as? [String], ["mcp"])
-        XCTAssertTrue(FileManager.default.fileExists(atPath: file.path + ".before-distiller.bak"), "Backed up before the first change")
-
-        try config.disconnect()
-        XCTAssertNil(config.configuredCommand())
-        let after = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
-        XCTAssertNotNil((after["mcpServers"] as? [String: Any])?["other"])
-
-        try "not json".write(to: file, atomically: true, encoding: .utf8)
-        XCTAssertThrowsError(try config.connect(serverExecutable: URL(fileURLWithPath: "/x")), "An unreadable file is left alone")
-        XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), "not json")
-    }
 }
 
 /// A thread-safe Bool for `@Sendable` closures in tests.

@@ -30,8 +30,9 @@ struct DistillerApp: App {
         WindowGroup("Distiller") {
             ContentView()
                 .environment(model)
-                // Can be made small (about half the opening size); opens at 920 × 580.
-                .frame(minWidth: 440, minHeight: 270)
+                // Narrow enough to sit beside a game, wide enough that the toolbar and each
+                // game's details fit on a line; opens at 920 × 580.
+                .frame(minWidth: 620, minHeight: 340)
                 .task { await model.start() }
                 .onAppear { NSApp.activate() }
                 // distiller:// links from the catalogue website; keep them in this window
