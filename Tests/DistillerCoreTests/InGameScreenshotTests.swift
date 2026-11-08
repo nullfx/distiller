@@ -23,6 +23,7 @@ final class InGameScreenshotTests: XCTestCase {
         return url
     }
 
+    @discardableResult
     func makeCheckBottle(owner: String? = nil) throws -> Bottle {
         let bottle = Bottle(id: "real-game-check-\(UUID().uuidString.prefix(6).lowercased())", name: "Real Game" + DistillerEngine.communityCheckBottleSuffix,
                             wine: "wine@11", createdAt: Date().addingTimeInterval(-600))
