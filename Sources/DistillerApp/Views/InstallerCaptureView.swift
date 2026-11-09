@@ -27,11 +27,11 @@ struct InstallerCaptureView: View {
             BrowserAddressBar(capture: capture)
             Divider()
             WebViewHost(capture: capture)
-                .frame(minHeight: 360)
+                .frame(minHeight: 200, maxHeight: .infinity)
             Divider()
             statusPanel
         }
-        .frame(minWidth: 860, idealWidth: 960, minHeight: 640, idealHeight: 720)
+        .frame(minWidth: 640, idealWidth: 900, maxWidth: .infinity, minHeight: 460, idealHeight: 640, maxHeight: .infinity)
         .onDisappear { capture.discardDownload() }
     }
 
@@ -243,10 +243,22 @@ final class InstallerCaptureModel: NSObject, WKNavigationDelegate, WKDownloadDel
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) { refreshNavigation() }
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) { refreshNavigation() }
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { refreshNavigation() }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        refreshNavigation()
+        if !Self.isExpected(error) { message = error.localizedDescription }
+    }
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
         refreshNavigation()
-        if (error as NSError).code != NSURLErrorCancelled { message = error.localizedDescription }
+        if !Self.isExpected(error) { message = error.localizedDescription }
+    }
+
+    /// Navigation "failures" that are part of normal browsing: one replaced by another (the
+    /// player clicked again) and one that became a download (WebKit's "frame load interrupted",
+    /// error 102, which every download click causes).
+    static func isExpected(_ error: Error) -> Bool {
+        let error = error as NSError
+        if error.domain == NSURLErrorDomain, error.code == NSURLErrorCancelled { return true }
+        return error.domain == WKErrorDomain || error.domain == "WebKitErrorDomain" ? error.code == 102 : false
     }
 
     // MARK: Downloads

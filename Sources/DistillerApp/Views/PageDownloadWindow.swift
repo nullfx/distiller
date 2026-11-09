@@ -45,15 +45,22 @@ final class PageDownloadWindow: NSObject, NSWindowDelegate {
         let view = PageDownloadView(request: request, capture: capture) { [weak self] file in
             self?.finish(file)
         }
+        // A size that fits the screen, leaving room around it; the window keeps it (the hosting
+        // view only enforces the minimum), so long text wraps instead of widening the window.
+        let visible = (NSApp.keyWindow?.screen ?? NSScreen.main)?.visibleFrame.size ?? NSSize(width: 1280, height: 800)
+        let size = NSSize(width: min(960, visible.width - 80), height: min(700, visible.height - 80))
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 960, height: 720),
+            contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered, defer: false
         )
         window.title = "Download \(request.title)'s Installer"
         window.isReleasedWhenClosed = false
-        window.contentMinSize = NSSize(width: 760, height: 560)
-        window.contentView = NSHostingView(rootView: view)
+        window.contentMinSize = NSSize(width: min(640, size.width), height: min(460, size.height))
+        let hosting = NSHostingView(rootView: view)
+        hosting.sizingOptions = [.minSize]
+        window.contentView = hosting
+        window.setContentSize(size)
         window.delegate = self
         window.center()
         window.makeKeyAndOrderFront(nil)
@@ -96,10 +103,11 @@ private struct PageDownloadView: View {
             BrowserAddressBar(capture: capture)
             Divider()
             WebViewHost(capture: capture)
-                .frame(minHeight: 360)
+                .frame(minHeight: 200, maxHeight: .infinity)
             Divider()
             status
         }
+        .frame(minWidth: 600, maxWidth: .infinity, minHeight: 420, maxHeight: .infinity)
     }
 
     private var status: some View {

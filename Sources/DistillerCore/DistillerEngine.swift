@@ -136,7 +136,21 @@ public final class DistillerEngine: @unchecked Sendable {
             resolved, in: bottle, wine: stack.wine, graphics: stack.graphics, supplied: supplied, progress: progress
         )
         try library.upsert(game)
+        // An installer that was cancelled or failed often exits normally, so check its result.
+        // The game stays in the library (marked as missing its program), where it can be
+        // removed with its bottle.
+        if let missing = Self.missingLaunchProgram(resolved, root: bottles.root(of: bottle)) {
+            throw DistillerError.setupFailed(
+                "The installer closed, but \(missing) isn't in the bottle, so \(recipe.game.title) didn't install. "
+                + "If the installer was cancelled or showed an error, remove the game from your library (that removes its bottle too) and install it again.")
+        }
         return game
+    }
+
+    /// The recipe's launch program (as the recipe names it) when the bottle doesn't have it.
+    static func missingLaunchProgram(_ resolved: ResolvedRecipe, root: URL) -> String? {
+        guard let exe = resolved.launch?.exe, let program = try? BottlePath.resolve(exe, in: root) else { return nil }
+        return FileManager.default.fileExists(atPath: program.followingSymlinks.path) ? nil : exe
     }
 
     /// The pre-authoring form, kept for callers that only supply files.

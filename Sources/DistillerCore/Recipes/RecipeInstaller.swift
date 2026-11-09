@@ -119,9 +119,41 @@ public final class RecipeInstaller: @unchecked Sendable {
         let root = bottles.root(of: bottle)
         let prefix = bottles.prefix(of: bottle)
         let env = WineEnvironment.build(prefix: prefix, wine: wine, graphics: graphics, resolved: resolved)
+        let gameProgram = resolved?.launch.flatMap { try? BottlePath.resolve($0.exe, in: root) }
         for (index, step) in steps.enumerated() {
             progress(index + 1, Self.describe(step))
+            if case .runWindows(let run) = step, run.wait ?? true {
+                // Don't wait for a launcher or the game that the installer leaves running.
+                let program = try BottlePath.resolve(run.path, in: root)
+                try await runner.runWindowsProgram(program, arguments: run.args ?? [], wine: wine, environment: env, wait: false)
+                let runner = self.runner
+                let driveC = prefix.appendingPathComponent("drive_c", isDirectory: true)
+                let exited = try await runner.waitForServer(wine: wine, environment: env) {
+                    guard let gameProgram, FileManager.default.fileExists(atPath: gameProgram.followingSymlinks.path) else { return false }
+                    let running = (try? await runner.runningPrograms(wine: wine, environment: env)) ?? []
+                    return Self.programStartedByInstaller(CommunityCheckSession.programs(from: running, driveC: driveC), gameProgram: gameProgram) != nil
+                }
+                if !exited, let gameProgram {
+                    progress(index + 1, "The installer left \(gameProgram.deletingLastPathComponent().lastPathComponent) running; the install is done")
+                }
+                continue
+            }
             try await perform(step, root: root, prefix: prefix, wine: wine, environment: env, supplied: supplied)
+        }
+    }
+
+    /// A program the installer started from the game's own folder (its launcher, or the game),
+    /// which may keep running after the install. Programs in that folder that install or
+    /// uninstall things don't count, and nor do programs in its subfolders (often runtimes'
+    /// installers).
+    static func programStartedByInstaller(_ running: [ProgramInBottle], gameProgram: URL) -> ProgramInBottle? {
+        let folder = gameProgram.deletingLastPathComponent().standardizedFileURL.path.lowercased()
+        let installerWords = ["setup", "install", "unins", "redist", "dxsetup", "vcredist", "update", "patch"]
+        return running.first { candidate in
+            let url = candidate.program.url.standardizedFileURL
+            let name = url.lastPathComponent.lowercased()
+            return url.deletingLastPathComponent().path.lowercased() == folder
+                && !installerWords.contains { name.contains($0) }
         }
     }
 
