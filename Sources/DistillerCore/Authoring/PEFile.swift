@@ -86,8 +86,10 @@ struct PEImage {
     let reader: ByteReader
     let machineCode: UInt16
     let imageBase: UInt64
-    private let directoriesOffset: Int
-    private let directoryCount: Int
+    let directoriesOffset: Int
+    let directoryCount: Int
+    /// Where the optional header starts; its checksum field is at +64 (PE32 and PE32+).
+    let optionalHeaderOffset: Int
     private let sections: [(virtualAddress: UInt32, virtualSize: UInt32, rawOffset: UInt32, rawSize: UInt32)]
 
     init?(data: Data) {
@@ -114,6 +116,7 @@ struct PEImage {
             : UInt64(reader.u32(optional + 28) ?? 0)
         self.directoryCount = Int(reader.u32(optional + (isPE32Plus ? 108 : 92)) ?? 0)
         self.directoriesOffset = optional + (isPE32Plus ? 112 : 96)
+        self.optionalHeaderOffset = optional
 
         var sections: [(virtualAddress: UInt32, virtualSize: UInt32, rawOffset: UInt32, rawSize: UInt32)] = []
         let sectionTable = optional + Int(optionalSize)

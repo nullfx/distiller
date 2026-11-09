@@ -285,7 +285,7 @@ struct RecipeCommand: AsyncParsableCommand {
         abstract: "Create, check and submit recipes.",
         subcommands: [
             Validate.self, Resolve.self, RecipeInspect.self, RecipeCreate.self, RecipePrograms.self,
-            RecipeSetLaunch.self, RecipeEdit.self, RecipeReload.self, RecipeRunInstaller.self, RecipeCommunityCheck.self, RecipeSubmit.self,
+            RecipeSetLaunch.self, RecipeEdit.self, RecipeReload.self, RecipeRunInstaller.self, RecipeCheckSignature.self, RecipeCommunityCheck.self, RecipeSubmit.self,
         ]
     )
 

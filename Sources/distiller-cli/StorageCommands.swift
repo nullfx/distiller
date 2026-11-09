@@ -430,3 +430,28 @@ struct LogsCommand: ParsableCommand {
         }
     }
 }
+
+// MARK: - recipe check-signature
+
+struct RecipeCheckSignature: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "check-signature",
+        abstract: "Check a Windows installer's publisher signature (Authenticode).",
+        discussion: """
+            Verifies that the program is signed, unchanged since signing, by a code-signing \
+            certificate macOS trusts, and prints the signer. Installers that change with every \
+            update can be checked this way instead of with a fixed checksum.
+            """
+    )
+
+    @Argument(help: "The installer (.exe or .msi).")
+    var file: String
+
+    @Option(help: "The signer it must be, such as \"Example Publisher, Inc.\".")
+    var signer: String?
+
+    func run() throws {
+        let signature = try Authenticode.verify(URL(fileURLWithPath: file), expectedSigner: signer)
+        print("Signed by \(signature.signer) (\(signature.digestAlgorithm)); unchanged since signing; certificate trusted for code signing.")
+    }
+}
