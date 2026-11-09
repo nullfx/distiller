@@ -6,7 +6,10 @@ import Foundation
 /// the Wine build's manifest, the graphics layer's manifest, then the resolved recipe.
 /// `WINEPREFIX` is set last so nothing can point Wine at another prefix.
 public enum WineEnvironment {
-    public static let defaults: [String: String] = ["WINEDEBUG": "-all"]
+    /// Wine's debug output off, and MoltenVK (under DXVK) reporting errors only: its warnings
+    /// can repeat many times a second and fill a launch log. Component manifests and recipes
+    /// come later in `build`, so either can turn them back up.
+    public static let defaults: [String: String] = ["WINEDEBUG": "-all", "MVK_CONFIG_LOG_LEVEL": "1"]
 
     static let inheritedKeys = ["HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "SHELL"]
 

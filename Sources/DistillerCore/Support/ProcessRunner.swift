@@ -94,14 +94,35 @@ public enum ProcessRunner {
         process.arguments = arguments
         process.environment = environment
         if let currentDirectory { process.currentDirectoryURL = currentDirectory }
-        let handle = try openLog(logFile)
-        process.standardOutput = handle
-        process.standardError = handle
+        // Through a pipe and a size-limited writer (LaunchLog), not straight into the file. The
+        // pipe is drained until every writer closes it, even after the log is finished:
+        // wineserver inherits it and outlives the program.
+        let log = LaunchLog(handle: try openLog(logFile))
+        let pipe = Pipe()
+        pipe.fileHandleForReading.readabilityHandler = { reader in
+            let chunk = reader.availableData
+            if chunk.isEmpty {
+                reader.readabilityHandler = nil
+                log.finish()
+            } else {
+                log.append(chunk)
+            }
+        }
+        process.standardOutput = pipe
+        process.standardError = pipe
         process.terminationHandler = { finished in
-            try? handle.close()
+            log.finish()
             onExit?(finished.terminationStatus)
         }
-        try process.run()
+        do {
+            try process.run()
+        } catch {
+            pipe.fileHandleForReading.readabilityHandler = nil
+            log.finish()
+            throw error
+        }
+        // Only the child should hold the writing end now.
+        try? pipe.fileHandleForWriting.close()
         return process
     }
 
