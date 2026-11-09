@@ -430,3 +430,53 @@ struct LogsCommand: ParsableCommand {
         }
     }
 }
+
+// MARK: - recipe check-link
+
+struct RecipeCheckLink: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "check-link",
+        abstract: "Check which installer links a player's Distiller can download directly.",
+        discussion: """
+            Asks each link the way Distiller downloads installers, with no cookies and no referrer \
+            (HEAD, or a 1-byte GET), in order, and reports the first that works. Give the link you \
+            clicked first, then any it redirects to. Signed or expiring links are skipped. The app's \
+            Get from Download Page… finds the links for you.
+            """
+    )
+
+    @Argument(help: "Installer links, the one you clicked first.")
+    var links: [String]
+
+    @Option(help: "The installer's size in bytes, if you know it: links that serve a different size are rejected.")
+    var size: Int64 = 0
+
+    func run() async throws {
+        let urls = try links.map { text -> URL in
+            guard let url = URL(string: text) else { throw ValidationError("\(text) isn't a link.") }
+            return url
+        }
+        let capture = CapturedDownload(page: nil, links: urls, fileName: urls.last?.lastPathComponent ?? "", size: size)
+        let result = await InstallerLinkTest.test(capture)
+        for attempt in result.tried {
+            print("\(Self.describe(attempt.outcome))\t\(attempt.url.absoluteString)")
+        }
+        if let url = result.url {
+            print("Use: \(url.absoluteString)")
+        } else {
+            fflush(stdout)
+            throw ValidationError("None of these links can be downloaded directly.")
+        }
+    }
+
+    static func describe(_ outcome: InstallerLinkOutcome) -> String {
+        switch outcome {
+        case .works: return "works"
+        case .shortLived: return "expires"
+        case .notHTTPS: return "not-https"
+        case .refused(let status): return "refused (\(status))"
+        case .differentFile(let size): return "different file (\(size) bytes)"
+        case .failed(let reason): return "failed (\(reason))"
+        }
+    }
+}
