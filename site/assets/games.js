@@ -140,6 +140,8 @@ function linksPanel(game) {
     const url = safeHttpsURL(store.url);
     if (url) links.push(el("li", {}, el("a", { href: url, rel: "noopener", text: STORE_NAMES[store.name] ?? "Store" })));
   }
+  const page = safeHttpsURL(game.installer?.page);
+  if (page) links.push(el("li", {}, el("a", { href: page, rel: "noopener", text: "Download page" }), el("span", { class: "muted", text: ` (${new URL(page).host})` })));
   const installer = safeHttpsURL(game.installer?.url);
   if (installer) links.push(el("li", {}, el("a", { href: installer, rel: "noopener", text: "Official installer" }), el("span", { class: "muted", text: ` (${new URL(installer).host})` })));
   if (!links.length) return null;

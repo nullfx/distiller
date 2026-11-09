@@ -37,6 +37,11 @@ public enum RecipeLoader {
             guard let url = URL(string: installer.url), url.scheme?.lowercased() == "https", url.host?.isEmpty == false else {
                 throw DistillerError.invalidRecipe("game.installer.url must be an https:// link to the publisher's installer.")
             }
+            if let page = installer.page {
+                guard let pageURL = URL(string: page), pageURL.scheme?.lowercased() == "https", pageURL.host?.isEmpty == false else {
+                    throw DistillerError.invalidRecipe("game.installer.page must be an https:// link to the publisher's download page.")
+                }
+            }
         }
         try RecipePolicy.checkVerbs(recipe.prefix?.winetricks ?? [])
         try RecipePolicy.checkEnv(recipe.env)

@@ -311,11 +311,13 @@ struct CommunityGameView: View {
         let website = CatalogueText.safeLink(game.website)
         let stores = (game.stores ?? []).compactMap { store in CatalogueText.safeLink(store.url).map { (CatalogueText.store(store.name), $0) } }
         let installer = CatalogueText.safeLink(game.installer?.url)
-        if website != nil || !stores.isEmpty || installer != nil {
+        let downloadPage = CatalogueText.safeLink(game.installer?.page)
+        if website != nil || !stores.isEmpty || installer != nil || downloadPage != nil {
             section("Links") {
                 VStack(alignment: .leading, spacing: 6) {
                     if let website { Link("Official website", destination: website) }
                     ForEach(stores, id: \.1) { name, url in Link(name, destination: url) }
+                    if let downloadPage { Link("Download page", destination: downloadPage) }
                     if let installer {
                         HStack(spacing: 4) {
                             Link("Official installer", destination: installer)
