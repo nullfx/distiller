@@ -342,7 +342,7 @@ struct RecipeCommunityCheck: AsyncParsableCommand {
         })
         let updated = try await engine.runCommunityCheck(for: entry, prompts: prompts, keepBottle: keepBottle) { print($0) }
         if let check = updated.communityCheck {
-            print("Community check passed. Installer SHA-256: \(check.installerSHA256). Launches \(check.recipe.launch?.exe ?? "?").")
+            print("Community check passed. Installer \(check.installerSigner.map { "signed by \($0)" } ?? "SHA-256: \(check.installerSHA256)"). Launches \(check.recipe.launch?.exe ?? "?").")
         }
     }
 }

@@ -24,7 +24,11 @@ public enum CPUArch: String, Codable, CaseIterable, Sendable {
 /// A shareable, declarative description of how to install and run one game.
 /// The JSON Schema in the distiller-recipes repository is the reference for this format.
 public struct Recipe: Codable, Equatable, Sendable {
-    public static let supportedSchema = 1
+    /// The newest recipe schema this version of Distiller reads.
+    public static let supportedSchema = 2
+    /// The schema new recipes start at: 1, unless they use something newer (`requiredSchema`),
+    /// so older versions of Distiller can still read them.
+    public static let baseSchema = 1
 
     public var schema: Int
     public var id: String
@@ -47,7 +51,7 @@ public struct Recipe: Codable, Equatable, Sendable {
     }
 
     public init(
-        schema: Int = Recipe.supportedSchema,
+        schema: Int = Recipe.baseSchema,
         id: String,
         name: String? = nil,
         forkedFrom: String? = nil,
@@ -103,12 +107,16 @@ public struct PublicInstaller: Codable, Equatable, Sendable {
     /// The publisher's download page (HTTPS), where a player can always get the installer.
     /// Optional; Distiller records it when the installer is downloaded from the page.
     public var page: String?
+    /// The installer changes with every update (a game launcher's, for example), so it's
+    /// verified by its publisher's signature rather than a fixed checksum. Schema 2.
+    public var updates: Bool?
     /// Arguments for the installer, such as a silent-install switch.
     public var args: [String]?
 
-    public init(url: String, page: String? = nil, args: [String]? = nil) {
+    public init(url: String, page: String? = nil, updates: Bool? = nil, args: [String]? = nil) {
         self.url = url
         self.page = page
+        self.updates = updates
         self.args = args
     }
 }
@@ -346,5 +354,17 @@ public struct StringList: Codable, Equatable, Sendable, ExpressibleByArrayLitera
         } else {
             try container.encode(values)
         }
+    }
+}
+
+extension Recipe {
+    /// The oldest schema that can describe this recipe: 2 if anything is verified by a
+    /// publisher's signature (a `signer` download, or an installer that `updates`), else 1.
+    public var requiredSchema: Int {
+        let signed = (install ?? []).contains { step in
+            if case .download(let download) = step { return download.signer != nil }
+            return false
+        }
+        return signed || game.installer?.updates == true ? 2 : 1
     }
 }

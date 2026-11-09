@@ -23,8 +23,11 @@ public enum RecipeLoader {
 
     /// The safety and consistency checks Distiller applies before trusting a recipe.
     public static func validate(_ recipe: Recipe) throws {
-        guard recipe.schema == Recipe.supportedSchema else {
+        guard (1...Recipe.supportedSchema).contains(recipe.schema) else {
             throw DistillerError.unsupportedSchema(recipe.schema)
+        }
+        guard recipe.schema >= recipe.requiredSchema else {
+            throw DistillerError.invalidRecipe("it verifies a download by its publisher's signature (signer, or game.installer.updates), which needs schema: \(recipe.requiredSchema).")
         }
         guard RecipePolicy.isValidSlug(recipe.id) else {
             throw DistillerError.invalidRecipe("id \"\(recipe.id)\" must be 2–64 lowercase letters, digits or hyphens.")
@@ -56,8 +59,19 @@ public enum RecipeLoader {
                 guard let url = URL(string: download.url), url.scheme?.lowercased() == "https" else {
                     throw DistillerError.insecureURL(download.url)
                 }
-                guard download.sha256.range(of: "^[0-9a-fA-F]{64}$", options: .regularExpression) != nil else {
-                    throw DistillerError.invalidRecipe("The download \(download.url) needs a 64-character sha256.")
+                switch (download.sha256, download.signer) {
+                case (let sha256?, nil):
+                    guard sha256.range(of: "^[0-9a-fA-F]{64}$", options: .regularExpression) != nil else {
+                        throw DistillerError.invalidRecipe("The download \(download.url) needs a 64-character sha256.")
+                    }
+                case (nil, let signer?):
+                    let trimmed = signer.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty, trimmed == signer, signer.count <= 200,
+                          !signer.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
+                        throw DistillerError.invalidRecipe("The download \(download.url) names its signer oddly: \"\(signer)\".")
+                    }
+                default:
+                    throw DistillerError.invalidRecipe("The download \(download.url) needs either a sha256 or a signer (its publisher), not both.")
                 }
                 _ = try BottlePath.resolve(download.to, in: scratch)
             case .extract(let extract):

@@ -17,13 +17,18 @@ public enum InstallStep: Codable, Equatable, Sendable {
     case userFile(UserFile)
     case userFolder(UserFolder)
 
+    /// A download, verified before it's used: by its SHA-256, or, for an installer that
+    /// changes with every update, by its publisher's Authenticode signature (`signer`,
+    /// recipe schema 2). Exactly one of the two.
     public struct Download: Codable, Equatable, Sendable {
         public var url: String
-        public var sha256: String
+        public var sha256: String?
+        public var signer: String?
         public var to: String
-        public init(url: String, sha256: String, to: String) {
+        public init(url: String, sha256: String? = nil, signer: String? = nil, to: String) {
             self.url = url
             self.sha256 = sha256
+            self.signer = signer
             self.to = to
         }
     }

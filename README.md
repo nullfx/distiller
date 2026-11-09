@@ -50,6 +50,8 @@ From a terminal: `swift run distiller setup` shows the status and `swift run dis
 - **A Windows installer**: Distiller runs it in a new bottle, then you pick the program it installed.
 - **An empty bottle**: set up the bottle yourself. Installers you run from Distiller are added to the recipe.
 
+For installers whose file changes with every release (a game launcher's, such as Battle.net's), turn on **The installer changes with updates**: the community check then reads the installer's publisher signature, and the shared recipe checks that signature (for example `signer: "Blizzard Entertainment, Inc."`) instead of a fixed checksum (`distiller recipe check-signature` checks a file from a terminal).
+
 The recipe's **official installer** link can be typed in, or found with **Get from Download Page…** in the workshop: browse to the publisher's download page in Distiller's private browser and click the Windows download, and Distiller records the page and the first of the download's links that works without the page (`distiller recipe check-link` tests links from a terminal).
 
 Every authored game opens in the **recipe workshop**: choose the program, adjust settings, edit the YAML directly or in your own editor (`recipe.yaml` in the bottle folder; choose **Reload from File** afterwards), run installers and Wine tools, and play to test. Changes to the Windows version, registry, graphics layer or winetricks are applied to the bottle when you save.

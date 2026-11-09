@@ -16,7 +16,7 @@ public enum CommunityCheck {
 
     /// Where the installer is downloaded to in the bottle, and the steps that run it. An MSI
     /// goes to C:\Installers so msiexec can reach it.
-    public static func installerSteps(_ installer: PublicInstaller, sha256: String) throws -> [InstallStep] {
+    public static func installerSteps(_ installer: PublicInstaller, sha256: String, signer: String? = nil) throws -> [InstallStep] {
         guard let url = URL(string: installer.url), url.scheme?.lowercased() == "https" else {
             throw DistillerError.insecureURL(installer.url)
         }
@@ -25,27 +25,30 @@ public enum CommunityCheck {
         if url.pathExtension.lowercased() == "msi" {
             let target = "C:\\Installers\\\(name)"
             return [
-                .download(.init(url: installer.url, sha256: sha256, to: target)),
+                .download(signer.map { .init(url: installer.url, signer: $0, to: target) } ?? .init(url: installer.url, sha256: sha256, to: target)),
                 .runWindows(.init(path: "C:\\windows\\system32\\msiexec.exe", args: ["/i", target] + args, wait: true)),
             ]
         }
         let target = "cache/\(name)"
         return [
-            .download(.init(url: installer.url, sha256: sha256, to: target)),
+            .download(signer.map { .init(url: installer.url, signer: $0, to: target) } ?? .init(url: installer.url, sha256: sha256, to: target)),
             .runWindows(.init(path: target, args: args.isEmpty ? nil : args, wait: true)),
         ]
     }
 
     /// The shareable recipe: the player's settings, installed from the public installer, and
     /// launching `launchExe` (found after the installer ran). Throws without `game.installer`.
-    public static func shareableRecipe(from recipe: Recipe, installerSHA256: String, launchExe: String?) throws -> Recipe {
+    /// `installerSigner`, for an installer that `updates`, verifies it by its publisher's
+    /// signature instead of `installerSHA256` (and raises the recipe to schema 2).
+    public static func shareableRecipe(from recipe: Recipe, installerSHA256: String, installerSigner: String? = nil, launchExe: String?) throws -> Recipe {
         guard let installer = recipe.game.installer else {
             throw DistillerError.invalidRecipe("it has no official public installer (game.installer.url).")
         }
         var shared = recipe
         // Settings first, so runtimes and registry values are in place before the installer
         // runs; the installer last, since it may start a launcher or the game and keep running.
-        shared.install = (recipe.install ?? []).filter(isKeptStep) + (try installerSteps(installer, sha256: installerSHA256))
+        shared.install = (recipe.install ?? []).filter(isKeptStep) + (try installerSteps(installer, sha256: installerSHA256, signer: installerSigner))
+        shared.schema = max(shared.schema, shared.requiredSchema)
         if let launchExe {
             shared.launch = LaunchSpec(exe: launchExe, args: recipe.launch?.args, workingDir: nil)
         } else {
