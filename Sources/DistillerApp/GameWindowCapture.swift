@@ -10,10 +10,11 @@ import ScreenCaptureKit
 /// The first capture makes macOS ask for Screen Recording permission; without it there's
 /// simply no screenshot.
 enum GameWindowCapture {
-    static func capture(programName: String) async -> Data? {
+    /// `programName` ("Game.exe") prefers that program's windows; without it, the largest
+    /// window of any Windows program.
+    static func capture(programName: String?) async -> Data? {
         guard let content = try? await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true) else { return nil }
-        let name = programName.lowercased()
-        let stem = (name as NSString).deletingPathExtension
+        let name = programName?.lowercased()
         let ownProcess = ProcessInfo.processInfo.processIdentifier
         let usable = content.windows.filter { window in
             guard let app = window.owningApplication, app.processID != ownProcess else { return false }
@@ -21,7 +22,10 @@ enum GameWindowCapture {
         }
         func appName(_ window: SCWindow) -> String { window.owningApplication?.applicationName.lowercased() ?? "" }
         // The program's own windows first; otherwise any Wine program's.
-        let named = usable.filter { appName($0) == name || appName($0) == stem || appName($0).hasPrefix(stem) }
+        let named: [SCWindow] = name.map { name in
+            let stem = (name as NSString).deletingPathExtension
+            return usable.filter { appName($0) == name || appName($0) == stem || appName($0).hasPrefix(stem) }
+        } ?? []
         let wine = usable.filter { let app = appName($0); return app.hasSuffix(".exe") || app.contains("wine") }
         guard let window = (named.isEmpty ? wine : named).max(by: { area($0) < area($1) }) else { return nil }
 

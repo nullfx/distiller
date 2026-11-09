@@ -105,6 +105,22 @@ public final class WineRunner: @unchecked Sendable {
         )
     }
 
+    /// The Windows programs running in the prefix named by `environment["WINEPREFIX"]`.
+    /// Output goes through a file, not a pipe: if nothing was running, Wine starts its server,
+    /// which would otherwise hold the pipe open.
+    public func runningPrograms(wine: InstalledComponent, environment: [String: String]) async throws -> [RunningWindowsProgram] {
+        guard let wineBinary = wine.wineBinary else {
+            throw DistillerError.componentNotFound("a wine executable in \(wine.manifest.displayName)")
+        }
+        let output = FileManager.default.temporaryDirectory.appendingPathComponent("distiller-wmic-\(UUID().uuidString).txt")
+        defer { try? FileManager.default.removeItem(at: output) }
+        var quiet = environment
+        quiet["WINEDEBUG"] = "-all"
+        _ = try await ProcessRunner.run(wineBinary, arguments: WineProcessList.wmicArguments, environment: quiet, logFile: output)
+        let data = (try? Data(contentsOf: output)) ?? Data()
+        return WineProcessList.parse(WineProcessList.decode(data))
+    }
+
     /// Stops every Wine process in the prefix named by `environment["WINEPREFIX"]`.
     public func killAll(wine: InstalledComponent, environment: [String: String]) async throws {
         guard let server = wine.wineserverBinary else { return }

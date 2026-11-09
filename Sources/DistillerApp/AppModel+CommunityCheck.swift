@@ -3,8 +3,8 @@ import CoreGraphics
 import Foundation
 import DistillerCore
 
-/// Runs the community check: an alert to choose the program, then the capture panel
-/// (CommunityCheckCapture.swift) while the game runs, for screenshots and the verdict.
+/// Runs the community check: the check panel (CommunityCheckCapture.swift) follows the test
+/// bottle from the installer's start, for choosing the game, screenshots and the verdict.
 extension AppModel {
     func runCommunityCheck(for game: Game) {
         guard let engine else { return }
@@ -20,14 +20,9 @@ extension AppModel {
                 return
             }
         }
-        let prompts = CommunityCheckPrompts(
-            chooseProgram: { programs, suggested in
-                await MainActor.run { Self.askForProgram(programs, suggested: suggested) }
-            },
-            confirmRunning: { title, programName in
-                await CommunityCheckCaptureSession.run(title: title, programName: programName)
-            }
-        )
+        let prompts = CommunityCheckPrompts(session: { check in
+            await CommunityCheckCaptureSession.run(check: check)
+        })
         perform("Running the community check for \(game.title)…") {
             _ = try await engine.runCommunityCheck(for: game, prompts: prompts) { message in
                 Task { @MainActor in self.busyMessage = message }
@@ -76,20 +71,5 @@ extension AppModel {
             }
             if !rescued.isEmpty { NSWorkspace.shared.activateFileViewerSelecting(rescued) }
         }
-    }
-
-    private static func askForProgram(_ programs: [ProgramInBottle], suggested: ProgramInBottle?) -> ProgramInBottle? {
-        let alert = NSAlert()
-        alert.messageText = "Which program starts the game?"
-        alert.informativeText = "The installer has finished. Choose the program players launch; Distiller suggests the one your recipe uses."
-        let popup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 420, height: 26), pullsDown: false)
-        let shown = Array(programs.prefix(40))
-        popup.addItems(withTitles: shown.map(\.windowsPath))
-        if let suggested, let index = shown.firstIndex(of: suggested) { popup.selectItem(at: index) }
-        alert.accessoryView = popup
-        alert.addButton(withTitle: "Launch It")
-        alert.addButton(withTitle: "Cancel Check")
-        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
-        return shown[popup.indexOfSelectedItem]
     }
 }

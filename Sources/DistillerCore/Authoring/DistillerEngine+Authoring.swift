@@ -16,7 +16,7 @@ public enum WineTool: String, CaseIterable, Sendable {
 }
 
 /// A program found on a bottle's C: drive.
-public struct ProgramInBottle: Identifiable, Equatable, Sendable {
+public struct ProgramInBottle: Identifiable, Hashable, Sendable {
     public var program: DiscoveredProgram
     /// Such as `C:\Program Files\Example\Game.exe`.
     public var windowsPath: String
