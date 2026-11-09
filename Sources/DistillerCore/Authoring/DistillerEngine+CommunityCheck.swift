@@ -212,8 +212,19 @@ extension DistillerEngine {
         let destination = try BottlePath.resolve(downloadTarget, in: root)
         try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
         let sha256 = try await Downloader.download(url, to: destination)
+        // An installer that changes with every update is verified by its publisher's signature,
+        // which goes in the shared recipe instead of this copy's checksum.
+        var signer: String?
+        if publicInstaller.updates == true {
+            progress("Checking \(url.lastPathComponent)'s publisher signature")
+            do {
+                signer = try Authenticode.verify(destination).signer
+            } catch {
+                throw DistillerError.invalidRecipe("the installer is marked as changing with updates, so it's checked by its publisher's signature, but \(url.lastPathComponent) can't be: \(error.localizedDescription)")
+            }
+        }
 
-        let withoutLaunch = try CommunityCheck.shareableRecipe(from: game.recipe, installerSHA256: sha256, launchExe: nil)
+        let withoutLaunch = try CommunityCheck.shareableRecipe(from: game.recipe, installerSHA256: sha256, installerSigner: signer, launchExe: nil)
         let resolved = resolve(withoutLaunch)
         try await applySettings(resolved, in: bottle, stack: stack, progress: progress)
 
@@ -255,7 +266,7 @@ extension DistillerEngine {
         case .cancelled:
             throw DistillerError.setupFailed("The community check was cancelled.")
         }
-        let shareable = try CommunityCheck.shareableRecipe(from: game.recipe, installerSHA256: sha256, launchExe: chosen.windowsPath)
+        let shareable = try CommunityCheck.shareableRecipe(from: game.recipe, installerSHA256: sha256, installerSigner: signer, launchExe: chosen.windowsPath)
         try RecipeLoader.validate(shareable)
         let launchedAt = startedAt
 
@@ -288,7 +299,8 @@ extension DistillerEngine {
             graphics: stack.graphics?.id,
             hasIcon: icon != nil ? true : nil,
             captures: captures.isEmpty ? nil : captures,
-            sharedCaptures: captures.isEmpty ? nil : Array(captures.prefix(CommunityMedia.maxSharedScreenshots))
+            sharedCaptures: captures.isEmpty ? nil : Array(captures.prefix(CommunityMedia.maxSharedScreenshots)),
+            installerSigner: signer
         )
         var updated = (try? library.game(id: game.id)) ?? game
         updated.communityCheck = check

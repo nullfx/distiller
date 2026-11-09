@@ -24,6 +24,7 @@ struct RecipeWorkshopView: View {
     @State private var installerURL = ""
     @State private var installerArgs = ""
     @State private var installerPage = ""
+    @State private var installerUpdates = false
     @State private var launchPath = ""
     @State private var programs: [ProgramInBottle] = []
     @State private var yaml = ""
@@ -103,12 +104,14 @@ struct RecipeWorkshopView: View {
                 TextField("Download link", text: $installerURL, prompt: Text("https://…"))
                 TextField("Download page", text: $installerPage, prompt: Text("Optional: the publisher's page with the download, https://…"))
                 TextField("Installer arguments", text: $installerArgs, prompt: Text("Optional, such as /S for a silent install"))
+                Toggle("The installer changes with updates", isOn: $installerUpdates)
+                    .help("For installers whose file changes with every release, such as a game launcher's: the recipe checks the publisher's signature instead of a fixed checksum.")
                 Button("Get from Download Page…") { isCapturingInstaller = true }
                     .help("Open the publisher's download page, download the installer there, and let Distiller find a link players can download it from directly.")
             } header: {
                 Text("Official installer")
             } footer: {
-                Text("The publisher's own download, never a copy hosted elsewhere. Shared recipes install from it, and the community check proves that works before you submit.")
+                Text("The publisher's own download, never a copy hosted elsewhere. Shared recipes install from it, and the community check proves that works before you submit. If its file changes with every release (a game launcher's, for example), turn on “changes with updates”: the shared recipe then checks the publisher's signature instead of a fixed checksum.")
             }
             RecipeSettingsSections(
                 settings: $settings,
@@ -226,13 +229,15 @@ struct RecipeWorkshopView: View {
         let link = installerURL.trimmingCharacters(in: .whitespaces)
         let args = RecipeSettings.splitArguments(installerArgs)
         let page = installerPage.trimmingCharacters(in: .whitespaces)
-        recipe.game.installer = link.isEmpty ? nil : PublicInstaller(url: link, page: page.isEmpty ? nil : page, args: args.isEmpty ? nil : args)
+        recipe.game.installer = link.isEmpty ? nil : PublicInstaller(url: link, page: page.isEmpty ? nil : page, updates: installerUpdates ? true : nil, args: args.isEmpty ? nil : args)
         if launchPath.isEmpty {
             recipe.launch = nil
         } else if recipe.launch?.exe != launchPath {
             recipe.launch = LaunchSpec(exe: launchPath, args: recipe.launch?.args)
         }
         settings.apply(to: &recipe)
+        // The lowest schema that describes it, so older versions of Distiller can still read it.
+        recipe.schema = max(Recipe.baseSchema, recipe.requiredSchema)
         return recipe
     }
 
@@ -265,6 +270,7 @@ struct RecipeWorkshopView: View {
         notes = recipe.notes ?? ""
         installerURL = recipe.game.installer?.url ?? ""
         installerPage = recipe.game.installer?.page ?? ""
+        installerUpdates = recipe.game.installer?.updates == true
         installerArgs = RecipeSettings.joinArguments(recipe.game.installer?.args ?? [])
         launchPath = recipe.launch?.exe ?? ""
         yaml = (try? RecipeLoader.encode(recipe)) ?? ""

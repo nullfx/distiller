@@ -164,6 +164,9 @@ struct SubmitRecipeView: View {
                     Link(url.lastPathComponent.isEmpty ? installer.url : url.lastPathComponent, destination: url)
                 }
                 LabeledContent("From", value: url.host ?? installer.url)
+                if installer.updates == true {
+                    LabeledContent("Verified by", value: game.communityCheck?.installerSigner.map { "\($0)'s signature" } ?? "Its publisher's signature (read by the community check)")
+                }
                 if let page = installer.page, let pageURL = URL(string: page) {
                     LabeledContent("Download page") { Link(pageURL.host ?? page, destination: pageURL) }
                 }

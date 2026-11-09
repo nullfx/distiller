@@ -64,9 +64,9 @@ final class RecipeLoadingTests: XCTestCase {
     }
 
     func testRejectsNewerSchema() throws {
-        let yaml = try sampleYAML(replacing: "schema: 1", with: "schema: 2")
+        let yaml = try sampleYAML(replacing: "schema: 1", with: "schema: 3")
         XCTAssertThrowsError(try RecipeLoader.decode(yaml: yaml)) { error in
-            XCTAssertEqual(error as? DistillerError, .unsupportedSchema(2))
+            XCTAssertEqual(error as? DistillerError, .unsupportedSchema(3))
         }
     }
 

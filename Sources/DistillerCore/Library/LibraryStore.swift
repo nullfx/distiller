@@ -185,6 +185,8 @@ public struct CommunityCheckResult: Codable, Equatable, Sendable {
     /// to it (other than notes or name) means checking again.
     public var sourceFingerprint: String
     public var installerSHA256: String
+    /// The installer's publisher, from its signature, when it's verified that way (`updates`).
+    public var installerSigner: String?
     public var hardwareKey: String
     /// "id@version" of the Wine build and graphics layer it ran with.
     public var wine: String
@@ -204,13 +206,15 @@ public struct CommunityCheckResult: Codable, Equatable, Sendable {
         case checkedAt = "checked_at"
         case sourceFingerprint = "source_fingerprint"
         case installerSHA256 = "installer_sha256"
+        case installerSigner = "installer_signer"
         case hardwareKey = "hardware_key"
     }
 
     public init(
         checkedAt: Date, recipe: Recipe, sourceFingerprint: String, installerSHA256: String, hardwareKey: String, wine: String, graphics: String?,
-        hasIcon: Bool? = nil, captures: [String]? = nil, sharedCaptures: [String]? = nil
+        hasIcon: Bool? = nil, captures: [String]? = nil, sharedCaptures: [String]? = nil, installerSigner: String? = nil
     ) {
+        self.installerSigner = installerSigner
         self.checkedAt = checkedAt
         self.recipe = recipe
         self.sourceFingerprint = sourceFingerprint

@@ -8,6 +8,8 @@ final class FakeDownloads: URLProtocol {
         var needsCookie = false
         var headAllowed = true
         var status = 200
+        /// What a full GET returns (instead of a few placeholder bytes).
+        var body: Data?
     }
 
     nonisolated(unsafe) static var routes: [String: Route] = [:]
@@ -38,7 +40,8 @@ final class FakeDownloads: URLProtocol {
         if method == "GET", request.value(forHTTPHeaderField: "Range") == "bytes=0-0" {
             return respond(206, ["Content-Range": "bytes 0-0/\(route.size)", "Content-Length": "1"], body: Data([0x4D]))
         }
-        respond(200, ["Content-Length": "\(route.size)"], body: method == "HEAD" ? Data() : Data(count: 16))
+        let body = route.body ?? Data(count: 16)
+        respond(200, ["Content-Length": "\(route.body.map { Int64($0.count) } ?? route.size)"], body: method == "HEAD" ? Data() : body)
     }
 
     private func respond(_ status: Int, _ headers: [String: String], body: Data = Data()) {

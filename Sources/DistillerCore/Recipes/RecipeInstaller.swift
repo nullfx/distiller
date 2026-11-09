@@ -136,7 +136,14 @@ public final class RecipeInstaller: @unchecked Sendable {
         switch step {
         case .download(let download):
             guard let url = URL(string: download.url) else { throw DistillerError.insecureURL(download.url) }
-            try await Downloader.download(url, sha256: download.sha256, to: BottlePath.resolve(download.to, in: root))
+            let destination = try BottlePath.resolve(download.to, in: root)
+            if let signer = download.signer {
+                try await Downloader.download(url, signer: signer, to: destination)
+            } else if let sha256 = download.sha256 {
+                try await Downloader.download(url, sha256: sha256, to: destination)
+            } else {
+                throw DistillerError.invalidRecipe("The download \(download.url) has neither a sha256 nor a signer.")
+            }
 
         case .extract(let extract):
             let archive = try BottlePath.resolve(extract.archive, in: root)
