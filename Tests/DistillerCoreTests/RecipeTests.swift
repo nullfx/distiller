@@ -1,4 +1,5 @@
 import XCTest
+import DistillerCommunity
 @testable import DistillerCore
 
 final class RecipeLoadingTests: XCTestCase {
@@ -246,5 +247,29 @@ final class WineEnvironmentTests: XCTestCase {
         XCTAssertTrue(text.contains(#""RetinaMode"="y""#))
         XCTAssertTrue(text.contains(#""Flag"=dword:0000001a"#))
         XCTAssertEqual(Array(RegistryFile.data([]).prefix(2)), [0xFF, 0xFE])
+    }
+}
+
+final class InstallerPageTests: XCTestCase {
+    func recipe(page: String?) throws -> Recipe {
+        var recipe = try loadFixtureRecipe("d3dmetal")
+        recipe.game.installer = PublicInstaller(url: "https://cdn.example-publisher.com/Setup.exe", page: page)
+        return recipe
+    }
+
+    func testDownloadPageIsKeptAndChecked() throws {
+        let withPage = try recipe(page: "https://www.example-publisher.com/download")
+        XCTAssertNoThrow(try RecipeLoader.validate(withPage))
+        let yaml = try RecipeLoader.encode(withPage)
+        XCTAssertTrue(yaml.contains("page: https://www.example-publisher.com/download"), yaml)
+        XCTAssertEqual(try RecipeLoader.decode(yaml: yaml).game.installer?.page, "https://www.example-publisher.com/download")
+        XCTAssertThrowsError(try RecipeLoader.validate(try recipe(page: "http://www.example-publisher.com/download")))
+        XCTAssertNoThrow(try RecipeLoader.validate(try recipe(page: nil)), "Optional")
+    }
+
+    func testCatalogueEntriesCarryThePage() throws {
+        let json = #"{"slug":"real-game","title":"Real Game","recipes":[],"installer":{"url":"https://cdn.example.com/Setup.exe","page":"https://www.example.com/download"}}"#
+        let game = try JSONDecoder().decode(IndexGame.self, from: Data(json.utf8))
+        XCTAssertEqual(game.installer?.page, "https://www.example.com/download")
     }
 }

@@ -164,6 +164,9 @@ struct SubmitRecipeView: View {
                     Link(url.lastPathComponent.isEmpty ? installer.url : url.lastPathComponent, destination: url)
                 }
                 LabeledContent("From", value: url.host ?? installer.url)
+                if let page = installer.page, let pageURL = URL(string: page) {
+                    LabeledContent("Download page") { Link(pageURL.host ?? page, destination: pageURL) }
+                }
                 if let args = installer.args, !args.isEmpty {
                     LabeledContent("Arguments", value: args.joined(separator: " "))
                 }

@@ -100,11 +100,15 @@ public struct GameInfo: Codable, Equatable, Sendable {
 public struct PublicInstaller: Codable, Equatable, Sendable {
     /// HTTPS URL of the installer (.exe or .msi) on the publisher's own servers.
     public var url: String
+    /// The publisher's download page (HTTPS), where a player can always get the installer.
+    /// Optional; Distiller records it when the installer is downloaded from the page.
+    public var page: String?
     /// Arguments for the installer, such as a silent-install switch.
     public var args: [String]?
 
-    public init(url: String, args: [String]? = nil) {
+    public init(url: String, page: String? = nil, args: [String]? = nil) {
         self.url = url
+        self.page = page
         self.args = args
     }
 }

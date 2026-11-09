@@ -23,6 +23,7 @@ struct RecipeWorkshopView: View {
     @State private var notes = ""
     @State private var installerURL = ""
     @State private var installerArgs = ""
+    @State private var installerPage = ""
     @State private var launchPath = ""
     @State private var programs: [ProgramInBottle] = []
     @State private var yaml = ""
@@ -93,6 +94,7 @@ struct RecipeWorkshopView: View {
             }
             Section {
                 TextField("Download link", text: $installerURL, prompt: Text("https://…"))
+                TextField("Download page", text: $installerPage, prompt: Text("Optional: the publisher's page with the download, https://…"))
                 TextField("Installer arguments", text: $installerArgs, prompt: Text("Optional, such as /S for a silent install"))
             } header: {
                 Text("Official installer")
@@ -205,7 +207,8 @@ struct RecipeWorkshopView: View {
         recipe.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes
         let link = installerURL.trimmingCharacters(in: .whitespaces)
         let args = RecipeSettings.splitArguments(installerArgs)
-        recipe.game.installer = link.isEmpty ? nil : PublicInstaller(url: link, args: args.isEmpty ? nil : args)
+        let page = installerPage.trimmingCharacters(in: .whitespaces)
+        recipe.game.installer = link.isEmpty ? nil : PublicInstaller(url: link, page: page.isEmpty ? nil : page, args: args.isEmpty ? nil : args)
         if launchPath.isEmpty {
             recipe.launch = nil
         } else if recipe.launch?.exe != launchPath {
@@ -243,6 +246,7 @@ struct RecipeWorkshopView: View {
         recipeName = recipe.name ?? ""
         notes = recipe.notes ?? ""
         installerURL = recipe.game.installer?.url ?? ""
+        installerPage = recipe.game.installer?.page ?? ""
         installerArgs = RecipeSettings.joinArguments(recipe.game.installer?.args ?? [])
         launchPath = recipe.launch?.exe ?? ""
         yaml = (try? RecipeLoader.encode(recipe)) ?? ""

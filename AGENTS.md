@@ -91,7 +91,7 @@ Shells that run under Rosetta (an x86_64 shell, for example one started from an 
 
 ### Sharing with the community
 
-- **Shared recipes install from the publisher's official installer** (`game.installer.url`, HTTPS, never a mirror or re-hosted copy) and download nothing else of the game. Players may use their own copy locally (`user_folder`, `user_file`); those steps are swapped for the official installer when shared.
+- **Shared recipes install from the publisher's official installer** (`game.installer.url`, HTTPS, never a mirror or re-hosted copy; `game.installer.page`, optional, is the publisher's download page) and download nothing else of the game. Players may use their own copy locally (`user_folder`, `user_file`); those steps are swapped for the official installer when shared.
 - **Shared recipes are MIT-licensed.** The submit sheet's licence confirmation is on by default and still required; pictures in `media/` stay the publisher's.
 - **Only checked recipes are submitted.** A recipe is submitted only after the community check passed for its current content, and only the checked recipe (`CommunityCheck.recipeToSubmit`) is ever sent.
 - **Submissions are pull requests on a new branch; nothing is ever pushed to the base branch.** Contributors' branches go in their fork; maintainers (GitHub reports push, maintain or admin permission) branch in the community repository itself. Never ask for more than the `public_repo` scope. A published recipe may be revised (an `-update` branch) only by a maintainer or one of the authors listed in the *published* file, never the player's own copy.
