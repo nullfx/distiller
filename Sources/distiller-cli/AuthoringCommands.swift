@@ -227,7 +227,7 @@ struct RecipePrograms: ParsableCommand {
 
     func run() throws {
         let engine = try makeEngine()
-        for entry in try engine.discoverPrograms(for: try engine.library.game(id: game)) {
+        for entry in try engine.discoverPrograms(for: try findGame(game, in: engine)) {
             print("\(entry.windowsPath)\t\(ByteCountFormatter.string(fromByteCount: entry.program.size, countStyle: .file))")
         }
     }
@@ -236,7 +236,7 @@ struct RecipePrograms: ParsableCommand {
 struct RecipeSetLaunch: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "set-launch", abstract: "Set the program a game's recipe launches.")
 
-    @Argument(help: "The game ID.")
+    @Argument(help: "The game ID, from 'distiller games'.")
     var game: String
 
     @Argument(help: #"A Windows path such as 'C:\Games\Example\Game.exe'."#)
@@ -247,7 +247,7 @@ struct RecipeSetLaunch: AsyncParsableCommand {
 
     func run() async throws {
         let engine = try makeEngine()
-        let entry = try engine.library.game(id: game)
+        let entry = try findGame(game, in: engine)
         var recipe = entry.recipe
         recipe.launch = LaunchSpec(exe: exe, args: arguments.isEmpty ? recipe.launch?.args : arguments)
         try await engine.updateRecipe(recipe, for: entry)
@@ -261,24 +261,24 @@ struct RecipeEdit: ParsableCommand {
         abstract: "Print the path of a game's editable recipe.yaml (then run 'distiller recipe reload')."
     )
 
-    @Argument(help: "The game ID.")
+    @Argument(help: "The game ID, from 'distiller games'.")
     var game: String
 
     func run() throws {
         let engine = try makeEngine()
-        print(try engine.writeRecipeFile(for: try engine.library.game(id: game)).path)
+        print(try engine.writeRecipeFile(for: try findGame(game, in: engine)).path)
     }
 }
 
 struct RecipeReload: AsyncParsableCommand {
     static let configuration = CommandConfiguration(commandName: "reload", abstract: "Apply an edited recipe.yaml to its game.")
 
-    @Argument(help: "The game ID.")
+    @Argument(help: "The game ID, from 'distiller games'.")
     var game: String
 
     func run() async throws {
         let engine = try makeEngine()
-        let updated = try await engine.reloadRecipeFile(for: try engine.library.game(id: game)) { progress in
+        let updated = try await engine.reloadRecipeFile(for: try findGame(game, in: engine)) { progress in
             print("[\(progress.step)/\(progress.total)] \(progress.message)")
         }
         print("Reloaded \(updated.title).")
@@ -291,7 +291,7 @@ struct RecipeRunInstaller: AsyncParsableCommand {
         abstract: "Run a Windows installer in a game's bottle and add it to the recipe."
     )
 
-    @Argument(help: "The game ID.")
+    @Argument(help: "The game ID, from 'distiller games'.")
     var game: String
 
     @Argument(help: "The installer (.exe or .msi).")
@@ -303,7 +303,7 @@ struct RecipeRunInstaller: AsyncParsableCommand {
     func run() async throws {
         let engine = try makeEngine()
         let url = URL(fileURLWithPath: (installer as NSString).expandingTildeInPath)
-        try await engine.runInstaller(url, for: try engine.library.game(id: game), record: !noRecord) { progress in
+        try await engine.runInstaller(url, for: try findGame(game, in: engine), record: !noRecord) { progress in
             print("[\(progress.step)/\(progress.total)] \(progress.message)")
         }
         print(noRecord ? "Done." : "Done, and added to the recipe.")
@@ -317,7 +317,7 @@ struct RecipeSubmit: AsyncParsableCommand {
         discussion: "Sign in first with: distiller github login"
     )
 
-    @Argument(help: "The game ID.")
+    @Argument(help: "The game ID, from 'distiller games'.")
     var game: String
 
     @Option(help: "Include a report: platinum, gold, silver, bronze or borked.")
@@ -346,7 +346,7 @@ struct RecipeSubmit: AsyncParsableCommand {
 
     func run() async throws {
         let engine = try makeEngine()
-        let entry = try engine.library.game(id: game)
+        let entry = try findGame(game, in: engine)
         let repository = CommunityRepository.default
         let issues = SubmissionPlan.issues(for: entry, recipe: CommunityCheck.recipeToSubmit(for: entry) ?? entry.recipe, repository: repository)
         for issue in issues { print("\(issue.severity.rawValue): \(issue.message)") }

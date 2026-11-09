@@ -121,7 +121,7 @@ struct GameLinkFolder: ParsableCommand {
 
     func run() throws {
         let engine = try makeEngine()
-        let entry = try engine.library.game(id: game)
+        let entry = try findGame(game, in: engine)
         let original = URL(fileURLWithPath: (folder as NSString).expandingTildeInPath, isDirectory: true)
         let (_, copy) = try engine.userFolderLocation(of: entry, stepID: step)
         if APFSClone.isSymlink(copy) {
@@ -167,7 +167,7 @@ struct GameIconCommand: ParsableCommand {
 
     func run() throws {
         let engine = try makeEngine()
-        let entry = try engine.library.game(id: game)
+        let entry = try findGame(game, in: engine)
         if let set {
             try engine.setCustomIcon(for: entry, from: URL(fileURLWithPath: (set as NSString).expandingTildeInPath))
         } else if reset {
@@ -290,7 +290,7 @@ struct RecipeCommunityCheck: AsyncParsableCommand {
             """
     )
 
-    @Argument(help: "The game ID.")
+    @Argument(help: "The game ID, from 'distiller games'.")
     var game: String
 
     @Flag(help: "Keep the test bottle afterwards (it's removed by default).")
@@ -298,7 +298,7 @@ struct RecipeCommunityCheck: AsyncParsableCommand {
 
     func run() async throws {
         let engine = try makeEngine()
-        let entry = try engine.library.game(id: game)
+        let entry = try findGame(game, in: engine)
         let prompts = CommunityCheckPrompts(
             chooseProgram: { programs, suggested in
                 print("Installed programs:")
