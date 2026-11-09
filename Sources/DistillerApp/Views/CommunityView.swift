@@ -287,8 +287,11 @@ struct CommunityGameView: View {
                         Text("Play it on your Mac").font(.headline)
                         Text("Best for this Mac: \(best.recipe.name ?? best.recipe.id) (\(CatalogueText.graphics(best.recipe.graphics))).")
                             .foregroundStyle(.secondary)
-                        if let host = game.installer.flatMap({ URL(string: $0.url)?.host }) {
+                        if let host = game.officialInstaller?.url.flatMap({ URL(string: $0)?.host }) {
                             Text("Installs from the publisher's official installer (\(host)). Distiller asks before it installs anything.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        } else if let host = game.officialInstaller?.page.flatMap({ URL(string: $0)?.host }) {
+                            Text("Installs from the publisher's official installer, which you download from its page on \(host). Distiller asks before it installs anything.")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         let copies = model.installedCopies(of: LinkInstallRequest(game: game, recipe: best.recipe))
@@ -310,8 +313,8 @@ struct CommunityGameView: View {
     @ViewBuilder private func links(_ game: IndexGame) -> some View {
         let website = CatalogueText.safeLink(game.website)
         let stores = (game.stores ?? []).compactMap { store in CatalogueText.safeLink(store.url).map { (CatalogueText.store(store.name), $0) } }
-        let installer = CatalogueText.safeLink(game.installer?.url)
-        let downloadPage = CatalogueText.safeLink(game.installer?.page)
+        let installer = CatalogueText.safeLink(game.officialInstaller?.url)
+        let downloadPage = CatalogueText.safeLink(game.officialInstaller?.page)
         if website != nil || !stores.isEmpty || installer != nil || downloadPage != nil {
             section("Links") {
                 VStack(alignment: .leading, spacing: 6) {

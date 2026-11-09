@@ -61,7 +61,7 @@ struct RecipeWorkshopView: View {
         .task { await refreshPrograms() }
         .sheet(isPresented: $isCapturingInstaller) {
             InstallerCaptureView(startPage: captureStartPage) { url, page in
-                installerURL = url.absoluteString
+                installerURL = url?.absoluteString ?? ""
                 if let page { installerPage = page.absoluteString }
             }
         }
@@ -101,8 +101,8 @@ struct RecipeWorkshopView: View {
                 }
             }
             Section {
-                TextField("Download link", text: $installerURL, prompt: Text("https://…"))
-                TextField("Download page", text: $installerPage, prompt: Text("Optional: the publisher's page with the download, https://…"))
+                TextField("Download link", text: $installerURL, prompt: Text("https://…, or empty to download from the page"))
+                TextField("Download page", text: $installerPage, prompt: Text("The publisher's page with the download, https://…"))
                 TextField("Installer arguments", text: $installerArgs, prompt: Text("Optional, such as /S for a silent install"))
                 Toggle("The installer changes with updates", isOn: $installerUpdates)
                     .help("For installers whose file changes with every release, such as a game launcher's: the recipe checks the publisher's signature instead of a fixed checksum.")
@@ -111,7 +111,7 @@ struct RecipeWorkshopView: View {
             } header: {
                 Text("Official installer")
             } footer: {
-                Text("The publisher's own download, never a copy hosted elsewhere. Shared recipes install from it, and the community check proves that works before you submit. If its file changes with every release (a game launcher's, for example), turn on “changes with updates”: the shared recipe then checks the publisher's signature instead of a fixed checksum.")
+                Text("The publisher's own download, never a copy hosted elsewhere. Shared recipes install from it, and the community check proves that works before you submit. If no link works on its own, leave the link empty and give the download page: players then download the installer there, in Distiller's browser. If its file changes with every release (a game launcher's, for example), turn on “changes with updates”: the shared recipe then checks the publisher's signature instead of a fixed checksum.")
             }
             RecipeSettingsSections(
                 settings: $settings,
@@ -229,7 +229,9 @@ struct RecipeWorkshopView: View {
         let link = installerURL.trimmingCharacters(in: .whitespaces)
         let args = RecipeSettings.splitArguments(installerArgs)
         let page = installerPage.trimmingCharacters(in: .whitespaces)
-        recipe.game.installer = link.isEmpty ? nil : PublicInstaller(url: link, page: page.isEmpty ? nil : page, updates: installerUpdates ? true : nil, args: args.isEmpty ? nil : args)
+        recipe.game.installer = link.isEmpty && page.isEmpty ? nil : PublicInstaller(
+            url: link.isEmpty ? nil : link, page: page.isEmpty ? nil : page,
+            updates: installerUpdates ? true : nil, args: args.isEmpty ? nil : args)
         if launchPath.isEmpty {
             recipe.launch = nil
         } else if recipe.launch?.exe != launchPath {

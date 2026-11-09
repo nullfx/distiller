@@ -171,7 +171,14 @@ final class AppModel {
 
     func install(_ recipe: Recipe) async throws {
         guard let engine else { return }
-        guard let supplied = askForUserItems(recipe.install ?? []) else { return }
+        guard let supplied = await askForUserItems(recipe) else { return }
+        // Files downloaded from publishers' pages are cloned into the bottle; remove the
+        // temporary copies however the install ends.
+        let pageDownloads = recipe.install?.compactMap { step -> URL? in
+            guard case .userDownload(let download) = step else { return nil }
+            return supplied.files[download.id]
+        } ?? []
+        defer { pageDownloads.forEach(PageDownloadWindow.removeDownload) }
         busyMessage = "Installing \(recipe.game.title)…"
         _ = try await engine.install(recipe: recipe, supplied: supplied) { progress in
             Task { @MainActor in
@@ -180,10 +187,12 @@ final class AppModel {
         }
     }
 
-    /// Asks for every file and folder the steps need. Returns nil if the player cancels.
-    func askForUserItems(_ steps: [InstallStep]) -> UserSupplied? {
+    /// Asks for every file and folder the recipe's steps need, and opens the publisher's page
+    /// for each file the player downloads there. Returns nil if the player cancels.
+    func askForUserItems(_ recipe: Recipe) async -> UserSupplied? {
         var supplied = UserSupplied()
-        for step in steps {
+        let pages = Dictionary(RecipeInstaller.pageDownloads(in: recipe).map { ($0.step.id, $0) }, uniquingKeysWith: { first, _ in first })
+        for step in recipe.install ?? [] {
             switch step {
             case .userFile(let file):
                 guard let url = chooseFile(prompt: file.prompt) else { return nil }
@@ -191,6 +200,15 @@ final class AppModel {
             case .userFolder(let folder):
                 guard let choice = chooseFolder(prompt: folder.prompt) else { return nil }
                 supplied.folders[folder.id] = choice
+            case .userDownload(let download):
+                guard let page = pages[download.id],
+                      let url = await PageDownloadWindow.obtain(page.request, verify: { file in
+                          try RecipeInstaller.checkPageDownload(file, for: download)
+                      }) else {
+                    supplied.files.values.filter { $0.path.contains("/distiller-installer-") }.forEach(PageDownloadWindow.removeDownload)
+                    return nil
+                }
+                supplied.files[download.id] = url
             default:
                 continue
             }

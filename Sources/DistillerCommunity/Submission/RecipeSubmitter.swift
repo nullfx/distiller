@@ -134,7 +134,9 @@ public enum SubmissionPlan {
             "- [x] Distiller validated the recipe before submitting it.",
             "- [ ] `python scripts/build_index.py --check` passes (the Validate check runs it).",
             "- [x] Every `download` step points at an official source and has the correct `sha256`.",
-            "- [x] `game.installer.url` is the publisher's official installer, and the recipe installs from it.",
+            recipe.game.installer?.url == nil
+                ? "- [x] `game.installer.page` is the publisher's official download page, and the recipe installs the installer the player downloads there (checked by \(recipe.game.installer?.updates == true ? "its publisher's signature" : "its SHA-256"))."
+                : "- [x] `game.installer.url` is the publisher's official installer, and the recipe installs from it.",
             "- [x] Distiller's community check passed: it installed the game from that installer in a fresh bottle and the game reached its login or menu.",
             "- [x] Any screenshot is the contributor's own capture of the community check, made by Distiller.",
             "- [x] I agree to license my contribution under this repository's MIT license (pictures in `media/` stay the publisher's).",
@@ -172,10 +174,13 @@ public enum SubmissionPlan {
             error("Game slugs starting with \"example-\" are reserved for the repository's samples.")
         }
         if let installer = recipe.game.installer, (recipe.install ?? []).contains(where: { step in
-            if case .download(let download) = step { return download.url != installer.url }
-            return false
+            switch step {
+            case .download(let download): return download.url != installer.url
+            case .userDownload(let download): return download.page != installer.page || installer.url != nil
+            default: return false
+            }
         }) {
-            error("Shared recipes may only download the game's official installer (game.installer.url).")
+            error("Shared recipes may only download the game's official installer: from its link (game.installer.url) or, when it has none, from its download page (game.installer.page).")
         }
         if game.lastPlayedAt == nil {
             warning("You haven't played the game with this recipe yet. Launch it at least once so you know it works.")

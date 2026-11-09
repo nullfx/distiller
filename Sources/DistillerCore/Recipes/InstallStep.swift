@@ -6,6 +6,7 @@ import Foundation
 ///     - download: { url: https://…, sha256: …, to: cache/patch.zip }
 ///     - run_windows: { path: cache/setup.exe, args: ["/S"] }
 ///     - user_folder: { id: game-folder, prompt: "Choose the game's folder", to: 'C:\Games\Example' }
+///     - user_download: { id: installer, page: https://…/download, sha256: …, to: cache/setup.exe }
 public enum InstallStep: Codable, Equatable, Sendable {
     case download(Download)
     case extract(Extract)
@@ -16,6 +17,9 @@ public enum InstallStep: Codable, Equatable, Sendable {
     case runWindows(RunWindows)
     case userFile(UserFile)
     case userFolder(UserFolder)
+    /// The player downloads a file from a publisher's page (for installers that have no link
+    /// that works without the page), and Distiller checks it like a download. Schema 2.
+    case userDownload(UserDownload)
 
     /// A download, verified before it's used: by its SHA-256, or, for an installer that
     /// changes with every update, by its publisher's Authenticode signature (`signer`,
@@ -63,6 +67,26 @@ public enum InstallStep: Codable, Equatable, Sendable {
     }
 
     /// Asks the player for a file they own, such as the game's installer.
+    /// A file the player downloads from `page` in Distiller's browser (or downloads
+    /// themselves, from the command line), verified by `sha256` or `signer` (exactly one)
+    /// before it's copied to `to`.
+    public struct UserDownload: Codable, Equatable, Sendable {
+        public var id: String
+        public var prompt: String
+        public var page: String
+        public var sha256: String?
+        public var signer: String?
+        public var to: String
+        public init(id: String, prompt: String, page: String, sha256: String? = nil, signer: String? = nil, to: String) {
+            self.id = id
+            self.prompt = prompt
+            self.page = page
+            self.sha256 = sha256
+            self.signer = signer
+            self.to = to
+        }
+    }
+
     public struct UserFile: Codable, Equatable, Sendable {
         public var id: String
         public var prompt: String
@@ -94,6 +118,7 @@ public enum InstallStep: Codable, Equatable, Sendable {
         case runWindows = "run_windows"
         case userFile = "user_file"
         case userFolder = "user_folder"
+        case userDownload = "user_download"
     }
 
     public init(from decoder: Decoder) throws {
@@ -115,6 +140,7 @@ public enum InstallStep: Codable, Equatable, Sendable {
         case .runWindows: self = .runWindows(try container.decode(RunWindows.self, forKey: key))
         case .userFile: self = .userFile(try container.decode(UserFile.self, forKey: key))
         case .userFolder: self = .userFolder(try container.decode(UserFolder.self, forKey: key))
+        case .userDownload: self = .userDownload(try container.decode(UserDownload.self, forKey: key))
         }
     }
 
@@ -130,6 +156,7 @@ public enum InstallStep: Codable, Equatable, Sendable {
         case .runWindows(let value): try container.encode(value, forKey: .runWindows)
         case .userFile(let value): try container.encode(value, forKey: .userFile)
         case .userFolder(let value): try container.encode(value, forKey: .userFolder)
+        case .userDownload(let value): try container.encode(value, forKey: .userDownload)
         }
     }
 }

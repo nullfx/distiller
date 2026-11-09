@@ -10,44 +10,72 @@ public enum CommunityCheck {
     static func isKeptStep(_ step: InstallStep) -> Bool {
         switch step {
         case .winetricks, .registry, .dllOverride: return true
-        case .download, .extract, .copy, .runWindows, .userFile, .userFolder: return false
+        case .download, .userDownload, .extract, .copy, .runWindows, .userFile, .userFolder: return false
         }
     }
 
     /// Where the installer is downloaded to in the bottle, and the steps that run it. An MSI
-    /// goes to C:\Installers so msiexec can reach it.
-    public static func installerSteps(_ installer: PublicInstaller, sha256: String, signer: String? = nil) throws -> [InstallStep] {
-        guard let url = URL(string: installer.url), url.scheme?.lowercased() == "https" else {
-            throw DistillerError.insecureURL(installer.url)
+    /// goes to C:\Installers so msiexec can reach it. An installer with a direct link is
+    /// downloaded from it; one with only its publisher's page is downloaded by the player from
+    /// that page (a `user_download` step), saved as `fileName` (the name of the file the
+    /// community check got).
+    public static func installerSteps(_ installer: PublicInstaller, sha256: String, signer: String? = nil, fileName: String? = nil, title: String? = nil) throws -> [InstallStep] {
+        let name: String
+        let fetch: (String) -> InstallStep
+        if let link = installer.url {
+            guard let url = URL(string: link), url.scheme?.lowercased() == "https" else {
+                throw DistillerError.insecureURL(link)
+            }
+            name = RecipeDraft.windowsSafeName(url.lastPathComponent.isEmpty ? "setup.exe" : url.lastPathComponent)
+            fetch = { target in
+                .download(signer.map { .init(url: link, signer: $0, to: target) } ?? .init(url: link, sha256: sha256, to: target))
+            }
+        } else if let page = installer.page {
+            guard let url = URL(string: page), url.scheme?.lowercased() == "https" else {
+                throw DistillerError.insecureURL(page)
+            }
+            let given = (fileName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            name = RecipeDraft.windowsSafeName(given.isEmpty ? "setup.exe" : given)
+            let prompt = "Download \(title.map { "\($0)'s" } ?? "the game's") installer from its publisher's download page."
+            fetch = { target in
+                .userDownload(.init(id: installerDownloadID, prompt: prompt, page: page,
+                                    sha256: signer == nil ? sha256 : nil, signer: signer, to: target))
+            }
+        } else {
+            throw DistillerError.invalidRecipe("game.installer needs its download link (url) or its download page (page).")
         }
-        let name = RecipeDraft.windowsSafeName(url.lastPathComponent.isEmpty ? "setup.exe" : url.lastPathComponent)
         let args = installer.args ?? []
-        if url.pathExtension.lowercased() == "msi" {
+        if (name as NSString).pathExtension.lowercased() == "msi" {
             let target = "C:\\Installers\\\(name)"
             return [
-                .download(signer.map { .init(url: installer.url, signer: $0, to: target) } ?? .init(url: installer.url, sha256: sha256, to: target)),
+                fetch(target),
                 .runWindows(.init(path: "C:\\windows\\system32\\msiexec.exe", args: ["/i", target] + args, wait: true)),
             ]
         }
         let target = "cache/\(name)"
         return [
-            .download(signer.map { .init(url: installer.url, signer: $0, to: target) } ?? .init(url: installer.url, sha256: sha256, to: target)),
+            fetch(target),
             .runWindows(.init(path: target, args: args.isEmpty ? nil : args, wait: true)),
         ]
     }
+
+    /// The id of the `user_download` step for an installer from a download page.
+    public static let installerDownloadID = "installer"
 
     /// The shareable recipe: the player's settings, installed from the public installer, and
     /// launching `launchExe` (found after the installer ran). Throws without `game.installer`.
     /// `installerSigner`, for an installer that `updates`, verifies it by its publisher's
     /// signature instead of `installerSHA256` (and raises the recipe to schema 2).
-    public static func shareableRecipe(from recipe: Recipe, installerSHA256: String, installerSigner: String? = nil, launchExe: String?) throws -> Recipe {
+    /// `installerFileName` names the installer the check got from the download page, for an
+    /// installer with only a page.
+    public static func shareableRecipe(from recipe: Recipe, installerSHA256: String, installerSigner: String? = nil, installerFileName: String? = nil, launchExe: String?) throws -> Recipe {
         guard let installer = recipe.game.installer else {
-            throw DistillerError.invalidRecipe("it has no official public installer (game.installer.url).")
+            throw DistillerError.invalidRecipe("it has no official public installer (game.installer: its download link or page).")
         }
         var shared = recipe
         // Settings first, so runtimes and registry values are in place before the installer
         // runs; the installer last, since it may start a launcher or the game and keep running.
-        shared.install = (recipe.install ?? []).filter(isKeptStep) + (try installerSteps(installer, sha256: installerSHA256, signer: installerSigner))
+        shared.install = (recipe.install ?? []).filter(isKeptStep) + (try installerSteps(installer, sha256: installerSHA256, signer: installerSigner, fileName: installerFileName, title: recipe.game.title))
         shared.schema = max(shared.schema, shared.requiredSchema)
         if let launchExe {
             shared.launch = LaunchSpec(exe: launchExe, args: recipe.launch?.args, workingDir: nil)

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   CATALOGUE_BASE, chipFamily, coverPath, describeHardwareKey, describeRecipe, facets, filterGames,
-  highlightYAML, installLink, mediaURL, openLink, rankRecipes, recipeRawURL, recipeSourceURL, safeHttpsURL, sortGames, tierInfo,
+  highlightYAML, installLink, mediaURL, officialInstaller, openLink, rankRecipes, recipeRawURL, recipeSourceURL, safeHttpsURL, sortGames, tierInfo,
 } from "../assets/catalogue-data.js";
 
 const games = [
@@ -128,4 +128,12 @@ test("highlights YAML without changing it", () => {
   assert.deepEqual(types(14), ["key:notes", "punct::", "punct:|"]);
   assert.deepEqual(types(15), ["string:Text with: a colon and # not a comment"], "a block scalar's lines are text");
   assert.ok(types(17).join(" ").includes("<script>"), "markup stays text for the page to show as text");
+});
+
+test("officialInstaller reads a link or, published separately, only a download page", () => {
+  const direct = { url: "https://cdn.example.com/Setup.exe", page: "https://www.example.com/download" };
+  assert.deepEqual(officialInstaller({ installer: direct }), direct);
+  assert.deepEqual(officialInstaller({ download_page: "https://www.example.com/download", download_page_updates: true }),
+    { page: "https://www.example.com/download", updates: true });
+  assert.equal(officialInstaller({}), null);
 });

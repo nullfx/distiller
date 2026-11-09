@@ -18,8 +18,15 @@ public struct CommunityCheckPrompts: Sendable {
     /// player follows the installer, starts or chooses the game (which may already be running,
     /// started by the installer itself), captures screenshots and says whether it works.
     public var session: @Sendable (CommunityCheckSession) async -> CommunityCheckOutcome
+    /// For an installer with only a download page: the player downloads it from the page and
+    /// this returns the file, or nil to cancel the check. The file isn't changed or removed.
+    public var obtainInstaller: @Sendable (PageDownloadRequest) async -> URL?
 
-    public init(session: @escaping @Sendable (CommunityCheckSession) async -> CommunityCheckOutcome) {
+    public init(
+        obtainInstaller: @escaping @Sendable (PageDownloadRequest) async -> URL? = { _ in nil },
+        session: @escaping @Sendable (CommunityCheckSession) async -> CommunityCheckOutcome
+    ) {
+        self.obtainInstaller = obtainInstaller
         self.session = session
     }
 }
@@ -183,8 +190,8 @@ extension DistillerEngine {
     ) async throws -> Game {
         try paths.requireAvailable(.bottles)
         try paths.requireAvailable(.wine)
-        guard let publicInstaller = game.recipe.game.installer, let url = URL(string: publicInstaller.url) else {
-            throw DistillerError.invalidRecipe("it has no official public installer. Add its download link (game.installer.url) first.")
+        guard let publicInstaller = game.recipe.game.installer else {
+            throw DistillerError.invalidRecipe("it has no official public installer. Add its download link or download page (game.installer) first.")
         }
         try RecipeLoader.validate(game.recipe)
 
@@ -201,30 +208,49 @@ extension DistillerEngine {
             if !keepBottle || !succeeded { try? FileManager.default.removeItem(at: root) }
         }
 
-        // Download once, to learn the installer's SHA-256 and put it where the recipe expects it.
-        let downloadTarget: String
-        if case .download(let download)? = try CommunityCheck.installerSteps(publicInstaller, sha256: String(repeating: "0", count: 64)).first {
-            downloadTarget = download.to
+        // Get the installer once, to learn its SHA-256 and put it where the recipe expects it:
+        // from its direct link, or from the player, who downloads it from the publisher's page.
+        let destination: URL
+        let installerName: String
+        let sha256: String
+        var fileName: String?
+        if let link = publicInstaller.url {
+            guard let url = URL(string: link) else { throw DistillerError.insecureURL(link) }
+            installerName = url.lastPathComponent
+            destination = try BottlePath.resolve(try Self.installerTarget(publicInstaller, fileName: nil), in: root)
+            progress("Downloading \(url.lastPathComponent) from \(url.host ?? "the publisher")")
+            try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            sha256 = try await Downloader.download(url, to: destination)
+        } else if let pageLink = publicInstaller.page, let page = URL(string: pageLink) {
+            progress("Waiting for the installer from \(page.host ?? "the publisher's download page")")
+            let request = PageDownloadRequest(
+                id: CommunityCheck.installerDownloadID, title: game.title,
+                prompt: "Download \(game.title)'s installer from its publisher's download page.", page: page)
+            guard let file = await prompts.obtainInstaller(request) else {
+                throw DistillerError.setupFailed("The community check was cancelled.")
+            }
+            fileName = RecipeDraft.windowsSafeName(file.lastPathComponent)
+            installerName = file.lastPathComponent
+            destination = try BottlePath.resolve(try Self.installerTarget(publicInstaller, fileName: fileName), in: root)
+            try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try APFSClone.replaceItem(at: destination, withCloneOf: file)
+            sha256 = try Checksum.sha256(of: destination)
         } else {
-            throw DistillerError.invalidRecipe("couldn't plan the installer download.")
+            throw DistillerError.invalidRecipe("game.installer needs its download link (url) or its download page (page).")
         }
-        progress("Downloading \(url.lastPathComponent) from \(url.host ?? "the publisher")")
-        let destination = try BottlePath.resolve(downloadTarget, in: root)
-        try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let sha256 = try await Downloader.download(url, to: destination)
         // An installer that changes with every update is verified by its publisher's signature,
         // which goes in the shared recipe instead of this copy's checksum.
         var signer: String?
         if publicInstaller.updates == true {
-            progress("Checking \(url.lastPathComponent)'s publisher signature")
+            progress("Checking \(installerName)'s publisher signature")
             do {
                 signer = try Authenticode.verify(destination).signer
             } catch {
-                throw DistillerError.invalidRecipe("the installer is marked as changing with updates, so it's checked by its publisher's signature, but \(url.lastPathComponent) can't be: \(error.localizedDescription)")
+                throw DistillerError.invalidRecipe("the installer is marked as changing with updates, so it's checked by its publisher's signature, but \(installerName) can't be: \(error.localizedDescription)")
             }
         }
 
-        let withoutLaunch = try CommunityCheck.shareableRecipe(from: game.recipe, installerSHA256: sha256, installerSigner: signer, launchExe: nil)
+        let withoutLaunch = try CommunityCheck.shareableRecipe(from: game.recipe, installerSHA256: sha256, installerSigner: signer, installerFileName: fileName, launchExe: nil)
         let resolved = resolve(withoutLaunch)
         try await applySettings(resolved, in: bottle, stack: stack, progress: progress)
 
@@ -266,7 +292,7 @@ extension DistillerEngine {
         case .cancelled:
             throw DistillerError.setupFailed("The community check was cancelled.")
         }
-        let shareable = try CommunityCheck.shareableRecipe(from: game.recipe, installerSHA256: sha256, installerSigner: signer, launchExe: chosen.windowsPath)
+        let shareable = try CommunityCheck.shareableRecipe(from: game.recipe, installerSHA256: sha256, installerSigner: signer, installerFileName: fileName, launchExe: chosen.windowsPath)
         try RecipeLoader.validate(shareable)
         let launchedAt = startedAt
 
@@ -314,13 +340,22 @@ extension DistillerEngine {
     /// Applies the shareable recipe's settings and runs its other install steps (winetricks,
     /// registry, DLL overrides): everything but the installer download, which the check has
     /// already done, and the installer run, which the check starts itself.
+    /// Where the installer goes in the bottle (the first of `CommunityCheck.installerSteps`).
+    static func installerTarget(_ installer: PublicInstaller, fileName: String?) throws -> String {
+        switch try CommunityCheck.installerSteps(installer, sha256: String(repeating: "0", count: 64), fileName: fileName).first {
+        case .download(let download)?: return download.to
+        case .userDownload(let download)?: return download.to
+        default: throw DistillerError.invalidRecipe("couldn't plan the installer download.")
+        }
+    }
+
     private func applySettings(_ resolved: ResolvedRecipe, in bottle: Bottle, stack: (wine: InstalledComponent, graphics: InstalledComponent?), progress: @escaping @Sendable (String) -> Void) async throws {
         try await installer.configurePrefix(resolved, in: bottle, wine: stack.wine, graphics: stack.graphics) { _, message in
             progress(message)
         }
         let steps = resolved.install.filter { step in
             switch step {
-            case .download, .runWindows: return false
+            case .download, .userDownload, .runWindows: return false
             default: return true
             }
         }

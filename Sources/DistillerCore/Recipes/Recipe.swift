@@ -100,12 +100,14 @@ public struct GameInfo: Codable, Equatable, Sendable {
 }
 
 /// Where anyone can download a game's installer from its publisher. Only the official URL
-/// belongs here, never a mirror or re-hosted copy.
+/// belongs here, never a mirror or re-hosted copy. It has a direct link (`url`), the
+/// publisher's download page (`page`), or both; one with only a page (schema 2) is downloaded
+/// by the player from that page, because the publisher has no link that works on its own.
 public struct PublicInstaller: Codable, Equatable, Sendable {
     /// HTTPS URL of the installer (.exe or .msi) on the publisher's own servers.
-    public var url: String
+    public var url: String?
     /// The publisher's download page (HTTPS), where a player can always get the installer.
-    /// Optional; Distiller records it when the installer is downloaded from the page.
+    /// Distiller records it when the installer is downloaded from the page.
     public var page: String?
     /// The installer changes with every update (a game launcher's, for example), so it's
     /// verified by its publisher's signature rather than a fixed checksum. Schema 2.
@@ -113,7 +115,7 @@ public struct PublicInstaller: Codable, Equatable, Sendable {
     /// Arguments for the installer, such as a silent-install switch.
     public var args: [String]?
 
-    public init(url: String, page: String? = nil, updates: Bool? = nil, args: [String]? = nil) {
+    public init(url: String?, page: String? = nil, updates: Bool? = nil, args: [String]? = nil) {
         self.url = url
         self.page = page
         self.updates = updates
@@ -361,10 +363,14 @@ extension Recipe {
     /// The oldest schema that can describe this recipe: 2 if anything is verified by a
     /// publisher's signature (a `signer` download, or an installer that `updates`), else 1.
     public var requiredSchema: Int {
-        let signed = (install ?? []).contains { step in
-            if case .download(let download) = step { return download.signer != nil }
-            return false
+        let newer = (install ?? []).contains { step in
+            switch step {
+            case .download(let download): return download.signer != nil
+            case .userDownload: return true
+            default: return false
+            }
         }
-        return signed || game.installer?.updates == true ? 2 : 1
+        let pageOnly = game.installer.map { $0.url == nil } ?? false
+        return newer || pageOnly || game.installer?.updates == true ? 2 : 1
     }
 }

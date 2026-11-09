@@ -332,13 +332,18 @@ struct InstallCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "install",
         abstract: "Install a game from a recipe file.",
-        discussion: "Supply files and folders the recipe asks for with --file <id>=<path> and --folder <id>=<path>, for example --file installer=~/Downloads/setup.exe"
+        discussion: """
+            Supply files and folders the recipe asks for with --file <id>=<path> and --folder <id>=<path>, \
+            for example --file installer=~/Downloads/setup.exe. A file the recipe has you download from \
+            its publisher's page (user_download) is asked for if you don't give it: download it in your \
+            browser, then enter its path. Distiller checks it's the file the recipe expects.
+            """
     )
 
     @Argument(help: "A recipe .yaml file.")
     var recipe: String
 
-    @Option(name: .customLong("file"), help: "A file for a user_file step, as id=path.")
+    @Option(name: .customLong("file"), help: "A file for a user_file or user_download step, as id=path.")
     var files: [String] = []
 
     @Option(name: .customLong("folder"), help: "A folder for a user_folder step, as id=path.")
@@ -361,6 +366,16 @@ struct InstallCommand: AsyncParsableCommand {
             let parts = entry.split(separator: "=", maxSplits: 1).map(String.init)
             guard parts.count == 2 else { throw ValidationError("--folder takes id=path, but got \(entry).") }
             folders[parts[0]] = UserFolderSource(url: URL(fileURLWithPath: (parts[1] as NSString).expandingTildeInPath), linkInPlace: link)
+        }
+        for (download, request) in RecipeInstaller.pageDownloads(in: loaded) {
+            if let given = userFiles[download.id] {
+                try RecipeInstaller.checkPageDownload(given, for: download)
+                continue
+            }
+            guard let file = askForPageDownload(request, check: { try RecipeInstaller.checkPageDownload($0, for: download) }) else {
+                throw DistillerError.setupFailed("Cancelled. Download it from \(request.page.absoluteString), then pass --file \(download.id)=<path>.")
+            }
+            userFiles[download.id] = file
         }
         let game = try await engine.install(recipe: loaded, supplied: UserSupplied(files: userFiles, folders: folders)) { progress in
             print("[\(progress.step)/\(progress.total)] \(progress.message)")
@@ -535,6 +550,37 @@ struct CommunityCommand: AsyncParsableCommand {
                 notes: notes
             )
             print(url.absoluteString)
+        }
+    }
+}
+
+/// Asks for a file the player downloads from a publisher's page in their own browser, until
+/// they give one that passes `check` (when given) or cancel (an empty answer, or no terminal).
+func askForPageDownload(_ request: PageDownloadRequest, check: ((URL) throws -> Void)?) -> URL? {
+    print(request.prompt)
+    print("Open the publisher's download page in your browser and download it for Windows:")
+    print("  \(request.page.absoluteString)")
+    while true {
+        print("Path of the downloaded file (drag it here), or Enter to cancel: ", terminator: "")
+        guard let line = readLine() else { return nil }
+        var path = line.trimmingCharacters(in: .whitespaces)
+        if path.isEmpty { return nil }
+        // Paths dragged into Terminal are quoted or have escaped spaces.
+        if path.count > 1, let first = path.first, (first == "'" || first == "\""), path.last == first {
+            path = String(path.dropFirst().dropLast())
+        }
+        path = path.replacingOccurrences(of: "\\ ", with: " ")
+        let url = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+        var isFolder: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isFolder), !isFolder.boolValue else {
+            print("There's no file at \(url.path).")
+            continue
+        }
+        do {
+            try check?(url)
+            return url
+        } catch {
+            print("\(url.lastPathComponent) isn't the file the recipe expects: \(error.localizedDescription)")
         }
     }
 }
