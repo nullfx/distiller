@@ -284,8 +284,9 @@ struct RecipeCommunityCheck: AsyncParsableCommand {
         abstract: "Prove a recipe works for other players before submitting it.",
         discussion: """
             In a new bottle: downloads the game's official installer (game.installer.url), applies the \
-            recipe's settings, runs the installer (follow its steps if it asks anything), asks which \
-            installed program to launch, starts it, and asks whether it reached its login or menu. \
+            recipe's settings and starts the installer. Follow its steps; when the game is running \
+            (started by the installer, or by you from the list of installed programs) and has \
+            reached its login or menu, answer y and choose its program. \
             A pass is saved with the game; `distiller recipe submit` then submits that checked recipe.
             """
     )
@@ -299,27 +300,71 @@ struct RecipeCommunityCheck: AsyncParsableCommand {
     func run() async throws {
         let engine = try makeEngine()
         let entry = try engine.library.game(id: game)
-        let prompts = CommunityCheckPrompts(
-            chooseProgram: { programs, suggested in
-                print("Installed programs:")
-                for (index, program) in programs.prefix(20).enumerated() {
-                    print("  \(index + 1). \(program.windowsPath)\(program == suggested ? "   ← suggested" : "")")
+        let prompts = CommunityCheckPrompts(session: { session in
+            print("The installer is running in the test bottle: follow its steps. Some installers start a launcher or the game themselves.")
+            print("Play until \(session.title) reaches its login screen or menu, then come back here and answer y.")
+            print("Screenshots: this command can't capture windows (the app's check panel can). Screenshots the game saves with its own screenshot key during the check are collected.")
+            while true {
+                let running = await session.runningPrograms()
+                print("")
+                if running.isEmpty {
+                    print("Running now: nothing besides Wine itself\(session.installerIsRunning ? ", and the installer" : "").")
+                } else {
+                    print("Running now:")
+                    for program in running { print("  • \(program.windowsPath)") }
                 }
-                print("Program to launch [Enter for the suggestion, q to cancel]: ", terminator: "")
-                guard let answer = readLine()?.trimmingCharacters(in: .whitespaces), answer.lowercased() != "q" else { return nil }
-                if answer.isEmpty { return suggested }
-                guard let number = Int(answer), (1...min(programs.count, 20)).contains(number) else { return nil }
-                return programs[number - 1]
-            },
-            confirmRunning: { title, _ in
-                // No screenshots from the command line; the app takes them.
-                print("Did \(title) reach its login screen or menu? [y/n]: ", terminator: "")
-                return CommunityCheckAnswer(works: readLine()?.lowercased().hasPrefix("y") == true)
+                print("[y] it works · [n] it doesn't work · [s] start an installed program · [Enter] refresh · [q] cancel: ", terminator: "")
+                guard let answer = readLine()?.trimmingCharacters(in: .whitespaces).lowercased() else { return .cancelled }
+                switch answer {
+                case "": continue
+                case "q": return .cancelled
+                case "n": return .doesNotWork
+                case "y":
+                    // The game's program: one that's running, or, if the game has been closed
+                    // already, one that's installed.
+                    let current = await session.runningPrograms()
+                    let installed = session.installedPrograms()
+                    let choices = current.isEmpty ? installed.programs : current
+                    let suggested = choices.first { $0.program.name.lowercased() == session.suggestedProgramName?.lowercased() }
+                        ?? (current.isEmpty ? installed.suggested : current.first)
+                    if let program = choose(from: choices, suggested: suggested, title: "Which program is the game?") {
+                        return .works(program: program, screenshots: [])
+                    }
+                case "s":
+                    let installed = session.installedPrograms()
+                    if let program = choose(from: installed.programs, suggested: installed.suggested, title: "Program to start") {
+                        do { try session.start(program); print("Started \(program.windowsPath).") } catch { print(error.localizedDescription) }
+                    }
+                default:
+                    print("Type y, n, s or q, or press Enter.")
+                }
             }
-        )
+        })
         let updated = try await engine.runCommunityCheck(for: entry, prompts: prompts, keepBottle: keepBottle) { print($0) }
         if let check = updated.communityCheck {
             print("Community check passed. Installer SHA-256: \(check.installerSHA256). Launches \(check.recipe.launch?.exe ?? "?").")
         }
     }
+}
+
+/// Lists programs by number and reads a choice; Enter takes the suggestion. Nil if there's
+/// nothing to choose or the answer isn't on the list.
+private func choose(from programs: [ProgramInBottle], suggested: ProgramInBottle?, title: String) -> ProgramInBottle? {
+    let shown = Array(programs.prefix(20))
+    guard !shown.isEmpty else {
+        print("No Windows programs are installed in the test bottle yet.")
+        return nil
+    }
+    print("\(title):")
+    for (index, program) in shown.enumerated() {
+        print("  \(index + 1). \(program.windowsPath)\(program == suggested ? "   ← suggested" : "")")
+    }
+    print("Number [Enter for the suggestion]: ", terminator: "")
+    let answer = readLine()?.trimmingCharacters(in: .whitespaces) ?? ""
+    if answer.isEmpty { return suggested }
+    guard let number = Int(answer), (1...shown.count).contains(number) else {
+        print("That isn't on the list.")
+        return nil
+    }
+    return shown[number - 1]
 }

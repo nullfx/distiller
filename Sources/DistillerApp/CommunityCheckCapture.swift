@@ -4,41 +4,48 @@ import Observation
 import SwiftUI
 import DistillerCore
 
-/// The community check's capture panel: while the test game runs, a small floating panel
-/// (above full-screen games too, without taking focus from them) lets the player capture
-/// screenshots whenever the game shows something worth sharing, with a button or ⌃⌥⌘S from
-/// inside the game, and then say whether the game works. The game keeps running until they
-/// answer. They choose which captures to share (up to three) when they submit.
+/// The community check's panel: from the moment the installer starts, a small floating panel
+/// (above full-screen games too, without taking focus from them) follows the test bottle. It
+/// shows whether the installer is still running and which programs are running, so the
+/// player can say which one is the game (many installers start a launcher or the game
+/// themselves) or start an installed one. Screenshots can be captured at any point, with a
+/// button or ⌃⌥⌘S from inside the game. Everything keeps running until the player answers;
+/// they choose which captures to share (up to three) when they submit.
 @MainActor
 @Observable
 final class CommunityCheckCaptureSession {
     static let hotKeyDescription = "⌃⌥⌘S"
 
-    let title: String
-    let programName: String
+    let check: CommunityCheckSession
     /// Normalised JPEGs, in the order taken.
     private(set) var captures: [Data] = []
     private(set) var thumbnails: [NSImage] = []
     private(set) var isCapturing = false
     private(set) var message: String?
     private(set) var flash = false
+    /// What's running in the test bottle (Wine's own programs left out), refreshed every few seconds.
+    private(set) var running: [ProgramInBottle] = []
+    private(set) var installerIsRunning = true
+    private(set) var installed: (programs: [ProgramInBottle], suggested: ProgramInBottle?) = ([], nil)
+    /// The game's program, chosen by the player (or suggested when it's running).
+    var gameProgram: ProgramInBottle?
     /// Checked when the panel opens; granting it only applies after Distiller restarts.
     let hasScreenRecording = ScreenRecordingAccess.isGranted
 
     private var panel: NSPanel?
     private var hotKey: GlobalHotKey?
-    private var continuation: CheckedContinuation<CommunityCheckAnswer, Never>?
+    private var refresh: Task<Void, Never>?
+    private var continuation: CheckedContinuation<CommunityCheckOutcome, Never>?
 
     var canCapture: Bool { !isCapturing && captures.count < CommunityMedia.maxCaptures }
 
-    private init(title: String, programName: String) {
-        self.title = title
-        self.programName = programName
+    private init(check: CommunityCheckSession) {
+        self.check = check
     }
 
     /// Shows the panel and waits for the player's answer.
-    static func run(title: String, programName: String) async -> CommunityCheckAnswer {
-        let session = CommunityCheckCaptureSession(title: title, programName: programName)
+    static func run(check: CommunityCheckSession) async -> CommunityCheckOutcome {
+        let session = CommunityCheckCaptureSession(check: check)
         return await withCheckedContinuation { continuation in
             session.continuation = continuation
             session.show()
@@ -49,14 +56,15 @@ final class CommunityCheckCaptureSession {
         guard canCapture else { return }
         isCapturing = true
         message = nil
+        let name = gameProgram?.program.name
         Task {
-            let raw = await GameWindowCapture.capture(programName: programName)
+            let raw = await GameWindowCapture.capture(programName: name)
             let jpeg = await Task.detached { raw.flatMap(CommunityMedia.screenshot(from:)) }.value
             isCapturing = false
             guard let jpeg, let image = NSImage(data: jpeg) else {
                 message = raw == nil
-                    ? "Couldn't capture the game's window. If macOS asked, allow Distiller in System Settings ▸ Privacy & Security ▸ Screen & System Audio Recording, then try again."
-                    : "The game's window is too small to capture (it needs to be at least \(CommunityMedia.screenshotMinWidth) pixels wide)."
+                    ? "Couldn't capture a window from the test bottle. If macOS asked, allow Distiller in System Settings ▸ Privacy & Security ▸ Screen & System Audio Recording, then try again."
+                    : "The window is too small to capture (it needs to be at least \(CommunityMedia.screenshotMinWidth) pixels wide)."
                 NSSound.beep()
                 return
             }
@@ -69,17 +77,35 @@ final class CommunityCheckCaptureSession {
         }
     }
 
-    func finish(works: Bool) {
+    /// Starts an installed program and makes it the game's program.
+    func start(_ program: ProgramInBottle) {
+        do {
+            try check.start(program)
+            gameProgram = program
+            message = nil
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    func finish(_ outcome: CommunityCheckOutcome) {
+        refresh?.cancel()
+        refresh = nil
         hotKey = nil
         panel?.orderOut(nil)
         panel = nil
-        continuation?.resume(returning: CommunityCheckAnswer(works: works, screenshots: works ? captures : []))
+        continuation?.resume(returning: outcome)
         continuation = nil
+    }
+
+    func works() {
+        guard let gameProgram else { return }
+        finish(.works(program: gameProgram, screenshots: captures))
     }
 
     private func show() {
         let panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 260),
+            contentRect: NSRect(x: 0, y: 0, width: 380, height: 320),
             styleMask: [.titled, .utilityWindow, .hudWindow, .nonactivatingPanel],
             backing: .buffered, defer: false
         )
@@ -90,8 +116,9 @@ final class CommunityCheckCaptureSession {
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true
         panel.standardWindowButton(.closeButton)?.isHidden = true
-        panel.contentView = NSHostingView(rootView: CapturePanelView(session: self))
-        panel.setContentSize(panel.contentView?.fittingSize ?? NSSize(width: 360, height: 260))
+        let hosting = NSHostingView(rootView: CapturePanelView(session: self))
+        hosting.sizingOptions = [.preferredContentSize]
+        panel.contentView = hosting
         if let screen = NSScreen.main?.visibleFrame {
             panel.setFrameTopLeftPoint(NSPoint(x: screen.maxX - panel.frame.width - 24, y: screen.maxY - 24))
         }
@@ -100,20 +127,41 @@ final class CommunityCheckCaptureSession {
         hotKey = GlobalHotKey(keyCode: UInt32(kVK_ANSI_S), modifiers: UInt32(controlKey | optionKey | cmdKey)) { [weak self] in
             self?.capture()
         }
+        refresh = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                let running = await self.check.runningPrograms()
+                let check = self.check
+                self.installed = await Task.detached { check.installedPrograms() }.value
+                self.running = running
+                self.installerIsRunning = self.check.installerIsRunning
+                if self.gameProgram == nil, let suggested = self.check.suggestedProgramName?.lowercased() {
+                    self.gameProgram = running.first { $0.program.name.lowercased() == suggested }
+                }
+                try? await Task.sleep(for: .seconds(3))
+            }
+        }
         NSApp.requestUserAttention(.informationalRequest)
     }
 }
 
 private struct CapturePanelView: View {
-    let session: CommunityCheckCaptureSession
+    @Bindable var session: CommunityCheckCaptureSession
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(session.title).font(.headline)
-            Text("Play until \(session.title) reaches its login screen or menu, or further. Whenever it shows something worth sharing, press \(CommunityCheckCaptureSession.hotKeyDescription) in the game or click Capture. Screenshots the game saves itself are picked up too. You choose up to \(CommunityMedia.maxSharedScreenshots) to share when you submit.")
-                .font(.callout)
+            Text(session.check.title).font(.headline)
+            HStack(spacing: 6) {
+                if session.installerIsRunning { ProgressView().controlSize(.mini) }
+                Text(session.installerIsRunning ? "The installer is running. Follow its steps." : "The installer has finished.")
+                    .font(.callout)
+            }
+            Text("Some installers start a launcher or the game themselves. Play until \(session.check.title) reaches its login screen or menu, or further, and capture what's worth sharing with \(CommunityCheckCaptureSession.hotKeyDescription) or Capture.")
+                .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            gamePicker
 
             if !session.hasScreenRecording {
                 VStack(alignment: .leading, spacing: 6) {
@@ -159,23 +207,69 @@ private struct CapturePanelView: View {
             }
 
             Divider()
-            Text("Did it reach its login screen or menu? Answering closes the game.")
+            Text("Did it reach its login screen or menu? Answering closes everything in the test bottle.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             HStack {
-                Button("It Doesn't Work") { session.finish(works: false) }
+                Button("Cancel") { session.finish(.cancelled) }
                 Spacer()
-                Button("It Works") { session.finish(works: true) }
+                Button("It Doesn't Work") { session.finish(.doesNotWork) }
+                Button("It Works") { session.works() }
                     .buttonStyle(.borderedProminent)
+                    .disabled(session.gameProgram == nil)
+                    .help(session.gameProgram == nil ? "First choose the game's program." : "")
             }
         }
         .padding(16)
-        .frame(width: 360)
+        .frame(width: 380)
         .overlay {
             if session.flash {
                 Color.white.opacity(0.25).allowsHitTesting(false)
             }
         }
+    }
+
+    /// Which running program is the game, or start one that's installed.
+    @ViewBuilder private var gamePicker: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("The game's program").font(.caption.bold())
+            if session.running.isEmpty && session.gameProgram == nil {
+                Text("Nothing is running in the test bottle yet, besides the installer.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Picker("The game's program", selection: $session.gameProgram) {
+                    Text("Choose…").tag(ProgramInBottle?.none)
+                    ForEach(choices) { program in
+                        Text(program.program.name).tag(ProgramInBottle?.some(program)).help(program.windowsPath)
+                    }
+                }
+                .labelsHidden()
+                if let program = session.gameProgram {
+                    Text(program.windowsPath).font(.caption2).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                }
+            }
+            Menu("Start an Installed Program") {
+                if session.installed.programs.isEmpty {
+                    Text("No programs are installed yet")
+                }
+                ForEach(session.installed.programs.prefix(30)) { program in
+                    Button(program == session.installed.suggested ? "\(program.windowsPath) (suggested)" : program.windowsPath) {
+                        session.start(program)
+                    }
+                }
+            }
+            .controlSize(.small)
+            .fixedSize()
+        }
+    }
+
+    /// The running programs, plus the chosen one if it isn't among them (just started).
+    private var choices: [ProgramInBottle] {
+        var list = session.running
+        if let chosen = session.gameProgram, !list.contains(chosen) { list.insert(chosen, at: 0) }
+        return list
     }
 }
 
