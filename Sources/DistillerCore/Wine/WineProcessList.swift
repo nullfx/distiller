@@ -31,6 +31,15 @@ public enum WineProcessList {
     /// The arguments for Wine.
     static let wmicArguments = ["wmic.exe", "process", "get", "ExecutablePath,ProcessId"]
 
+    /// wmic's output as text. Redirected to a file (as Distiller reads it), Wine's wmic writes
+    /// UTF-16 with a byte-order mark, like Windows; on a terminal it writes plain text.
+    public static func decode(_ data: Data) -> String {
+        let bytes = [UInt8](data.prefix(2))
+        if bytes == [0xFF, 0xFE] { return String(data: data.dropFirst(2), encoding: .utf16LittleEndian) ?? "" }
+        if bytes == [0xFE, 0xFF] { return String(data: data.dropFirst(2), encoding: .utf16BigEndian) ?? "" }
+        return String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
+    }
+
     /// Parses wmic's table: a header naming the columns, then one row per process. The process
     /// ID is each row's last word and the path everything before it, so paths with spaces
     /// (even double ones) survive whatever the column widths. Anything before the header

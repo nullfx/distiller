@@ -27,6 +27,17 @@ final class CheckSessionTests: XCTestCase {
         XCTAssertEqual(WineProcessList.parse("wine: could not load kernel32.dll\n"), [], "No table, nothing running")
     }
 
+    /// Redirected to a file, Wine's wmic writes UTF-16 with a byte-order mark; read as UTF-8,
+    /// that came out empty, and the check listed nothing running.
+    func testReadsWmicsUTF16Output() throws {
+        let utf16 = Data([0xFF, 0xFE]) + (wmicOutput.data(using: .utf16LittleEndian) ?? Data())
+        XCTAssertEqual(WineProcessList.parse(WineProcessList.decode(utf16)), WineProcessList.parse(wmicOutput))
+        let bigEndian = Data([0xFE, 0xFF]) + (wmicOutput.data(using: .utf16BigEndian) ?? Data())
+        XCTAssertEqual(WineProcessList.parse(WineProcessList.decode(bigEndian)).count, 7)
+        XCTAssertEqual(WineProcessList.parse(WineProcessList.decode(Data(wmicOutput.utf8))).count, 7, "Plain text still works")
+        XCTAssertEqual(WineProcessList.decode(Data()), "")
+    }
+
     func testLeavesOutWinesOwnPrograms() {
         let programs = WineProcessList.parse(wmicOutput)
         XCTAssertEqual(programs.filter(\.isWineSystemProgram).map(\.name), ["start.exe", "services.exe", "wmic.exe"])

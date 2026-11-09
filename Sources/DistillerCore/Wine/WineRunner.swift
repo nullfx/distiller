@@ -117,8 +117,8 @@ public final class WineRunner: @unchecked Sendable {
         var quiet = environment
         quiet["WINEDEBUG"] = "-all"
         _ = try await ProcessRunner.run(wineBinary, arguments: WineProcessList.wmicArguments, environment: quiet, logFile: output)
-        let text = (try? String(contentsOf: output, encoding: .utf8)) ?? ""
-        return WineProcessList.parse(text)
+        let data = (try? Data(contentsOf: output)) ?? Data()
+        return WineProcessList.parse(WineProcessList.decode(data))
     }
 
     /// Stops every Wine process in the prefix named by `environment["WINEPREFIX"]`.
