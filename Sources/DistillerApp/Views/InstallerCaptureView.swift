@@ -13,17 +13,18 @@ import DistillerCore
 struct InstallerCaptureView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var capture: InstallerCaptureModel
-    /// The installer's direct link and the page it came from.
-    let onUse: (URL, URL?) -> Void
+    /// The installer's direct link and the page it came from; no link when none works on its
+    /// own and the player chose to have players download it from the page.
+    let onUse: (URL?, URL?) -> Void
 
-    init(startPage: URL?, onUse: @escaping (URL, URL?) -> Void) {
+    init(startPage: URL?, onUse: @escaping (URL?, URL?) -> Void) {
         _capture = State(initialValue: InstallerCaptureModel(startPage: startPage))
         self.onUse = onUse
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            addressBar
+            BrowserAddressBar(capture: capture)
             Divider()
             WebViewHost(capture: capture)
                 .frame(minHeight: 360)
@@ -32,24 +33,6 @@ struct InstallerCaptureView: View {
         }
         .frame(minWidth: 860, idealWidth: 960, minHeight: 640, idealHeight: 720)
         .onDisappear { capture.discardDownload() }
-    }
-
-    private var addressBar: some View {
-        HStack(spacing: 8) {
-            Button { capture.webView.goBack() } label: { Image(systemName: "chevron.left") }
-                .disabled(!capture.canGoBack)
-                .help("Back")
-            Button { capture.webView.goForward() } label: { Image(systemName: "chevron.right") }
-                .disabled(!capture.canGoForward)
-                .help("Forward")
-            Button { capture.webView.reload() } label: { Image(systemName: "arrow.clockwise") }
-                .help("Reload")
-            TextField("The publisher's download page, https://…", text: $capture.address)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit { capture.open(capture.address) }
-            if capture.isLoading { ProgressView().controlSize(.small) }
-        }
-        .padding(10)
     }
 
     private var statusPanel: some View {
@@ -71,6 +54,8 @@ struct InstallerCaptureView: View {
                 }
             case .result(let download, let result):
                 resultView(download, result)
+            case .checking, .obtained, .rejected:
+                EmptyView()
             }
             if let message = capture.message {
                 Label(message, systemImage: "exclamationmark.triangle")
@@ -84,6 +69,13 @@ struct InstallerCaptureView: View {
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
+                if case .result(let download, let result) = capture.state, result.url == nil, let page = download.page {
+                    Button("Use the Download Page") {
+                        onUse(nil, page)
+                        dismiss()
+                    }
+                    .help("Players download the installer from this page themselves, in Distiller's browser, and Distiller checks it's the same installer.")
+                }
                 Button("Use This Installer") {
                     if case .result(let download, let result) = capture.state, let url = result.url {
                         onUse(url, download.page)
@@ -108,7 +100,9 @@ struct InstallerCaptureView: View {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
             }
         } else {
-            Label("None of this download's links work without the page (they need its cookies, or they expire). Recipes that download from the page itself are coming in a later version of Distiller.", systemImage: "xmark.octagon")
+            Label(download.page == nil
+                  ? "None of this download's links work without the page (they need its cookies, or they expire)."
+                  : "None of this download's links work without the page (they need its cookies, or they expire). Use the download page instead: players download the installer there themselves, in Distiller's browser, and Distiller checks it's the same installer (by its checksum, or by its publisher's signature if it changes with updates).", systemImage: "xmark.octagon")
                 .foregroundStyle(.orange)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -144,9 +138,18 @@ final class InstallerCaptureModel: NSObject, WKNavigationDelegate, WKDownloadDel
     enum State {
         case browsing
         case downloading(String, Double)
+        /// Finding a link that works on its own (the workshop).
         case testing(String)
         case result(CapturedDownload, InstallerLinkResult)
+        /// Checking a file the player downloaded for an install or a community check.
+        case checking(String)
+        case obtained(URL)
+        case rejected(String, String)
     }
+
+    /// Set when the player downloads a file to install (`PageDownloadWindow`) rather than to
+    /// find its link: each download is checked with this, instead of testing its links.
+    @ObservationIgnored var verify: (@Sendable (URL) throws -> Void)?
 
     var address: String
     var state: State = .browsing
@@ -191,6 +194,14 @@ final class InstallerCaptureModel: NSObject, WKNavigationDelegate, WKDownloadDel
     func discardDownload() {
         if let destination { try? FileManager.default.removeItem(at: destination.deletingLastPathComponent()) }
         destination = nil
+    }
+
+    /// Hands over the checked file: it's kept when the window closes, and its folder is the
+    /// caller's to remove (`PageDownloadWindow.removeDownload`).
+    func takeObtainedFile() -> URL? {
+        guard case .obtained(let file) = state else { return nil }
+        destination = nil
+        return file
     }
 
     private func refreshNavigation() {
@@ -282,6 +293,18 @@ final class InstallerCaptureModel: NSObject, WKNavigationDelegate, WKDownloadDel
         guard let file = destination else { return }
         let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
         let captured = CapturedDownload(page: pageAtDownload, links: links, fileName: file.lastPathComponent, size: size, localFile: file)
+        if let verify {
+            state = .checking(file.lastPathComponent)
+            Task {
+                do {
+                    try await Task.detached { try verify(file) }.value
+                    state = .obtained(file)
+                } catch {
+                    state = .rejected(file.lastPathComponent, error.localizedDescription)
+                }
+            }
+            return
+        }
         state = .testing(file.lastPathComponent)
         Task {
             let result = await InstallerLinkTest.test(captured)
@@ -296,8 +319,31 @@ final class InstallerCaptureModel: NSObject, WKNavigationDelegate, WKDownloadDel
     }
 }
 
+/// Back, forward, reload and the address of the capture browser.
+struct BrowserAddressBar: View {
+    @Bindable var capture: InstallerCaptureModel
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button { capture.webView.goBack() } label: { Image(systemName: "chevron.left") }
+                .disabled(!capture.canGoBack)
+                .help("Back")
+            Button { capture.webView.goForward() } label: { Image(systemName: "chevron.right") }
+                .disabled(!capture.canGoForward)
+                .help("Forward")
+            Button { capture.webView.reload() } label: { Image(systemName: "arrow.clockwise") }
+                .help("Reload")
+            TextField("The publisher's download page, https://…", text: $capture.address)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit { capture.open(capture.address) }
+            if capture.isLoading { ProgressView().controlSize(.small) }
+        }
+        .padding(10)
+    }
+}
+
 /// Hosts the capture model's web view.
-private struct WebViewHost: NSViewRepresentable {
+struct WebViewHost: NSViewRepresentable {
     let capture: InstallerCaptureModel
     func makeNSView(context: Context) -> WKWebView { capture.webView }
     func updateNSView(_ nsView: WKWebView, context: Context) {}

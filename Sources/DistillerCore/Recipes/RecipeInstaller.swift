@@ -1,4 +1,5 @@
 import Foundation
+import Security
 
 public struct InstallProgress: Sendable {
     public var step: Int
@@ -185,6 +186,13 @@ public final class RecipeInstaller: @unchecked Sendable {
             try fileManager.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
             try APFSClone.replaceItem(at: destination, withCloneOf: source)
 
+        case .userDownload(let download):
+            guard let source = supplied.files[download.id] else { throw DistillerError.missingUserFile(download.prompt) }
+            try Self.verify(source, sha256: download.sha256, signer: download.signer)
+            let destination = try BottlePath.resolve(download.to, in: root)
+            try fileManager.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try APFSClone.replaceItem(at: destination, withCloneOf: source)
+
         case .userFolder(let folder):
             guard let source = supplied.folders[folder.id] else { throw DistillerError.missingUserFile(folder.prompt) }
             let destination = try BottlePath.resolve(folder.to, in: root)
@@ -214,6 +222,36 @@ public final class RecipeInstaller: @unchecked Sendable {
         case .runWindows(let run): return "Running \(run.path)"
         case .userFile(let file): return "Copying your file for \(file.id)"
         case .userFolder(let folder): return "Adding your folder for \(folder.id)"
+        case .userDownload(let download): return "Checking your download for \(download.id)"
+        }
+    }
+
+    /// The files a recipe's steps ask the player to download from a publisher's page.
+    public static func pageDownloads(in recipe: Recipe) -> [(step: InstallStep.UserDownload, request: PageDownloadRequest)] {
+        (recipe.install ?? []).compactMap { step in
+            guard case .userDownload(let download) = step, let page = URL(string: download.page) else { return nil }
+            return (download, PageDownloadRequest(id: download.id, title: recipe.game.title, prompt: download.prompt, page: page))
+        }
+    }
+
+    /// Checks a file the player downloaded for `download` before installing, so a wrong file
+    /// is caught while they're still on the page.
+    public static func checkPageDownload(_ file: URL, for download: InstallStep.UserDownload) throws {
+        try verify(file, sha256: download.sha256, signer: download.signer)
+    }
+
+    /// Checks a file the player downloaded the way a recipe download is checked.
+    static func verify(_ file: URL, sha256: String?, signer: String?, anchors: [SecCertificate]? = nil) throws {
+        if let sha256 {
+            try Checksum.verify(file, expected: sha256)
+        } else if let signer {
+            do {
+                _ = try Authenticode.verify(file, expectedSigner: signer, anchors: anchors)
+            } catch {
+                throw DistillerError.invalidRecipe("\(file.lastPathComponent) can't be trusted: \(error.localizedDescription)")
+            }
+        } else {
+            throw DistillerError.invalidRecipe("\(file.lastPathComponent) has nothing to be checked against.")
         }
     }
 }

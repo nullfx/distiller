@@ -20,10 +20,21 @@ extension AppModel {
                 return
             }
         }
-        let prompts = CommunityCheckPrompts(session: { check in
-            await CommunityCheckCaptureSession.run(check: check)
-        })
+        // An installer with only a download page: the player downloads it in Distiller's
+        // browser. The check records its checksum (or signer), so there's nothing to check yet.
+        let obtained = PageDownloads()
+        let prompts = CommunityCheckPrompts(
+            obtainInstaller: { request in
+                let file = await PageDownloadWindow.obtain(request, verify: nil)
+                if let file { await obtained.add(file) }
+                return file
+            },
+            session: { check in
+                await CommunityCheckCaptureSession.run(check: check)
+            }
+        )
         perform("Running the community check for \(game.title)…") {
+            defer { Task { await obtained.removeAll() } }
             _ = try await engine.runCommunityCheck(for: game, prompts: prompts) { message in
                 Task { @MainActor in self.busyMessage = message }
             }
@@ -71,5 +82,17 @@ extension AppModel {
             }
             if !rescued.isEmpty { NSWorkspace.shared.activateFileViewerSelecting(rescued) }
         }
+    }
+}
+
+/// Files downloaded from publishers' pages during a community check, removed when it ends
+/// (the check clones the installer into its test bottle).
+private actor PageDownloads {
+    private var files: [URL] = []
+    func add(_ file: URL) { files.append(file) }
+    func removeAll() async {
+        let files = self.files
+        self.files = []
+        await MainActor.run { files.forEach(PageDownloadWindow.removeDownload) }
     }
 }

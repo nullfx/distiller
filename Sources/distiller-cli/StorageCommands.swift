@@ -283,7 +283,8 @@ struct RecipeCommunityCheck: AsyncParsableCommand {
         commandName: "community-check",
         abstract: "Prove a recipe works for other players before submitting it.",
         discussion: """
-            In a new bottle: downloads the game's official installer (game.installer.url), applies the \
+            In a new bottle: downloads the game's official installer (game.installer.url; with only a \
+            download page, game.installer.page, you download it in your browser and give its path), applies the \
             recipe's settings and starts the installer. Follow its steps; when the game is running \
             (started by the installer, or by you from the list of installed programs) and has \
             reached its login or menu, answer y and choose its program. \
@@ -300,7 +301,9 @@ struct RecipeCommunityCheck: AsyncParsableCommand {
     func run() async throws {
         let engine = try makeEngine()
         let entry = try findGame(game, in: engine)
-        let prompts = CommunityCheckPrompts(session: { session in
+        let prompts = CommunityCheckPrompts(obtainInstaller: { request in
+            askForPageDownload(request, check: nil)
+        }, session: { session in
             print("The installer is running in the test bottle: follow its steps. Some installers start a launcher or the game themselves.")
             print("Play until \(session.title) reaches its login screen or menu, then come back here and answer y.")
             print("Screenshots: this command can't capture windows (the app's check panel can). Screenshots the game saves with its own screenshot key during the check are collected.")

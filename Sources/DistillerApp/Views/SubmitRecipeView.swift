@@ -159,11 +159,15 @@ struct SubmitRecipeView: View {
 
     @ViewBuilder private func installerPage(_ game: Game) -> some View {
         Section {
-            if let installer = game.recipe.game.installer, let url = URL(string: installer.url) {
-                LabeledContent("Official installer") {
-                    Link(url.lastPathComponent.isEmpty ? installer.url : url.lastPathComponent, destination: url)
+            if let installer = game.recipe.game.installer {
+                if let link = installer.url, let url = URL(string: link) {
+                    LabeledContent("Official installer") {
+                        Link(url.lastPathComponent.isEmpty ? link : url.lastPathComponent, destination: url)
+                    }
+                    LabeledContent("From", value: url.host ?? link)
+                } else {
+                    LabeledContent("Official installer", value: "Downloaded by each player from the download page")
                 }
-                LabeledContent("From", value: url.host ?? installer.url)
                 if installer.updates == true {
                     LabeledContent("Verified by", value: game.communityCheck?.installerSigner.map { "\($0)'s signature" } ?? "Its publisher's signature (read by the community check)")
                 }
@@ -477,9 +481,20 @@ private struct CommunityCheckSection: View {
         } footer: {
             Footnote(game.recipe.game.installer == nil
                  ? "Add the game's official installer link (Edit Recipe ▸ Settings ▸ Official installer) first."
-                 : "In a new bottle, Distiller downloads \(URL(string: game.recipe.game.installer?.url ?? "")?.lastPathComponent ?? "the installer") from the publisher, applies this recipe's settings and starts the installer. A panel then follows the test bottle: choose the game's program when it runs (the installer may start it), capture screenshots, and say whether it reached its login or menu. The test bottle is removed afterwards. Large games can take a while.")
+                 : "In a new bottle, Distiller \(checkDownloadText(game.recipe.game.installer)), applies this recipe's settings and starts the installer. A panel then follows the test bottle: choose the game's program when it runs (the installer may start it), capture screenshots, and say whether it reached its login or menu. The test bottle is removed afterwards. Large games can take a while.")
         }
     }
+}
+
+/// How the community check gets the installer, for the check's footnote.
+private func checkDownloadText(_ installer: PublicInstaller?) -> String {
+    if let name = installer?.url.flatMap({ URL(string: $0)?.lastPathComponent }), !name.isEmpty {
+        return "downloads \(name) from the publisher"
+    }
+    if installer?.page != nil {
+        return "opens the publisher's download page for you to download the installer"
+    }
+    return "downloads the installer from the publisher"
 }
 
 /// One capture in the Submit window's filmstrip, numbered when it's shared (1 is the cover).

@@ -66,8 +66,11 @@ struct LinkInstallSheet: View {
     }
 
     private func installerText(_ game: IndexGame) -> String {
-        if let url = game.installer.flatMap({ URL(string: $0.url) }), let host = url.host {
+        if let url = game.officialInstaller?.url.flatMap({ URL(string: $0) }), let host = url.host {
             return "The game is installed from its publisher's official installer, \(url.lastPathComponent), downloaded from \(host)."
+        }
+        if let page = game.officialInstaller?.page.flatMap({ URL(string: $0) }), let host = page.host {
+            return "The game is installed from its publisher's official installer. Distiller opens its download page on \(host) for you to download it."
         }
         return "The game is installed as the recipe describes."
     }

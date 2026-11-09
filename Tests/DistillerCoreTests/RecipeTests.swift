@@ -31,6 +31,7 @@ final class RecipeLoadingTests: XCTestCase {
             case .runWindows: return "run_windows"
             case .userFile: return "user_file"
             case .userFolder: return "user_folder"
+            case .userDownload: return "user_download"
             }
         }
         XCTAssertEqual(kinds, ["user_file", "extract", "download", "extract", "copy", "dll_override"])

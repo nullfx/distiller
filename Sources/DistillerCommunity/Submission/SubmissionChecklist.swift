@@ -97,7 +97,10 @@ public enum SubmissionChecklist {
             guard let installer = game.recipe.game.installer else {
                 return (.needed, "Add the official installer link")
             }
-            let host = URL(string: installer.url)?.host ?? installer.url
+            let source = installer.url ?? installer.page ?? ""
+            let host = installer.url == nil
+                ? "Download page at \(URL(string: source)?.host ?? source)"
+                : URL(string: source)?.host ?? source
             if installer.updates == true {
                 if let signer = game.communityCheck?.installerSigner, CommunityCheck.isCurrent(game) {
                     return (.done, "\(host) · signed by \(signer)")

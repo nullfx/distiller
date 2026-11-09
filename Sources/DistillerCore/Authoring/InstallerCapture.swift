@@ -127,3 +127,23 @@ public enum InstallerLinkTest {
         return (http.statusCode, http.expectedContentLength > 0 ? http.expectedContentLength : nil)
     }
 }
+
+/// A file the player downloads themselves from a publisher's download page: an installer with
+/// no direct link that works on its own (`user_download` steps, and installers with only a
+/// `game.installer.page`). The app opens the page in its private browser; the command line
+/// asks for the file's path.
+public struct PageDownloadRequest: Sendable, Equatable {
+    /// The step's id (`CommunityCheck.installerDownloadID` for a game's installer).
+    public var id: String
+    /// The game.
+    public var title: String
+    public var prompt: String
+    public var page: URL
+
+    public init(id: String, title: String, prompt: String, page: URL) {
+        self.id = id
+        self.title = title
+        self.prompt = prompt
+        self.page = page
+    }
+}

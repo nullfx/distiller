@@ -63,7 +63,13 @@ public struct IndexGame: Codable, Equatable, Sendable, Identifiable {
     public var description: String?
     public var website: String?
     public var stores: [IndexStore]?
+    /// The official installer when it has a direct link. One with only a download page is
+    /// published as `downloadPage` instead, because Distiller 1.0 needs every installer here to
+    /// have a url; use `officialInstaller` for either.
     public var installer: PublicInstaller?
+    public var downloadPage: String?
+    /// The installer from `downloadPage` changes with every update.
+    public var downloadPageUpdates: Bool?
     /// Path of the game's detail file, relative to the index: "games/<slug>.json".
     public var detail: String?
     /// Across all its recipes.
@@ -76,9 +82,16 @@ public struct IndexGame: Codable, Equatable, Sendable, Identifiable {
     public var icon: String?
     public var id: String { slug }
 
+    /// The official installer: its direct link and page, or only its download page.
+    public var officialInstaller: PublicInstaller? {
+        installer ?? downloadPage.map { PublicInstaller(url: nil, page: $0, updates: downloadPageUpdates) }
+    }
+
     enum CodingKeys: String, CodingKey {
         case slug, title, recipes, publisher, developer, genres, description, website, stores, installer, detail, summary, graphics, updated, icon
         case releaseYear = "release_year"
+        case downloadPage = "download_page"
+        case downloadPageUpdates = "download_page_updates"
     }
 }
 

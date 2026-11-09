@@ -189,6 +189,14 @@ function scanValue(text, push) {
 }
 
 /** distiller://install?game=…&recipe=… (see DistillerLink.swift), or null for bad slugs. */
+/** The game's official installer: its link and page, or (published as download_page, which
+ *  older versions of Distiller don't read) only its download page. */
+export function officialInstaller(game) {
+  if (game?.installer) return game.installer;
+  if (game?.download_page) return { page: game.download_page, updates: game.download_page_updates === true };
+  return null;
+}
+
 export function installLink(game, recipe) {
   if (!SLUG.test(game ?? "") || !SLUG.test(recipe ?? "")) return null;
   return `distiller://install?game=${game}&recipe=${recipe}`;

@@ -1,7 +1,7 @@
 // The catalogue: the game list with search and filters, and a game's page (?game=<slug>).
 import {
   coverPath, describeHardwareKey, describeRecipe, detailURL, facets, filterGames, genreName, graphicsName,
-  installLink, mediaURL, openLink, rankRecipes, safeHttpsURL, SLUG, sortGames,
+  installLink, mediaURL, officialInstaller, openLink, rankRecipes, safeHttpsURL, SLUG, sortGames,
 } from "./catalogue-data.js";
 import { el, fetchCatalogue, picture, recipeViewer, tierBadge } from "./site.js";
 
@@ -140,9 +140,9 @@ function linksPanel(game) {
     const url = safeHttpsURL(store.url);
     if (url) links.push(el("li", {}, el("a", { href: url, rel: "noopener", text: STORE_NAMES[store.name] ?? "Store" })));
   }
-  const page = safeHttpsURL(game.installer?.page);
+  const page = safeHttpsURL(officialInstaller(game)?.page);
   if (page) links.push(el("li", {}, el("a", { href: page, rel: "noopener", text: "Download page" }), el("span", { class: "muted", text: ` (${new URL(page).host})` })));
-  const installer = safeHttpsURL(game.installer?.url);
+  const installer = safeHttpsURL(officialInstaller(game)?.url);
   if (installer) links.push(el("li", {}, el("a", { href: installer, rel: "noopener", text: "Official installer" }), el("span", { class: "muted", text: ` (${new URL(installer).host})` })));
   if (!links.length) return null;
   return el("section", { class: "panel" }, el("h2", { text: "Links" }), el("ul", { class: "link-list" }, links));
