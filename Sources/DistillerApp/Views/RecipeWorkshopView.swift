@@ -29,6 +29,7 @@ struct RecipeWorkshopView: View {
     @State private var yaml = ""
     @State private var loadedRecipe: Recipe?
     @State private var isSubmitting = false
+    @State private var isCapturingInstaller = false
 
     private var game: Game? { model.games.first { $0.id == gameID } }
 
@@ -57,6 +58,12 @@ struct RecipeWorkshopView: View {
         .onAppear(perform: loadFromGame)
         .onChange(of: game?.recipe) { loadFromGame() }
         .task { await refreshPrograms() }
+        .sheet(isPresented: $isCapturingInstaller) {
+            InstallerCaptureView(startPage: captureStartPage) { url, page in
+                installerURL = url.absoluteString
+                if let page { installerPage = page.absoluteString }
+            }
+        }
         .sheet(isPresented: $isSubmitting) {
             SubmitRecipeView(gameID: gameID)
         }
@@ -96,6 +103,8 @@ struct RecipeWorkshopView: View {
                 TextField("Download link", text: $installerURL, prompt: Text("https://…"))
                 TextField("Download page", text: $installerPage, prompt: Text("Optional: the publisher's page with the download, https://…"))
                 TextField("Installer arguments", text: $installerArgs, prompt: Text("Optional, such as /S for a silent install"))
+                Button("Get from Download Page…") { isCapturingInstaller = true }
+                    .help("Open the publisher's download page, download the installer there, and let Distiller find a link players can download it from directly.")
             } header: {
                 Text("Official installer")
             } footer: {
@@ -196,6 +205,15 @@ struct RecipeWorkshopView: View {
             }
         }
         .padding(16)
+    }
+
+    /// Where the installer browser opens: the recipe's download page, else the game's website.
+    private var captureStartPage: URL? {
+        for text in [installerPage, game?.recipe.game.website ?? ""] {
+            let trimmed = text.trimmingCharacters(in: .whitespaces)
+            if let url = URL(string: trimmed), url.scheme?.lowercased() == "https", url.host != nil { return url }
+        }
+        return nil
     }
 
     // MARK: State
