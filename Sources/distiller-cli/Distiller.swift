@@ -25,6 +25,7 @@ struct Distiller: AsyncParsableCommand {
             StorageCommand.self,
             McpCommand.self,
             AssistantCommand.self,
+            LogsCommand.self,
         ]
     )
 }

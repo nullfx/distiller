@@ -368,3 +368,65 @@ private func choose(from programs: [ProgramInBottle], suggested: ProgramInBottle
     }
     return shown[number - 1]
 }
+
+// MARK: - logs
+
+struct LogsCommand: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "logs",
+        abstract: "Show how much the logs take, clean them up, or change how long and how much to keep.",
+        discussion: "Distiller's app cleans up when it starts and once a day: logs older than the retention period, then the oldest over the size limit. Logs written in the last hour are always kept.",
+        subcommands: [Show.self, Clean.self, Configure.self],
+        defaultSubcommand: Show.self
+    )
+
+    struct Show: ParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Show the logs' size and the cleanup settings.")
+
+        func run() throws {
+            let engine = try makeEngine()
+            let usage = engine.logUsage()
+            let settings = StorageSettings.load(fromSupportFolder: engine.paths.root)
+            print("Logs: \(usage.files) in \(engine.paths.logs.path), \(ByteCountFormatter.string(fromByteCount: usage.bytes, countStyle: .file))")
+            print("Keep for: \(settings.effectiveLogRetentionDays == 0 ? "until the size limit" : "\(settings.effectiveLogRetentionDays) days")")
+            print("Keep at most: \(settings.effectiveLogLimitMB == 0 ? "no limit" : "\(settings.effectiveLogLimitMB) MB")")
+        }
+    }
+
+    struct Clean: ParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Remove old logs now, then the oldest over the size limit.")
+
+        func run() throws {
+            let engine = try makeEngine()
+            let result = engine.cleanLogs()
+            print(result.removed == 0
+                  ? "Nothing to remove."
+                  : "Removed \(result.removed) log\(result.removed == 1 ? "" : "s"), \(ByteCountFormatter.string(fromByteCount: result.freedBytes, countStyle: .file)).")
+        }
+    }
+
+    struct Configure: ParsableCommand {
+        static let configuration = CommandConfiguration(commandName: "set", abstract: "Change how long and how much to keep (0 turns either off).")
+
+        @Option(help: "Remove logs older than this many days (0 keeps them).")
+        var keepDays: Int?
+
+        @Option(help: "Keep at most this many megabytes of logs, removing the oldest first (0 means no limit).")
+        var limitMb: Int?
+
+        func validate() throws {
+            guard keepDays != nil || limitMb != nil else { throw ValidationError("Give --keep-days, --limit-mb or both.") }
+            if let keepDays, keepDays < 0 { throw ValidationError("--keep-days can't be negative.") }
+            if let limitMb, limitMb < 0 { throw ValidationError("--limit-mb can't be negative.") }
+        }
+
+        func run() throws {
+            let root = DistillerPaths().root
+            var settings = StorageSettings.load(fromSupportFolder: root)
+            if let keepDays { settings.logRetentionDays = keepDays }
+            if let limitMb { settings.logLimitMB = limitMb }
+            try settings.save(toSupportFolder: root)
+            try Show().run()
+        }
+    }
+}
