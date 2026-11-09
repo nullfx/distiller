@@ -43,6 +43,9 @@ final class AppModel {
     /// Shown in the status bar while long work runs.
     var busyMessage: String?
     var errorMessage: String?
+    /// What the Logs folder holds (Settings ▸ Storage ▸ Logs), and the last cleanup's result.
+    var logUsage: LogCleaner.Usage?
+    var logCleanupMessage: String?
     var isImportingRecipe = false
     /// Set after a play session, to offer a compatibility report.
     var gameToReport: Game?
@@ -98,6 +101,7 @@ final class AppModel {
 
     func reload() {
         guard let engine else { return }
+        cleanUpLogsIfDue()
         unavailableStorage = engine.paths.unavailable
         games = engine.library.load()
         refreshLibraryState()

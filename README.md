@@ -66,6 +66,10 @@ Shared recipes must install the game from its publisher's official installer. Be
 
 From a terminal: `distiller github login`, `distiller recipe community-check <game-id>`, then `distiller recipe submit <game-id> --tier gold --confirm`. A fork of Distiller that uses its own catalogue sets `CommunityRepository.default` in `Sources/DistillerCommunity/CommunityClient.swift` (its repository and the client ID of a GitHub OAuth app with Device Flow enabled).
 
+## Logs
+
+Every launch writes a log to `~/Library/Application Support/Distiller/Logs`, which **Show Log** opens and the AI assistant reads. A log keeps its first 20 MB and last 4 MB however much a game prints. Distiller removes logs older than 14 days, then the oldest beyond 1 GB, when it starts and once a day; change both in **Settings ▸ Storage ▸ Logs**, or with `distiller logs set --keep-days 7 --limit-mb 500` (`distiller logs` shows the usage, `distiller logs clean` cleans up now).
+
 ## Troubleshooting with an AI assistant
 
 Distiller includes an MCP server (`distiller mcp`) with read-only tools that let an AI assistant read a game's setup, launch logs, crash dumps and program details, and suggest recipe settings while you build a recipe. It's **off until you turn it on** in the **AI Assistant** tab of Settings (or `distiller assistant on`). Distiller doesn't change other apps' settings: you add its command (`/Applications/Distiller.app/Contents/Helpers/distiller mcp`) to your AI app's MCP servers, and the app starts the server when it needs it. Turning the assistant on opens the **Connect an AI Assistant** window, with the steps and copyable settings for Claude Desktop, Claude Code, ChatGPT, LM Studio, Ollama and other MCP clients; `distiller assistant setup [client]` prints the same in a terminal. Online assistants send what the tools return to their service; models in LM Studio or Ollama keep it on your Mac. The [docs](https://nullfx.github.io/distiller/docs/#assistant) walk through building a recipe from scratch with it.

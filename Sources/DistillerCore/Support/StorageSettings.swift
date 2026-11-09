@@ -19,12 +19,19 @@ public struct StorageSettings: Codable, Equatable, Sendable {
     /// Whether `distiller mcp` serves its troubleshooting tools to AI assistants. Off until the
     /// player turns it on (Settings ▸ AI Assistant, or `distiller assistant on`).
     public var assistantEnabled: Bool?
+    /// Logs older than this many days are removed (0 keeps them). Nil means the default.
+    public var logRetentionDays: Int?
+    /// The most the Logs folder may hold, in megabytes; the oldest go first (0 means no limit).
+    /// Nil means the default.
+    public var logLimitMB: Int?
 
     enum CodingKeys: String, CodingKey {
         case wineLocation = "wine_location"
         case bottlesLocation = "bottles_location"
         case locationsConfirmed = "locations_confirmed"
         case assistantEnabled = "assistant_enabled"
+        case logRetentionDays = "log_retention_days"
+        case logLimitMB = "log_limit_mb"
     }
 
     public init(wineLocation: String? = nil, bottlesLocation: String? = nil, locationsConfirmed: Bool? = nil, assistantEnabled: Bool? = nil) {
@@ -35,6 +42,11 @@ public struct StorageSettings: Codable, Equatable, Sendable {
     }
 
     public var isAssistantEnabled: Bool { assistantEnabled ?? false }
+
+    public static let defaultLogRetentionDays = 14
+    public static let defaultLogLimitMB = 1024
+    public var effectiveLogRetentionDays: Int { max(0, logRetentionDays ?? Self.defaultLogRetentionDays) }
+    public var effectiveLogLimitMB: Int { max(0, logLimitMB ?? Self.defaultLogLimitMB) }
 
     public static let fileName = "settings.json"
 

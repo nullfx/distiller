@@ -67,7 +67,10 @@ private struct StorageLocationRow: View {
 struct SettingsView: View {
     var body: some View {
         TabView {
-            SettingsPane { StorageLocationsSection(header: "Storage") }
+            SettingsPane {
+                StorageLocationsSection(header: "Storage")
+                LogsSettingsSection()
+            }
                 .tabItem { Label("Storage", systemImage: "externaldrive") }
             SettingsPane { GitHubSettingsSection() }
                 .tabItem { Label { Text("GitHub") } icon: { Image(nsImage: .gitHubMarkTemplate) } }
@@ -99,6 +102,50 @@ private struct SettingsPane<Content: View>: View {
             }
         }
         .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Settings ▸ Storage ▸ Logs: how much the logs take, how long and how much to keep.
+struct LogsSettingsSection: View {
+    @Environment(AppModel.self) private var model
+    static let retentionChoices = [3, 7, 14, 30, 90, 0]
+    static let limitChoices = [250, 500, 1024, 2048, 5120, 0]
+
+    var body: some View {
+        let settings = model.logSettings
+        Section {
+            LabeledContent("Logs now") {
+                if let usage = model.logUsage {
+                    Text("\(usage.files) log\(usage.files == 1 ? "" : "s"), \(ByteCountFormatter.string(fromByteCount: usage.bytes, countStyle: .file))")
+                } else {
+                    ProgressView().controlSize(.small)
+                }
+            }
+            Picker("Keep logs for", selection: Binding(get: { settings.effectiveLogRetentionDays }, set: { model.setLogRetention(days: $0) })) {
+                ForEach(Self.retentionChoices, id: \.self) { days in
+                    Text(days == 0 ? "Until the size limit" : "\(days) days").tag(days)
+                }
+            }
+            Picker("Keep at most", selection: Binding(get: { settings.effectiveLogLimitMB }, set: { model.setLogLimit(megabytes: $0) })) {
+                ForEach(Self.limitChoices, id: \.self) { megabytes in
+                    Text(megabytes == 0 ? "No limit" : ByteCountFormatter.string(fromByteCount: Int64(megabytes) * 1024 * 1024, countStyle: .file)).tag(megabytes)
+                }
+            }
+            HStack {
+                Button("Clean Up Now") { model.cleanUpLogs() }
+                    .disabled(model.busyMessage != nil)
+                Button("Show in Finder") { model.showLogsFolder() }
+                Spacer()
+                if let message = model.logCleanupMessage {
+                    Text(message).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Text("Logs")
+        } footer: {
+            Text("Each launch writes a log, which the troubleshooting assistant reads. Distiller removes old logs, then the oldest over the limit, when it starts and once a day. A game's log keeps its first 20 MB and last 4 MB however much it prints, and logs written in the last hour are always kept.")
+        }
+        .onAppear { model.refreshLogUsage() }
     }
 }
 
