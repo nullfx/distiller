@@ -284,8 +284,9 @@ struct RecipeCommunityCheck: AsyncParsableCommand {
         abstract: "Prove a recipe works for other players before submitting it.",
         discussion: """
             In a new bottle: downloads the game's official installer (game.installer.url), applies the \
-            recipe's settings, runs the installer (follow its steps if it asks anything), asks which \
-            installed program to launch, starts it, and asks whether it reached its login or menu. \
+            recipe's settings and starts the installer. Follow its steps; when the game is running \
+            (started by the installer, or by you from the list of installed programs), choose its \
+            program from what's running and confirm it reached its login or menu. \
             A pass is saved with the game; `distiller recipe submit` then submits that checked recipe.
             """
     )
@@ -299,24 +300,46 @@ struct RecipeCommunityCheck: AsyncParsableCommand {
     func run() async throws {
         let engine = try makeEngine()
         let entry = try engine.library.game(id: game)
-        let prompts = CommunityCheckPrompts(
-            chooseProgram: { programs, suggested in
-                print("Installed programs:")
-                for (index, program) in programs.prefix(20).enumerated() {
-                    print("  \(index + 1). \(program.windowsPath)\(program == suggested ? "   ← suggested" : "")")
+        // No screenshots from the command line; the app takes them.
+        let prompts = CommunityCheckPrompts(session: { session in
+            print("The installer is running in the test bottle: follow its steps. Some installers start a launcher or the game themselves.")
+            print("When \(session.title) is at its login screen or menu, come back here.")
+            while true {
+                let running = await session.runningPrograms()
+                print("")
+                if running.isEmpty {
+                    print("Running now: nothing besides Wine itself\(session.installerIsRunning ? ", and the installer" : "").")
+                } else {
+                    print("Running now:")
+                    for (index, program) in running.enumerated() { print("  \(index + 1). \(program.windowsPath)") }
+                    print("Type the game's number once it reached its login screen or menu.")
                 }
-                print("Program to launch [Enter for the suggestion, q to cancel]: ", terminator: "")
-                guard let answer = readLine()?.trimmingCharacters(in: .whitespaces), answer.lowercased() != "q" else { return nil }
-                if answer.isEmpty { return suggested }
-                guard let number = Int(answer), (1...min(programs.count, 20)).contains(number) else { return nil }
-                return programs[number - 1]
-            },
-            confirmRunning: { title, _ in
-                // No screenshots from the command line; the app takes them.
-                print("Did \(title) reach its login screen or menu? [y/n]: ", terminator: "")
-                return CommunityCheckAnswer(works: readLine()?.lowercased().hasPrefix("y") == true)
+                print("[Enter] refresh · [s] start an installed program · [n] it doesn't work · [q] cancel: ", terminator: "")
+                guard let answer = readLine()?.trimmingCharacters(in: .whitespaces).lowercased() else { return .cancelled }
+                switch answer {
+                case "": continue
+                case "q": return .cancelled
+                case "n": return .doesNotWork
+                case "s":
+                    let installed = session.installedPrograms()
+                    guard !installed.programs.isEmpty else { print("No Windows programs are installed yet."); continue }
+                    for (index, program) in installed.programs.prefix(20).enumerated() {
+                        print("  \(index + 1). \(program.windowsPath)\(program == installed.suggested ? "   ← suggested" : "")")
+                    }
+                    print("Program to start [Enter for the suggestion]: ", terminator: "")
+                    let choice = readLine()?.trimmingCharacters(in: .whitespaces) ?? ""
+                    let program = choice.isEmpty ? installed.suggested : Int(choice).flatMap { (1...min(installed.programs.count, 20)).contains($0) ? installed.programs[$0 - 1] : nil }
+                    if let program {
+                        do { try session.start(program); print("Started \(program.windowsPath).") } catch { print(error.localizedDescription) }
+                    }
+                default:
+                    if let number = Int(answer), (1...running.count).contains(number) {
+                        return .works(program: running[number - 1], screenshots: [])
+                    }
+                    print("Type a number from the list, s, n or q.")
+                }
             }
-        )
+        })
         let updated = try await engine.runCommunityCheck(for: entry, prompts: prompts, keepBottle: keepBottle) { print($0) }
         if let check = updated.communityCheck {
             print("Community check passed. Installer SHA-256: \(check.installerSHA256). Launches \(check.recipe.launch?.exe ?? "?").")

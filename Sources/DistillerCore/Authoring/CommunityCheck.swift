@@ -43,7 +43,9 @@ public enum CommunityCheck {
             throw DistillerError.invalidRecipe("it has no official public installer (game.installer.url).")
         }
         var shared = recipe
-        shared.install = try installerSteps(installer, sha256: installerSHA256) + (recipe.install ?? []).filter(isKeptStep)
+        // Settings first, so runtimes and registry values are in place before the installer
+        // runs; the installer last, since it may start a launcher or the game and keep running.
+        shared.install = (recipe.install ?? []).filter(isKeptStep) + (try installerSteps(installer, sha256: installerSHA256))
         if let launchExe {
             shared.launch = LaunchSpec(exe: launchExe, args: recipe.launch?.args, workingDir: nil)
         } else {

@@ -23,7 +23,7 @@ public enum GraphicsAPI: String, Codable, CaseIterable, Sendable, Comparable {
 }
 
 /// A Windows program found in a game folder or bottle, as a candidate to launch.
-public struct DiscoveredProgram: Identifiable, Equatable, Sendable {
+public struct DiscoveredProgram: Identifiable, Hashable, Sendable {
     /// Path relative to the folder that was searched, with forward slashes.
     public var relativePath: String
     public var url: URL

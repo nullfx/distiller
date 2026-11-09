@@ -1,37 +1,108 @@
 import Foundation
 
-/// The player's answer while the game runs in the community check.
-public struct CommunityCheckAnswer: Sendable {
-    /// The game reached its login screen or menu.
-    public var works: Bool
-    /// Captures of the game's window the player took while it ran (any image format), in order.
-    public var screenshots: [Data]
-
-    public init(works: Bool, screenshots: [Data] = []) {
-        self.works = works
-        self.screenshots = screenshots
-    }
-
-    public static let doesNotWork = CommunityCheckAnswer(works: false)
+/// How a community check session ended.
+public enum CommunityCheckOutcome: Sendable {
+    /// The game reached its login screen or menu. `program` starts the game (it becomes the
+    /// recipe's launch program); `screenshots` are the player's captures, in order.
+    case works(program: ProgramInBottle, screenshots: [Data])
+    /// It didn't get that far.
+    case doesNotWork
+    /// The player stopped the check.
+    case cancelled
 }
 
-/// How the community check talks to the player. The app answers with dialogs, the CLI with
+/// How the community check talks to the player. The app shows its capture panel, the CLI
 /// prompts; tests answer directly.
 public struct CommunityCheckPrompts: Sendable {
-    /// Picks the installed program to launch. `suggested` matches the player's own recipe
-    /// when possible. Return nil to cancel.
-    public var chooseProgram: @Sendable (_ programs: [ProgramInBottle], _ suggested: ProgramInBottle?) async -> ProgramInBottle?
-    /// Asked while the game is running: did it reach its login screen or menu? `programName`
-    /// is the launched program's file name (such as "Game.exe"), for finding its window to
-    /// capture a screenshot.
-    public var confirmRunning: @Sendable (_ title: String, _ programName: String) async -> CommunityCheckAnswer
+    /// Called once the installer has started. The session lasts until this returns: the
+    /// player follows the installer, starts or chooses the game (which may already be running,
+    /// started by the installer itself), captures screenshots and says whether it works.
+    public var session: @Sendable (CommunityCheckSession) async -> CommunityCheckOutcome
 
-    public init(
-        chooseProgram: @escaping @Sendable ([ProgramInBottle], ProgramInBottle?) async -> ProgramInBottle?,
-        confirmRunning: @escaping @Sendable (String, String) async -> CommunityCheckAnswer
-    ) {
-        self.chooseProgram = chooseProgram
-        self.confirmRunning = confirmRunning
+    public init(session: @escaping @Sendable (CommunityCheckSession) async -> CommunityCheckOutcome) {
+        self.session = session
+    }
+}
+
+/// A community check in progress: the test bottle with the recipe's settings and its
+/// installer running. Many installers start a launcher, an updater or the game itself and
+/// never "finish", so nothing waits for the installer: the player decides when the game is
+/// running, from what's running in the bottle or by starting an installed program.
+public final class CommunityCheckSession: @unchecked Sendable {
+    public let title: String
+    public let startedAt: Date
+    /// The program the player's own recipe launches (such as "Game.exe"), to suggest.
+    public let suggestedProgramName: String?
+
+    let driveC: URL
+    let wine: InstalledComponent
+    let environment: [String: String]
+    let runner: WineRunner
+    private let installer: Process
+    private let lock = NSLock()
+    private var started: [Process] = []
+
+    init(title: String, startedAt: Date, suggestedProgramName: String?, driveC: URL, wine: InstalledComponent,
+         environment: [String: String], runner: WineRunner, installer: Process) {
+        self.title = title
+        self.startedAt = startedAt
+        self.suggestedProgramName = suggestedProgramName
+        self.driveC = driveC
+        self.wine = wine
+        self.environment = environment
+        self.runner = runner
+        self.installer = installer
+    }
+
+    /// True while the installer's own process is running.
+    public var installerIsRunning: Bool { installer.isRunning }
+
+    /// The Windows programs running in the test bottle now, not counting Wine's own, that
+    /// could be the game: whatever the installer started (a launcher, the game) and anything
+    /// the player started. Empty if Wine can't be asked.
+    public func runningPrograms() async -> [ProgramInBottle] {
+        let running = (try? await runner.runningPrograms(wine: wine, environment: environment)) ?? []
+        return Self.programs(from: running, driveC: driveC)
+    }
+
+    /// The programs installed on drive C:, most likely game first, and the one to suggest.
+    public func installedPrograms() -> (programs: [ProgramInBottle], suggested: ProgramInBottle?) {
+        let programs = ProgramFinder.find(in: driveC).map { program in
+            ProgramInBottle(program: program, windowsPath: BottlePath.windowsPath(relativeComponents: program.relativePath.split(separator: "/").map(String.init)))
+        }
+        let suggested = programs.first { $0.program.name.lowercased() == suggestedProgramName?.lowercased() } ?? programs.first
+        return (programs, suggested)
+    }
+
+    /// Starts an installed program in the test bottle.
+    public func start(_ program: ProgramInBottle) throws {
+        let process = try runner.launch(
+            program: program.program.url.path, arguments: [], wine: wine, environment: environment,
+            workingDirectory: program.program.url.deletingLastPathComponent(),
+            logName: "check-\(program.program.url.deletingPathExtension().lastPathComponent)"
+        )
+        lock.withLock { started.append(process) }
+    }
+
+    /// Running programs on drive C: that aren't Wine's own, as programs in the bottle,
+    /// once each (a program can run several processes).
+    static func programs(from running: [RunningWindowsProgram], driveC: URL) -> [ProgramInBottle] {
+        var seen = Set<String>()
+        return running.compactMap { process in
+            guard !process.isWineSystemProgram else { return nil }
+            let windowsPath = process.windowsPath.replacingOccurrences(of: "/", with: "\\")
+            guard windowsPath.lowercased().hasPrefix("c:\\"), seen.insert(windowsPath.lowercased()).inserted else { return nil }
+            let components = windowsPath.dropFirst(3).split(separator: "\\").map(String.init)
+            guard !components.isEmpty, !components.contains(where: { $0 == ".." || $0 == "." }) else { return nil }
+            let url = components.reduce(driveC) { $0.appendingPathComponent($1) }
+            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
+            let program = DiscoveredProgram(relativePath: components.joined(separator: "/"), url: url, size: size, score: 0)
+            return ProgramInBottle(program: program, windowsPath: windowsPath)
+        }
+    }
+
+    func terminateStarted() {
+        for process in lock.withLock({ started }) + [installer] where process.isRunning { process.terminate() }
     }
 }
 
@@ -95,8 +166,9 @@ extension DistillerEngine {
 
     /// Proves a recipe works for other players before it's shared: in a new bottle, downloads
     /// the game's official installer (recording its SHA-256), applies the recipe's settings,
-    /// runs the installer, finds the installed program, launches it, and asks the player
-    /// whether it reached its login or menu. On "yes" the shareable recipe is saved with the
+    /// starts the installer, and hands over to the player (`CommunityCheckPrompts.session`):
+    /// they follow the installer, choose the game's program while it runs (or start it), and
+    /// say whether it reached its login or menu. On "yes" the shareable recipe is saved with the
     /// game as its `communityCheck`, along with the program's icon and the screenshots: those
     /// the player captured, then any the game saved itself in the bottle during the run (the
     /// first few are preselected for sharing). The test bottle is removed unless `keepBottle`.
@@ -143,36 +215,49 @@ extension DistillerEngine {
 
         let withoutLaunch = try CommunityCheck.shareableRecipe(from: game.recipe, installerSHA256: sha256, launchExe: nil)
         let resolved = resolve(withoutLaunch)
-        try await installShareable(resolved, in: bottle, stack: stack, progress: progress)
+        try await applySettings(resolved, in: bottle, stack: stack, progress: progress)
 
-        progress("Looking for the installed program")
-        let driveC = bottles.prefix(of: bottle).appendingPathComponent("drive_c", isDirectory: true)
-        let programs = ProgramFinder.find(in: driveC).map { program in
-            ProgramInBottle(program: program, windowsPath: BottlePath.windowsPath(relativeComponents: program.relativePath.split(separator: "/").map(String.init)))
+        // Start the installer without waiting for it: from here the player is in charge.
+        guard let installerStep = resolved.install.last(where: { if case .runWindows = $0 { return true }; return false }),
+              case .runWindows(let run) = installerStep else {
+            throw DistillerError.invalidRecipe("couldn't plan the installer run.")
         }
-        guard !programs.isEmpty else {
-            throw DistillerError.invalidRecipe("the installer finished, but no Windows program was found in the test bottle.")
-        }
-        let wanted = game.recipe.launch.map { ($0.exe.replacingOccurrences(of: "\\", with: "/") as NSString).lastPathComponent.lowercased() }
-        let suggested = programs.first { $0.program.name.lowercased() == wanted } ?? programs.first
-        guard let chosen = await prompts.chooseProgram(programs, suggested) else {
+        let prefix = bottles.prefix(of: bottle)
+        if let graphics = stack.graphics { try GraphicsPlacer.installPrefixDLLs(graphics, prefix: prefix) }
+        let environment = WineEnvironment.build(prefix: prefix, wine: stack.wine, graphics: stack.graphics, resolved: resolved)
+        let installerProgram = try BottlePath.resolve(run.path, in: root)
+        progress("Running the installer. Follow its steps; when the game is running, say so in the Community Check panel.")
+        let startedAt = Date().addingTimeInterval(-2)
+        let installerProcess = try runner.launch(
+            program: installerProgram.path, arguments: run.args ?? [], wine: stack.wine, environment: environment,
+            workingDirectory: installerProgram.deletingLastPathComponent(),
+            logName: "check-install-\(installerProgram.deletingPathExtension().lastPathComponent)"
+        )
+        let session = CommunityCheckSession(
+            title: game.title, startedAt: startedAt,
+            suggestedProgramName: game.recipe.launch.map { ($0.exe.replacingOccurrences(of: "\\", with: "/") as NSString).lastPathComponent },
+            driveC: prefix.appendingPathComponent("drive_c", isDirectory: true),
+            wine: stack.wine, environment: environment, runner: runner, installer: installerProcess
+        )
+        let outcome = await prompts.session(session)
+        progress("Stopping everything in the test bottle")
+        try? await runner.killAll(wine: stack.wine, environment: environment)
+        session.terminateStarted()
+
+        let chosen: ProgramInBottle
+        let screenshots: [Data]
+        switch outcome {
+        case .works(let program, let captures):
+            chosen = program
+            screenshots = captures
+        case .doesNotWork:
+            throw DistillerError.setupFailed("The community check didn't pass: \(game.title) didn't reach its login or menu. The recipe can't be submitted until it does.")
+        case .cancelled:
             throw DistillerError.setupFailed("The community check was cancelled.")
         }
-
         let shareable = try CommunityCheck.shareableRecipe(from: game.recipe, installerSHA256: sha256, launchExe: chosen.windowsPath)
         try RecipeLoader.validate(shareable)
-        let trial = Game(id: bottle.id, title: game.title, bottleID: bottle.id, recipe: shareable)
-
-        progress("Starting \(game.title)")
-        let launchedAt = Date().addingTimeInterval(-2)
-        let process = try launch(trial)
-        let answer = await prompts.confirmRunning(game.title, chosen.program.name)
-        progress("Stopping \(game.title)")
-        try? await stop(trial)
-        if process.isRunning { process.terminate() }
-        guard answer.works else {
-            throw DistillerError.setupFailed("The community check didn't pass: \(game.title) didn't reach its login or menu. The recipe can't be submitted until it does.")
-        }
+        let launchedAt = startedAt
 
         // The pictures that go with the submission: the installed program's icon, and the
         // screenshots from this run. Earlier ones are replaced, so they always match the check.
@@ -186,7 +271,7 @@ extension DistillerEngine {
             inPrefix: bottles.prefix(of: bottle), programFolder: chosen.program.url.deletingLastPathComponent(), since: launchedAt
         )
         var captures: [String] = []
-        for data in (answer.screenshots + saved.compactMap { try? Data(contentsOf: $0) }).prefix(CommunityMedia.maxCaptures) {
+        for data in (screenshots + saved.compactMap { try? Data(contentsOf: $0) }).prefix(CommunityMedia.maxCaptures) {
             guard let jpeg = CommunityMedia.screenshot(from: data) else { continue }
             let name = CommunityMedia.captureFile(captures.count + 1)
             try jpeg.write(to: media.appendingPathComponent(name), options: .atomic)
@@ -214,17 +299,20 @@ extension DistillerEngine {
         return updated
     }
 
-    /// Applies the shareable recipe's settings and runs its install steps, skipping the
-    /// download, which the check has already done.
-    private func installShareable(_ resolved: ResolvedRecipe, in bottle: Bottle, stack: (wine: InstalledComponent, graphics: InstalledComponent?), progress: @escaping @Sendable (String) -> Void) async throws {
+    /// Applies the shareable recipe's settings and runs its other install steps (winetricks,
+    /// registry, DLL overrides): everything but the installer download, which the check has
+    /// already done, and the installer run, which the check starts itself.
+    private func applySettings(_ resolved: ResolvedRecipe, in bottle: Bottle, stack: (wine: InstalledComponent, graphics: InstalledComponent?), progress: @escaping @Sendable (String) -> Void) async throws {
         try await installer.configurePrefix(resolved, in: bottle, wine: stack.wine, graphics: stack.graphics) { _, message in
             progress(message)
         }
         let steps = resolved.install.filter { step in
-            if case .download = step { return false }
-            return true
+            switch step {
+            case .download, .runWindows: return false
+            default: return true
+            }
         }
-        progress("Running the installer. Follow its steps if it asks you anything.")
+        guard !steps.isEmpty else { return }
         try await installer.runSteps(steps, in: bottle, resolved: resolved, wine: stack.wine, graphics: stack.graphics, supplied: UserSupplied()) { _, message in
             progress(message)
         }

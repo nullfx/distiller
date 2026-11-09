@@ -91,7 +91,8 @@ final class SubmissionPlanTests: XCTestCase {
         var recipe = shareableRecipe()
         recipe.install = (recipe.install ?? []) + [.winetricks(["vcrun2022"]), .registry(RegistryEdit(key: "HKCU\\Software\\Wine", values: ["X": .string("1")]))]
         let shared = try CommunityCheck.shareableRecipe(from: recipe, installerSHA256: Self.installerSHA, launchExe: "C:\\Program Files\\Real Game\\Game.exe")
-        guard case .download(let download)? = shared.install?.first, case .runWindows(let run)? = shared.install?.dropFirst().first else {
+        // Settings first, then the official installer: downloaded, then run.
+        guard case .download(let download)? = shared.install?.dropLast().last, case .runWindows(let run)? = shared.install?.last else {
             return XCTFail("\(String(describing: shared.install))")
         }
         XCTAssertEqual(download.url, Self.installerURL)
