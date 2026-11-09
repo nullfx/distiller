@@ -221,6 +221,17 @@ final class WineEnvironmentTests: XCTestCase {
         XCTAssertTrue(env["PATH"]?.hasPrefix("/opt/wine/bin:") == true)
     }
 
+    /// MoltenVK's warnings can repeat many times a second and fill a launch log, so it reports
+    /// errors only unless a recipe asks for more.
+    func testMoltenVKReportsErrorsOnlyByDefault() throws {
+        let prefix = URL(fileURLWithPath: "/tmp/bottles/demo/prefix")
+        var resolved = RecipeResolver.resolve(try loadFixtureRecipe("d3dmetal"), for: Macs.m3Pro)
+        XCTAssertEqual(WineEnvironment.build(prefix: prefix, wine: makeWine(), graphics: nil, resolved: resolved, host: [:])["MVK_CONFIG_LOG_LEVEL"], "1")
+        resolved.env["MVK_CONFIG_LOG_LEVEL"] = "3"
+        XCTAssertTrue(RecipePolicy.isAllowedEnvKey("MVK_CONFIG_LOG_LEVEL"))
+        XCTAssertEqual(WineEnvironment.build(prefix: prefix, wine: makeWine(), graphics: nil, resolved: resolved, host: [:])["MVK_CONFIG_LOG_LEVEL"], "3", "A recipe can turn it back up")
+    }
+
     func testDLLOverrideString() {
         let text = WineEnvironment.dllOverrideString(["nvapi": "disabled", "d3d11": "native,builtin", "dxgi": "native"])
         XCTAssertEqual(text, "d3d11=n,b;dxgi=n;nvapi=")
