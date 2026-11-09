@@ -39,6 +39,15 @@ func makeEngine() throws -> DistillerEngine {
     try DistillerEngine()
 }
 
+/// A game in the library by its ID, with a hint about where IDs come from when there's none.
+func findGame(_ id: String, in engine: DistillerEngine) throws -> Game {
+    do {
+        return try engine.library.game(id: id)
+    } catch DistillerError.gameNotFound {
+        throw ValidationError("There's no game in the library with the ID \(id). Run `distiller games` to list the games and their IDs.")
+    }
+}
+
 func printJSON<T: Encodable>(_ value: T) throws {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -403,7 +412,7 @@ struct LaunchCommand: AsyncParsableCommand {
 
     func run() async throws {
         let engine = try makeEngine()
-        let entry = try engine.library.game(id: game)
+        let entry = try findGame(game, in: engine)
         var launched = entry
         if let graphics {
             var overrides = launched.overrides ?? LocalOverrides()
@@ -512,7 +521,7 @@ struct CommunityCommand: AsyncParsableCommand {
 
         func run() throws {
             let engine = try makeEngine()
-            let entry = try engine.library.game(id: game)
+            let entry = try findGame(game, in: engine)
             let stack = try? engine.selectStack(for: entry)
             let url = CommunityClient(paths: engine.paths).reportURL(
                 gameSlug: entry.recipe.game.slug,
