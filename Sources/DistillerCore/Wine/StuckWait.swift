@@ -14,7 +14,7 @@ public enum StuckWait {
     /// Wine's own programs that end by themselves once nothing else runs in the bottle.
     static let wineServices: Set<String> = [
         "services.exe", "winedevice.exe", "plugplay.exe", "svchost.exe", "rpcss.exe", "lsass.exe",
-        "explorer.exe", "conhost.exe", "wmic.exe",
+        "explorer.exe", "conhost.exe", "wmic.exe", "start.exe",
     ]
 
     /// Background services that never exit, by program, with the service names that run it.
@@ -80,8 +80,11 @@ extension WineRunner {
         let services = StuckWait.servicesToStop(programs)
         guard !services.isEmpty else { return false }
         for service in services {
-            // Either can fail harmlessly: a 32-bit-only bottle has no 64-bit service.
-            try? await wineCommand(["sc", "config", service, "start=", "demand"], wine: wine, environment: environment, logName: "services")
+            // Either can fail harmlessly: a 32-bit-only bottle has no 64-bit service. Start = 3 is
+            // "on demand"; Wine's `sc config` can't change it (it fails with code 103).
+            try? await wineCommand(["reg", "add", #"HKLM\System\CurrentControlSet\Services\"# + service,
+                                    "/v", "Start", "/t", "REG_DWORD", "/d", "3", "/f"],
+                                   wine: wine, environment: environment, logName: "services")
             try? await wineCommand(["net", "stop", service], wine: wine, environment: environment, logName: "services")
         }
         return true

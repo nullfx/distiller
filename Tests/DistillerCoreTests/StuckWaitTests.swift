@@ -14,7 +14,7 @@ final class StuckWaitTests: XCTestCase {
         let left = programs([
             #"C:\windows\system32\services.exe"#, #"C:\windows\system32\winedevice.exe"#,
             #"C:\windows\system32\svchost.exe"#, #"C:\windows\system32\plugplay.exe"#,
-            #"C:\windows\system32\rpcss.exe"#, netService, netService, #"C:\windows\system32\wmic.exe"#,
+            #"C:\windows\system32\rpcss.exe"#, netService, netService, #"C:\windows\system32\start.exe"#, #"C:\windows\system32\wbem\wmic.exe"#,
         ])
         XCTAssertEqual(StuckWait.servicesToStop(left), ["clr_optimization_v4.0.30319_32", "clr_optimization_v4.0.30319_64"])
     }
