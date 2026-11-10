@@ -115,11 +115,22 @@ extension AppModel {
             busyMessage = nil
             reload()
         }
+        let session = InstallSession(title: draft.title, tasks: InstallPlan.tasks(for: engine.resolve(draft.makeRecipe())))
+        InstallProgressWindow.show(session)
         do {
-            return try await engine.create(from: draft, supplied: supplied) { progress in
-                Task { @MainActor in self.busyMessage = "\(draft.title): \(progress.message)" }
+            let game = try await engine.create(from: draft, supplied: supplied, cancellation: session.cancellation) { progress in
+                Task { @MainActor in
+                    session.update(progress)
+                    self.busyMessage = "\(draft.title): \(progress.message)"
+                }
             }
+            session.finish(.installed)
+            return game
+        } catch is CancellationError {
+            session.finish(.cancelled)
+            return nil
         } catch {
+            session.finish(.failed(error.localizedDescription))
             errorMessage = error.localizedDescription
             return engine.library.load()
                 .filter { $0.isAuthored && $0.recipe.game.slug == draft.slug && $0.recipe.id == draft.recipeID }

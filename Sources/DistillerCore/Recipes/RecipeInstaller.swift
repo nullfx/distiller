@@ -44,8 +44,11 @@ public final class RecipeInstaller: @unchecked Sendable {
     let bottles: BottleStore
     let components: ComponentStore
 
-    /// The number of progress steps `configurePrefix` reports.
-    public static let configureStepCount = 4
+    /// The number of progress steps `configurePrefix` reports: three, then one per winetricks
+    /// component (`InstallPlan.configureTasks`).
+    public static func configureStepCount(for resolved: ResolvedRecipe) -> Int {
+        InstallPlan.configureTasks(resolved).count
+    }
 
     public init(runner: WineRunner, bottles: BottleStore, components: ComponentStore) {
         self.runner = runner
@@ -59,14 +62,17 @@ public final class RecipeInstaller: @unchecked Sendable {
         wine: InstalledComponent,
         graphics: InstalledComponent?,
         supplied: UserSupplied,
+        cancellation: InstallCancellation? = nil,
         progress: @escaping @Sendable (InstallProgress) -> Void
     ) async throws {
-        let total = Self.configureStepCount + resolved.install.count
-        try await configurePrefix(resolved, in: bottle, wine: wine, graphics: graphics) { step, message in
-            progress(InstallProgress(step: step, total: total, message: message))
+        // Step 1, creating the bottle, is the engine's (`InstallPlan.tasks`).
+        let total = InstallPlan.tasks(for: resolved).count
+        let configured = Self.configureStepCount(for: resolved)
+        try await configurePrefix(resolved, in: bottle, wine: wine, graphics: graphics, cancellation: cancellation) { step, message in
+            progress(InstallProgress(step: 1 + step, total: total, message: message))
         }
-        try await runSteps(resolved.install, in: bottle, resolved: resolved, wine: wine, graphics: graphics, supplied: supplied) { index, message in
-            progress(InstallProgress(step: Self.configureStepCount + index, total: total, message: message))
+        try await runSteps(resolved.install, in: bottle, resolved: resolved, wine: wine, graphics: graphics, supplied: supplied, cancellation: cancellation) { index, message in
+            progress(InstallProgress(step: 1 + configured + index, total: total, message: message))
         }
     }
 
@@ -78,15 +84,19 @@ public final class RecipeInstaller: @unchecked Sendable {
         in bottle: Bottle,
         wine: InstalledComponent,
         graphics: InstalledComponent?,
+        cancellation: InstallCancellation? = nil,
         progress: @escaping @Sendable (Int, String) -> Void
     ) async throws {
         let prefix = bottles.prefix(of: bottle)
         let env = WineEnvironment.build(prefix: prefix, wine: wine, graphics: graphics, resolved: resolved)
+        let titles = InstallPlan.configureTasks(resolved).map(\.title)
 
-        progress(1, "Setting the Windows version to \(resolved.windowsVersion)")
+        try cancellation?.check()
+        progress(1, titles[0])
         try await runner.setWindowsVersion(resolved.windowsVersion, wine: wine, environment: env)
 
-        progress(2, "Applying registry settings")
+        try cancellation?.check()
+        progress(2, titles[1])
         var registry = resolved.registry
         registry.append(RegistryEdit(
             key: "HKCU\\Software\\Wine\\Mac Driver",
@@ -94,15 +104,21 @@ public final class RecipeInstaller: @unchecked Sendable {
         ))
         try await runner.importRegistry(registry, prefix: prefix, wine: wine, environment: env)
 
-        progress(3, "Placing \(resolved.graphics.displayName) files")
+        try cancellation?.check()
+        progress(3, titles[2])
         if let graphics {
             try GraphicsPlacer.installPrefixDLLs(graphics, prefix: prefix)
         }
 
-        progress(4, resolved.winetricks.isEmpty ? "No winetricks needed" : "Installing \(resolved.winetricks.joined(separator: ", "))")
+        // One component at a time, so the player sees which one is running (some, such as
+        // .NET Framework, take half an hour or more).
         if !resolved.winetricks.isEmpty {
             guard let winetricks = components.winetricks() else { throw DistillerError.componentNotFound("winetricks") }
-            try await runner.runWinetricks(resolved.winetricks, winetricks: winetricks, wine: wine, environment: env)
+            for (index, verb) in resolved.winetricks.enumerated() {
+                try cancellation?.check()
+                progress(4 + index, titles[3 + index])
+                try await runner.runWinetricks([verb], winetricks: winetricks, wine: wine, environment: env)
+            }
         }
     }
 
@@ -114,6 +130,7 @@ public final class RecipeInstaller: @unchecked Sendable {
         wine: InstalledComponent,
         graphics: InstalledComponent?,
         supplied: UserSupplied,
+        cancellation: InstallCancellation? = nil,
         progress: @escaping @Sendable (Int, String) -> Void = { _, _ in }
     ) async throws {
         let root = bottles.root(of: bottle)
@@ -121,7 +138,8 @@ public final class RecipeInstaller: @unchecked Sendable {
         let env = WineEnvironment.build(prefix: prefix, wine: wine, graphics: graphics, resolved: resolved)
         let gameProgram = resolved?.launch.flatMap { try? BottlePath.resolve($0.exe, in: root) }
         for (index, step) in steps.enumerated() {
-            progress(index + 1, Self.describe(step))
+            try cancellation?.check()
+            progress(index + 1, InstallPlan.step(step).title)
             if case .runWindows(let run) = step, run.wait ?? true {
                 // Don't wait for a launcher or the game that the installer leaves running.
                 let program = try BottlePath.resolve(run.path, in: root)
@@ -240,21 +258,6 @@ public final class RecipeInstaller: @unchecked Sendable {
             } else {
                 try APFSClone.replaceItem(at: destination, withCloneOf: source.url)
             }
-        }
-    }
-
-    static func describe(_ step: InstallStep) -> String {
-        switch step {
-        case .download(let download): return "Downloading \(URL(string: download.url)?.lastPathComponent ?? download.url)"
-        case .extract(let extract): return "Extracting \(extract.archive)"
-        case .winetricks(let verbs): return "Installing \(verbs.joined(separator: ", "))"
-        case .registry(let edit): return "Setting \(edit.key)"
-        case .dllOverride: return "Setting DLL overrides"
-        case .copy(let copy): return "Copying \(copy.from)"
-        case .runWindows(let run): return "Running \(run.path)"
-        case .userFile(let file): return "Copying your file for \(file.id)"
-        case .userFolder(let folder): return "Adding your folder for \(folder.id)"
-        case .userDownload(let download): return "Checking your download for \(download.id)"
         }
     }
 

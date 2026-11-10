@@ -118,13 +118,16 @@ public final class DistillerEngine: @unchecked Sendable {
         recipe: Recipe,
         supplied: UserSupplied = UserSupplied(),
         authored: Bool = false,
+        cancellation: InstallCancellation? = nil,
         progress: @escaping @Sendable (InstallProgress) -> Void = { _ in }
     ) async throws -> Game {
         try RecipeLoader.validate(recipe)
         try paths.requireAvailable(.wine)
         let resolved = resolve(recipe)
         let stack = try selectStack(for: resolved)
-        progress(InstallProgress(step: 0, total: 1, message: "Creating a bottle"))
+        let plan = InstallPlan.tasks(for: resolved)
+        try cancellation?.check()
+        progress(InstallProgress(step: 1, total: plan.count, message: plan[0].title))
         let bottle = try await bottles.makeBottle(name: recipe.game.title, wine: stack.wine, runner: runner)
         // Add the game before running steps, so a failed install still shows up and can be fixed.
         let game = Game(id: bottle.id, title: recipe.game.title, bottleID: bottle.id, recipe: recipe, authored: authored ? true : nil)
@@ -132,9 +135,26 @@ public final class DistillerEngine: @unchecked Sendable {
             try library.upsert(game)
             try writeRecipeFile(for: game)
         }
-        try await installer.install(
-            resolved, in: bottle, wine: stack.wine, graphics: stack.graphics, supplied: supplied, progress: progress
-        )
+        // Cancelling stops every program in the new bottle, which ends the running step.
+        let environment = WineEnvironment.build(prefix: bottles.prefix(of: bottle), wine: stack.wine, graphics: stack.graphics, resolved: resolved)
+        let runner = self.runner
+        cancellation?.onCancel {
+            Task { try? await runner.killAll(wine: stack.wine, environment: environment) }
+        }
+        do {
+            try await installer.install(
+                resolved, in: bottle, wine: stack.wine, graphics: stack.graphics, supplied: supplied,
+                cancellation: cancellation, progress: progress
+            )
+            try cancellation?.check()
+        } catch {
+            guard cancellation?.isCancelled == true else { throw error }
+            // The player stopped it: nothing of theirs is in the new bottle, so it goes.
+            try? await runner.killAll(wine: stack.wine, environment: environment)
+            if authored { try? library.remove(id: game.id) }
+            try? bottles.delete(bottle)
+            throw CancellationError()
+        }
         try library.upsert(game)
         // An installer that was cancelled or failed often exits normally, so check its result.
         // The game stays in the library (marked as missing its program), where it can be
