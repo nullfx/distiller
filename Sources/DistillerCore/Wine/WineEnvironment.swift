@@ -71,4 +71,12 @@ public enum WineEnvironment {
         default: return value.lowercased()
         }
     }
+
+    /// `environment` with msync and esync turned off, for installing components (winetricks).
+    public static func withoutFastSync(_ environment: [String: String]) -> [String: String] {
+        var env = environment
+        env["WINEMSYNC"] = nil
+        env["WINEESYNC"] = nil
+        return env
+    }
 }

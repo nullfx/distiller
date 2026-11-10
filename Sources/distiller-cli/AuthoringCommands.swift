@@ -206,9 +206,8 @@ struct RecipeCreate: AsyncParsableCommand {
             print(try RecipeLoader.encode(recipe))
             return
         }
-        let game = try await engine.create(from: draft, supplied: supplied) { progress in
-            print("[\(progress.step)/\(progress.total)] \(progress.message)")
-        }
+        printInstallPlan(InstallPlan.tasks(for: engine.resolve(recipe)))
+        let game = try await engine.create(from: draft, supplied: supplied, progress: printInstallProgress)
         print("Created \(game.title) (\(game.id)).")
         if game.recipe.launch == nil {
             print("Choose the program to launch: distiller recipe programs \(game.id), then distiller recipe set-launch \(game.id) '<C:\\path>'")

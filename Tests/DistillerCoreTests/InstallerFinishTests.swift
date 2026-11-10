@@ -50,4 +50,36 @@ final class InstallerFinishTests: XCTestCase {
         XCTAssertNil(DistillerEngine.missingLaunchProgram(RecipeResolver.resolve(recipe, for: Macs.m3Pro), root: root),
                      "Nothing to check without a launch program (chosen after the install)")
     }
+
+    // MARK: Installers run from the Windows drive
+
+    func testInstallersOutsideDriveCRunFromTheUsersDownloads() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("distiller-onc-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let prefix = root.appendingPathComponent("prefix")
+        let user = prefix.appendingPathComponent("drive_c/users/player")
+        try FileManager.default.createDirectory(at: user, withIntermediateDirectories: true)
+        let cached = root.appendingPathComponent("cache/Setup.exe")
+        try FileManager.default.createDirectory(at: cached.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("setup".utf8).write(to: cached)
+
+        let staged = try RecipeInstaller.onDriveC(cached, prefix: prefix, environment: ["USER": "player"])
+        XCTAssertEqual(staged.standardizedFileURL.path, user.appendingPathComponent("Downloads/Setup.exe").standardizedFileURL.path)
+        XCTAssertEqual(try Data(contentsOf: staged), Data("setup".utf8))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: cached.path), "the cached installer stays for next time")
+        // Again (a retry) replaces the copy.
+        XCTAssertEqual(try RecipeInstaller.onDriveC(cached, prefix: prefix, environment: ["USER": "player"]), staged)
+
+        // No such Windows user yet: the Public profile.
+        let other = try RecipeInstaller.onDriveC(cached, prefix: prefix, environment: ["USER": "nobody"])
+        XCTAssertTrue(other.path.hasSuffix("drive_c/users/Public/Downloads/Setup.exe"), other.path)
+    }
+
+    func testProgramsOnDriveCRunWhereTheyAre() throws {
+        let prefix = URL(fileURLWithPath: "/bottles/test/prefix")
+        let msiexec = prefix.appendingPathComponent("drive_c/windows/system32/msiexec.exe")
+        XCTAssertEqual(try RecipeInstaller.onDriveC(msiexec, prefix: prefix, environment: [:]), msiexec)
+        let installer = prefix.appendingPathComponent("drive_c/Installers/Game.exe")
+        XCTAssertEqual(try RecipeInstaller.onDriveC(installer, prefix: prefix, environment: [:]), installer)
+    }
 }

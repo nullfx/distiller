@@ -31,9 +31,10 @@ extension DistillerEngine {
     public func create(
         from draft: RecipeDraft,
         supplied: UserSupplied,
+        cancellation: InstallCancellation? = nil,
         progress: @escaping @Sendable (InstallProgress) -> Void = { _ in }
     ) async throws -> Game {
-        try await install(recipe: draft.makeRecipe(), supplied: supplied, authored: true, progress: progress)
+        try await install(recipe: draft.makeRecipe(), supplied: supplied, authored: true, cancellation: cancellation, progress: progress)
     }
 
     /// Windows programs in a game's bottle, best guesses first, with their Windows paths.
@@ -89,7 +90,7 @@ extension DistillerEngine {
         let bottle = try bottles.bottle(id: game.bottleID)
         let resolved = resolve(game.recipe, overrides: game.overrides)
         let stack = try selectStack(for: game, recordUpgrade: true)
-        let total = RecipeInstaller.configureStepCount
+        let total = RecipeInstaller.configureStepCount(for: resolved)
         try await installer.configurePrefix(resolved, in: bottle, wine: stack.wine, graphics: stack.graphics) { step, message in
             progress(InstallProgress(step: step, total: total, message: message))
         }

@@ -125,6 +125,8 @@ final class AppModel {
             }
             do {
                 try await work()
+            } catch is CancellationError {
+                // The player stopped it; nothing to report.
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -180,10 +182,22 @@ final class AppModel {
         } ?? []
         defer { pageDownloads.forEach(PageDownloadWindow.removeDownload) }
         busyMessage = "Installing \(recipe.game.title)…"
-        _ = try await engine.install(recipe: recipe, supplied: supplied) { progress in
-            Task { @MainActor in
-                self.busyMessage = "Installing \(recipe.game.title): \(progress.message)"
+        let session = InstallSession(title: recipe.game.title, tasks: InstallPlan.tasks(for: engine.resolve(recipe)))
+        InstallProgressWindow.show(session)
+        do {
+            _ = try await engine.install(recipe: recipe, supplied: supplied, cancellation: session.cancellation) { progress in
+                Task { @MainActor in
+                    session.update(progress)
+                    self.busyMessage = "Installing \(recipe.game.title): \(progress.message)"
+                }
             }
+            session.finish(.installed)
+        } catch is CancellationError {
+            session.finish(.cancelled)
+            throw CancellationError()
+        } catch {
+            session.finish(.failed(error.localizedDescription))
+            throw error
         }
     }
 

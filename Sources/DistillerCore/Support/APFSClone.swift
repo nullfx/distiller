@@ -23,11 +23,21 @@ public enum APFSClone {
     }
 
     /// Clones `source` over `destination`, replacing whatever is there.
+    /// Nothing to do when `source` already is `destination` (a file picked from the bottle's
+    /// own folder): removing the destination first would delete the source.
     public static func replaceItem(at destination: URL, withCloneOf source: URL) throws {
+        if isSameFile(source, destination) { return }
         if FileManager.default.fileExists(atPath: destination.path) || isSymlink(destination) {
             try FileManager.default.removeItem(at: destination)
         }
         try cloneItem(at: source, to: destination)
+    }
+
+    /// Whether two paths name the same file (same volume and inode), through links too.
+    static func isSameFile(_ a: URL, _ b: URL) -> Bool {
+        var first = stat(), second = stat()
+        guard stat(a.path, &first) == 0, stat(b.path, &second) == 0 else { return false }
+        return first.st_dev == second.st_dev && first.st_ino == second.st_ino
     }
 
     public static func isSymlink(_ url: URL) -> Bool {

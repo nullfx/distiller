@@ -377,9 +377,8 @@ struct InstallCommand: AsyncParsableCommand {
             }
             userFiles[download.id] = file
         }
-        let game = try await engine.install(recipe: loaded, supplied: UserSupplied(files: userFiles, folders: folders)) { progress in
-            print("[\(progress.step)/\(progress.total)] \(progress.message)")
-        }
+        printInstallPlan(InstallPlan.tasks(for: engine.resolve(loaded)))
+        let game = try await engine.install(recipe: loaded, supplied: UserSupplied(files: userFiles, folders: folders), progress: printInstallProgress)
         print("Installed \(game.title). Start it with: distiller launch \(game.id)")
     }
 }
@@ -583,4 +582,17 @@ func askForPageDownload(_ request: PageDownloadRequest, check: ((URL) throws -> 
             print("\(url.lastPathComponent) isn't the file the recipe expects: \(error.localizedDescription)")
         }
     }
+}
+
+/// Lists an install's steps before it starts, with a note on the slow ones.
+func printInstallPlan(_ tasks: [InstallTask]) {
+    print("Installing in \(tasks.count) steps:")
+    for task in tasks {
+        print("  \(task.id). \(task.title)\(task.note.map { _ in " (can take a long time)" } ?? "")")
+    }
+}
+
+/// Prints each step as it starts, and anything it adds while running.
+@Sendable func printInstallProgress(_ progress: InstallProgress) {
+    print("[\(progress.step)/\(progress.total)] \(progress.message)")
 }

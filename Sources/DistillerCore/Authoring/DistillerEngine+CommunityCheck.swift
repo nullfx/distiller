@@ -262,7 +262,7 @@ extension DistillerEngine {
         let prefix = bottles.prefix(of: bottle)
         if let graphics = stack.graphics { try GraphicsPlacer.installPrefixDLLs(graphics, prefix: prefix) }
         let environment = WineEnvironment.build(prefix: prefix, wine: stack.wine, graphics: stack.graphics, resolved: resolved)
-        let installerProgram = try BottlePath.resolve(run.path, in: root)
+        let installerProgram = try RecipeInstaller.onDriveC(BottlePath.resolve(run.path, in: root), prefix: prefix, environment: environment)
         progress("Running the installer. Follow its steps; when the game is running, say so in the Community Check panel.")
         let startedAt = Date().addingTimeInterval(-2)
         let installerProcess = try runner.launch(
