@@ -47,14 +47,35 @@ public final class WineRunner: @unchecked Sendable {
         env["WINE"] = wineBinary.path
         env["WINESERVER"] = wine.wineserverBinary?.path
         let log = logURL(named: "winetricks")
-        let result = try await ProcessRunner.run(
+        let process = try ProcessRunner.launch(
             URL(fileURLWithPath: "/bin/bash"),
             arguments: [script.path, "-q"] + verbs,
             environment: env,
+            currentDirectory: nil,
             logFile: log
         )
-        guard result.status == 0 else {
-            throw DistillerError.processFailed(command: "winetricks \(verbs.joined(separator: " "))", status: result.status, logFile: log.path)
+        // winetricks waits for the bottle's programs to exit at times of its own; release a wait
+        // that's stuck on a service that never exits (StuckWait).
+        var waitingSince: ContinuousClock.Instant?
+        while process.isRunning {
+            try await Task.sleep(for: .seconds(5))
+            guard process.isRunning else { break }
+            if await isWaitingForServer(under: process.processIdentifier) {
+                let since = waitingSince ?? .now
+                waitingSince = since
+                if ContinuousClock.now - since >= StuckWait.patience {
+                    await releaseStuckWait(wine: wine, environment: environment)
+                    waitingSince = .now
+                }
+            } else {
+                waitingSince = nil
+            }
+        }
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw DistillerError.processFailed(
+                command: "winetricks \(verbs.joined(separator: " "))", status: process.terminationStatus, logFile: log.path
+            )
         }
         try await waitForServer(wine: wine, environment: environment)
     }
@@ -180,6 +201,7 @@ public final class WineRunner: @unchecked Sendable {
         guard let server = wine.wineserverBinary, FileManager.default.isExecutableFile(atPath: server.path) else { return true }
         let waiting = try ProcessRunner.launch(server, arguments: ["-w"], environment: environment,
                                                currentDirectory: nil, logFile: logURL(named: "wineserver"))
+        var lastLook = ContinuousClock.now
         while waiting.isRunning {
             try await Task.sleep(for: .seconds(3))
             guard waiting.isRunning else { break }
@@ -188,12 +210,17 @@ public final class WineRunner: @unchecked Sendable {
                 waiting.terminate()
                 return false
             }
+            if ContinuousClock.now - lastLook >= StuckWait.patience {
+                await releaseStuckWait(wine: wine, environment: environment)
+                lastLook = .now
+            }
         }
         return true
     }
 
+    /// Waits until every program in the prefix has exited (releasing a wait stuck on a service
+    /// that never exits, see StuckWait).
     func waitForServer(wine: InstalledComponent, environment: [String: String]) async throws {
-        guard let server = wine.wineserverBinary, FileManager.default.isExecutableFile(atPath: server.path) else { return }
-        _ = try await ProcessRunner.run(server, arguments: ["-w"], environment: environment, logFile: logURL(named: "wineserver"))
+        _ = try await waitForServer(wine: wine, environment: environment, orUntil: { false })
     }
 }
