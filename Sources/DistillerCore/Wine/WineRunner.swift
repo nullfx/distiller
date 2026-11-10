@@ -169,6 +169,29 @@ public final class WineRunner: @unchecked Sendable {
         }
     }
 
+    /// Waits until every program in the prefix has exited, or until `settled` (asked every few
+    /// seconds) says the wait is over, for installers that leave a launcher or the game
+    /// running. Returns true if everything exited.
+    func waitForServer(
+        wine: InstalledComponent,
+        environment: [String: String],
+        orUntil settled: @escaping @Sendable () async -> Bool
+    ) async throws -> Bool {
+        guard let server = wine.wineserverBinary, FileManager.default.isExecutableFile(atPath: server.path) else { return true }
+        let waiting = try ProcessRunner.launch(server, arguments: ["-w"], environment: environment,
+                                               currentDirectory: nil, logFile: logURL(named: "wineserver"))
+        while waiting.isRunning {
+            try await Task.sleep(for: .seconds(3))
+            guard waiting.isRunning else { break }
+            if await settled() {
+                // Stops only the waiting; the programs keep running.
+                waiting.terminate()
+                return false
+            }
+        }
+        return true
+    }
+
     func waitForServer(wine: InstalledComponent, environment: [String: String]) async throws {
         guard let server = wine.wineserverBinary, FileManager.default.isExecutableFile(atPath: server.path) else { return }
         _ = try await ProcessRunner.run(server, arguments: ["-w"], environment: environment, logFile: logURL(named: "wineserver"))
