@@ -145,7 +145,7 @@ public final class RecipeInstaller: @unchecked Sendable {
             progress(index + 1, InstallPlan.step(step).title)
             if case .runWindows(let run) = step, run.wait ?? true {
                 // Don't wait for a launcher or the game that the installer leaves running.
-                let program = try BottlePath.resolve(run.path, in: root)
+                let program = try Self.onDriveC(BottlePath.resolve(run.path, in: root), prefix: prefix, environment: env)
                 try await runner.runWindowsProgram(program, arguments: run.args ?? [], wine: wine, environment: env, wait: false)
                 let runner = self.runner
                 let driveC = prefix.appendingPathComponent("drive_c", isDirectory: true)
@@ -165,6 +165,24 @@ public final class RecipeInstaller: @unchecked Sendable {
                 try await runner.setWindowsVersion(resolved.windowsVersion, wine: wine, environment: env)
             }
         }
+    }
+
+    /// Where to run `program` from: itself when it's on the bottle's Windows drive, otherwise a
+    /// clone of it in the Windows user's Downloads folder, as if a browser had saved it there.
+    /// Installers kept in the bottle's cache are outside the Windows drive, so Windows programs
+    /// see them on Z: (Wine's view of the whole Mac), and some fail from there: Battle.net's
+    /// setup can't reach its Agent (BLZBNTBTS0000005C) from Z: but installs from C:.
+    static func onDriveC(_ program: URL, prefix: URL, environment: [String: String]) throws -> URL {
+        let driveC = prefix.appendingPathComponent("drive_c", isDirectory: true).standardizedFileURL.path
+        if program.standardizedFileURL.path.hasPrefix(driveC + "/") { return program }
+        let users = URL(fileURLWithPath: driveC, isDirectory: true).appendingPathComponent("users", isDirectory: true)
+        let user = environment["USER"] ?? NSUserName()
+        let home = FileManager.default.fileExists(atPath: users.appendingPathComponent(user).path) ? user : "Public"
+        let downloads = users.appendingPathComponent(home, isDirectory: true).appendingPathComponent("Downloads", isDirectory: true)
+        try FileManager.default.createDirectory(at: downloads, withIntermediateDirectories: true)
+        let staged = downloads.appendingPathComponent(program.lastPathComponent)
+        try APFSClone.replaceItem(at: staged, withCloneOf: program)
+        return staged
     }
 
     /// A program the installer started from the game's own folder (its launcher, or the game),
@@ -232,7 +250,7 @@ public final class RecipeInstaller: @unchecked Sendable {
             try APFSClone.replaceItem(at: destination, withCloneOf: source)
 
         case .runWindows(let run):
-            let program = try BottlePath.resolve(run.path, in: root)
+            let program = try Self.onDriveC(BottlePath.resolve(run.path, in: root), prefix: prefix, environment: environment)
             try await runner.runWindowsProgram(
                 program, arguments: run.args ?? [], wine: wine, environment: environment, wait: run.wait ?? true
             )
