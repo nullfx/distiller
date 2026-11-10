@@ -119,6 +119,9 @@ public final class RecipeInstaller: @unchecked Sendable {
                 progress(4 + index, titles[3 + index])
                 try await runner.runWinetricks([verb], winetricks: winetricks, wine: wine, environment: env)
             }
+            // Components change the Windows version and don't always change it back (dotnet48
+            // leaves Windows 7, which launchers such as Battle.net refuse), so set the recipe's again.
+            try await runner.setWindowsVersion(resolved.windowsVersion, wine: wine, environment: env)
         }
     }
 
@@ -157,6 +160,10 @@ public final class RecipeInstaller: @unchecked Sendable {
                 continue
             }
             try await perform(step, root: root, prefix: prefix, wine: wine, environment: env, supplied: supplied)
+            if case .winetricks = step, let resolved {
+                // As in configurePrefix: components can leave a different Windows version.
+                try await runner.setWindowsVersion(resolved.windowsVersion, wine: wine, environment: env)
+            }
         }
     }
 
