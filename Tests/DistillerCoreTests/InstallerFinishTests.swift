@@ -13,7 +13,7 @@ final class InstallerFinishTests: XCTestCase {
     func testALauncherFromTheGamesFolderEndsTheWait() {
         let game = driveC.appendingPathComponent("Program Files (x86)/Battle.net/Battle.net Launcher.exe")
         let launcher = RecipeInstaller.programStartedByInstaller(
-            running(["C:\\users\\steve\\Temp\\Battle.net-Setup.exe", "C:\\Program Files (x86)\\Battle.net\\Battle.net.exe"]), gameProgram: game)
+            running(["C:\\users\\player\\Temp\\Battle.net-Setup.exe", "C:\\Program Files (x86)\\Battle.net\\Battle.net.exe"]), gameProgram: game)
         XCTAssertEqual(launcher?.windowsPath, "C:\\Program Files (x86)\\Battle.net\\Battle.net.exe")
         XCTAssertNotNil(RecipeInstaller.programStartedByInstaller(running(["C:\\Program Files (x86)\\Battle.net\\Battle.net Launcher.exe"]), gameProgram: game),
                         "The game's own program counts too")
