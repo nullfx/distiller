@@ -40,6 +40,11 @@ public final class WineRunner: @unchecked Sendable {
     ) async throws {
         guard !verbs.isEmpty else { return }
         try RecipePolicy.checkVerbs(verbs)
+        // Without msync or esync: the .NET Framework's installers stall under them (its compile
+        // workers wait forever on an event handed over from ngen), and installing gains nothing
+        // from them. Every step before this one waits for the bottle's Wine to stop, so this
+        // starts a server of its own; the waits below use the same setting to talk to it.
+        let environment = WineEnvironment.withoutFastSync(environment)
         guard let script = winetricks.scriptURL, let wineBinary = wine.wineBinary else {
             throw DistillerError.componentNotFound("winetricks")
         }

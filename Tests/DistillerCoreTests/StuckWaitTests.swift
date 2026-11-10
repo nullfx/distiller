@@ -58,4 +58,9 @@ final class StuckWaitTests: XCTestCase {
         """)
         XCTAssertFalse(StuckWait.isWaitingForServer(under: 200, in: processes))
     }
+
+    func testWinetricksRunsWithoutFastSync() {
+        let env = WineEnvironment.withoutFastSync(["WINEMSYNC": "1", "WINEESYNC": "1", "WINEPREFIX": "/p", "WINEDEBUG": "-all"])
+        XCTAssertEqual(env, ["WINEPREFIX": "/p", "WINEDEBUG": "-all"])
+    }
 }
