@@ -112,7 +112,7 @@ From a terminal: `gh workflow run release.yml --ref main`.
 
 **Dry run:** tick **Dry run** in the Run workflow form. It does the same build, sign and notarization, keeps the disk image as a workflow artifact for a week, and creates no tag or release.
 
-**A new major or minor version:** in a pull request, run `Scripts/bump-version.sh minor` (or `major`, or an exact `2.1.0`), commit `VERSION`, and merge. Merging doesn't release anything; the next Release run releases `1.1.0`.
+**A new major or minor version:** fill in **Major** and/or **Minor** when you start the run (Minor `1` for 1.1.0; Major `2` alone for 2.0.0). Leave them empty to keep the current major.minor. The run's summary shows the `VERSION` file, the newest release, the fields and the version it releases; a version older than one already released is refused. Later runs carry on from the newest release tag, so `VERSION` doesn't have to change first: bring it up to date in a pull request with `Scripts/bump-version.sh 1.1.0` whenever convenient (the summary reminds you). Changing `VERSION` in a pull request (`Scripts/bump-version.sh minor`, `major` or an exact `2.1.0`) also works, as before.
 
 Tags are created only by the workflow. Don't push `v*` tags by hand: a stray tag would shift the next revision.
 

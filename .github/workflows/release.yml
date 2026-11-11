@@ -3,11 +3,13 @@ name: Release
 # Builds Distiller.app, signs it with the maintainer's Developer ID, notarizes and staples it,
 # packs it in a signed and notarized disk image, and publishes a GitHub Release.
 #
-#   Run it by hand: Actions ▸ Release ▸ Run workflow, on main. It releases VERSION's major.minor
-#   with the next revision (Scripts/next-version.sh: one past the newest v<major>.<minor>.<n> tag,
-#   or VERSION's own revision for the first release of that major.minor), tags v<version>
-#   after a successful build, and publishes. VERSION only changes, by hand in a pull request,
-#   for a new major or minor version (Scripts/bump-version.sh minor|major).
+#   Run it by hand: Actions ▸ Release ▸ Run workflow, on main. It releases the current
+#   major.minor (the newer of VERSION's and the newest release's) with the next revision
+#   (Scripts/next-version.sh: one past the newest v<major>.<minor>.<n> tag), tags v<version>
+#   after a successful build, and publishes. For a new major or minor version, fill in the
+#   Major and/or Minor fields when you start the run; later runs carry it on from the release
+#   tag, so VERSION doesn't have to change (bring it up to date in a pull request with
+#   Scripts/bump-version.sh whenever convenient). The run's summary shows what it used.
 #   Tick "Dry run" for the same build kept as a workflow artifact for a week, without a tag
 #   or a release.
 #
@@ -33,6 +35,14 @@ name: Release
 on:
   workflow_dispatch:
     inputs:
+      major:
+        description: "Major version, only to change it (empty: keep the current one, shown in the run's summary)"
+        type: string
+        default: ""
+      minor:
+        description: "Minor version, only to change it (empty: keep the current one; a new major starts at 0)"
+        type: string
+        default: ""
       dry_run:
         description: "Dry run: build, sign and notarize, but don't tag or publish (the disk image is kept for a week)"
         type: boolean
@@ -66,13 +76,40 @@ jobs:
         id: plan
         env:
           DRY_RUN: ${{ inputs.dry_run }}
+          WANT_MAJOR: ${{ inputs.major }}
+          WANT_MINOR: ${{ inputs.minor }}
         run: |
           # The release environment's signing secrets are only available to main.
           if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
             echo "::error::Run Release on main (this run is on $GITHUB_REF_NAME)."
             exit 1
           fi
-          next="$(Scripts/next-version.sh)"
+          # Spaces typed around a number don't matter.
+          WANT_MAJOR="$(tr -d '[:space:]' <<< "$WANT_MAJOR")"
+          WANT_MINOR="$(tr -d '[:space:]' <<< "$WANT_MINOR")"
+          args=()
+          [[ -n "$WANT_MAJOR" ]] && args+=(--major "$WANT_MAJOR")
+          [[ -n "$WANT_MINOR" ]] && args+=(--minor "$WANT_MINOR")
+          if ! next="$(Scripts/next-version.sh "${args[@]}" --explain 2> "$RUNNER_TEMP/explain")"; then
+            echo "::error::$(cat "$RUNNER_TEMP/explain")"
+            exit 1
+          fi
+          file_version="$(tr -d '[:space:]' < VERSION)"
+          newest="$(git ls-remote --tags --refs origin 'v*' | sed 's#.*refs/tags/v##' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)"
+          {
+            echo "## Version"
+            echo ""
+            echo "| | |"
+            echo "| --- | --- |"
+            echo "| VERSION file | \`$file_version\` |"
+            echo "| Newest release | \`${newest:-none}\` |"
+            echo "| Major / Minor fields | \`${WANT_MAJOR:-(empty)}\` / \`${WANT_MINOR:-(empty)}\` |"
+            echo "| This run | **\`$next\`** ($(cat "$RUNNER_TEMP/explain")) |"
+            if [[ "${next%.*}" != "${file_version%.*}" ]]; then
+              echo ""
+              echo "VERSION still says ${file_version%.*}. Later runs carry on from the release tag; to bring the file up to date, merge a pull request with \`Scripts/bump-version.sh ${next%.*}.0\`."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
           release=true publish=true create_tag=true full="$next"
           if [[ "$DRY_RUN" == "true" ]]; then
             full="$next-dev.${GITHUB_SHA::7}" publish=false create_tag=false
