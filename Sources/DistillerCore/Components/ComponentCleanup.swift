@@ -2,7 +2,8 @@ import Foundation
 
 /// Removes component versions nothing needs any more, after an update.
 ///
-/// A version is removable when it isn't the active version of its component, Distiller can
+/// A version is removable when it isn't the active version of its component, no game stays on
+/// it (`Bottle.stayOn`), Distiller can
 /// download it again (its source is an https address: imported components, such as D3DMetal
 /// from the player's own download, are never removed automatically), and, for a Wine build,
 /// every bottle can still be opened by another installed build (`DistillerEngine.wine(_:canOpen:madeBy:)`).
@@ -13,11 +14,13 @@ public enum ComponentCleanup {
     /// player's active choices and the bottles.
     static func removable(installed: [InstalledComponent], chosen: [String: String], bottles: [Bottle]) -> [InstalledComponent] {
         let active = Set(ComponentStore.active(in: installed, chosen: chosen).map(\.id))
+        // Versions a game stays on are needed by that game.
+        let keptByGames = Set(bottles.flatMap { $0.stayOn?.all ?? [] })
         var remaining = installed
         var result: [InstalledComponent] = []
         // Oldest first, so the newest of the unneeded versions is the last to go.
         let candidates = installed
-            .filter { !active.contains($0.id) && isRedownloadable($0) }
+            .filter { !active.contains($0.id) && !keptByGames.contains($0.id) && isRedownloadable($0) }
             .sorted { VersionNumber($0.manifest.version) < VersionNumber($1.manifest.version) }
         for candidate in candidates {
             let without = remaining.filter { $0.id != candidate.id }

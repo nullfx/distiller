@@ -107,3 +107,23 @@ extension AppModel {
         }
     }
 }
+
+// MARK: Per-game versions
+
+extension AppModel {
+    func versions(for game: Game) -> GameVersions? {
+        try? engine?.versions(for: game)
+    }
+
+    /// Keeps `game` on the component with `id`, or (nil) lets it follow updates.
+    func setStayOn(_ kind: ComponentKind, id: String?, for game: Game) {
+        guard let engine else { return }
+        do {
+            let component = id.flatMap { id in engine.components.installed().first { $0.id == id } }
+            try engine.setStayOn(kind, component, for: game)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        reload()
+    }
+}

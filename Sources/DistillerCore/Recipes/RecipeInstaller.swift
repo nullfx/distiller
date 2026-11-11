@@ -113,7 +113,7 @@ public final class RecipeInstaller: @unchecked Sendable {
         // One component at a time, so the player sees which one is running (some, such as
         // .NET Framework, take half an hour or more).
         if !resolved.winetricks.isEmpty {
-            guard let winetricks = components.winetricks() else { throw DistillerError.componentNotFound("winetricks") }
+            let winetricks = try self.winetricks(for: bottle)
             for (index, verb) in resolved.winetricks.enumerated() {
                 try cancellation?.check()
                 progress(4 + index, titles[3 + index])
@@ -123,6 +123,30 @@ public final class RecipeInstaller: @unchecked Sendable {
             // leaves Windows 7, which launchers such as Battle.net refuse), so set the recipe's again.
             try await runner.setWindowsVersion(resolved.windowsVersion, wine: wine, environment: env)
         }
+    }
+
+    /// The winetricks for `bottle`: the version it stays on, or the active one. Records it on
+    /// the bottle, so the player can see what it last used.
+    func winetricks(for bottle: Bottle) throws -> InstalledComponent {
+        let current = (try? bottles.bottle(id: bottle.id)) ?? bottle
+        let chosen: InstalledComponent?
+        if let kept = current.stayOn?.winetricks {
+            guard let match = components.installed().first(where: { $0.id == kept }) else {
+                throw DistillerError.componentNotFound(
+                    "\(kept.replacingOccurrences(of: "@", with: " ")), which \(current.name) stays on (choose Follow Updates in its Bottle settings to use another)"
+                )
+            }
+            chosen = match
+        } else {
+            chosen = components.winetricks()
+        }
+        guard let chosen else { throw DistillerError.componentNotFound("winetricks") }
+        if current.winetricks != chosen.id {
+            var updated = current
+            updated.winetricks = chosen.id
+            try? bottles.save(updated)
+        }
+        return chosen
     }
 
     /// Runs install steps in order. `progress` gets the 1-based index of each step.
@@ -159,7 +183,11 @@ public final class RecipeInstaller: @unchecked Sendable {
                 }
                 continue
             }
-            try await perform(step, root: root, prefix: prefix, wine: wine, environment: env, supplied: supplied)
+            if case .winetricks(let verbs) = step {
+                try await runner.runWinetricks(verbs, winetricks: try winetricks(for: bottle), wine: wine, environment: env)
+            } else {
+                try await perform(step, root: root, prefix: prefix, wine: wine, environment: env, supplied: supplied)
+            }
             if case .winetricks = step, let resolved {
                 // As in configurePrefix: components can leave a different Windows version.
                 try await runner.setWindowsVersion(resolved.windowsVersion, wine: wine, environment: env)
@@ -233,6 +261,7 @@ public final class RecipeInstaller: @unchecked Sendable {
             }
 
         case .winetricks(let verbs):
+            // runSteps runs these with the bottle's winetricks; this is for callers without a bottle.
             guard let winetricks = components.winetricks() else { throw DistillerError.componentNotFound("winetricks") }
             try await runner.runWinetricks(verbs, winetricks: winetricks, wine: wine, environment: environment)
 
