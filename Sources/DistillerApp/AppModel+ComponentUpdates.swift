@@ -38,11 +38,11 @@ extension AppModel {
     }
 
     /// Looks for updates now. `automatic` checks are quiet, and in "auto" install what they find.
-    func checkForComponentUpdates(automatic: Bool = false) {
+    func checkForComponentUpdates(automatic: Bool = false, includingApp: Bool = true) {
         guard let setup, !isCheckingForUpdates else { return }
         isCheckingForUpdates = true
         hasCheckedComponentsThisSession = true
-        checkForAppUpdate(automatic: automatic)
+        if includingApp { checkForAppUpdate(automatic: automatic) }
         if !automatic { componentUpdateMessage = nil }
         Task {
             let check = await setup.checkForUpdates()

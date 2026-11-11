@@ -95,6 +95,20 @@ struct ContentView: View {
         } message: { release in
             Text("You have \(DistillerVersion.current). You can also install it later from Settings ▸ Updates.")
         }
+        .alert(
+            model.updateCheckSummary?.title ?? "",
+            isPresented: Binding(get: { model.updateCheckSummary != nil }, set: { if !$0 { model.updateCheckSummary = nil } }),
+            presenting: model.updateCheckSummary
+        ) { summary in
+            if summary.hasComponentUpdates {
+                Button("Show Components") { model.sidebarSelection = .components }
+                Button("Later", role: .cancel) {}
+            } else {
+                Button("OK") {}
+            }
+        } message: { summary in
+            Text(summary.message)
+        }
         .fileImporter(isPresented: $model.isImportingRecipe, allowedContentTypes: [.yaml]) { result in
             if case .success(let url) = result { model.addGame(fromRecipeFile: url) }
         }

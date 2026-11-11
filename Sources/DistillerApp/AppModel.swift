@@ -66,6 +66,8 @@ final class AppModel {
     var isInstallingAppUpdate = false
     /// Set when an automatic check finds a version not announced before; shows an alert.
     var appUpdateToAnnounce: AppRelease?
+    /// The result of Distiller ▸ Check for Updates…, when there's no new Distiller to offer.
+    var updateCheckSummary: UpdateCheckSummary?
     /// `settings.json`'s update mode and last check, kept here so views update when they change.
     var componentUpdateMode: ComponentUpdateMode = .ask
     var lastComponentCheck: Date?

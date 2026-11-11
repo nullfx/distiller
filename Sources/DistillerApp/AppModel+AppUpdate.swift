@@ -36,6 +36,49 @@ extension AppModel {
         }
     }
 
+    /// Distiller ▸ Check for Updates…: checks Distiller and the components now, and always
+    /// says what it found: the install alert for a new Distiller, otherwise a summary.
+    func checkForUpdatesFromMenu() {
+        checkForComponentUpdates(includingApp: false)
+        Task {
+            var appLine: String
+            if let repository = appUpdateRepository {
+                do {
+                    let release = try await AppUpdater(repository: repository).latestRelease()
+                    if AppUpdater.isNewer(release.version, than: DistillerVersion.current) {
+                        appUpdate = release
+                        appUpdateStatus = nil
+                        UserDefaults.standard.set(release.version, forKey: Self.announcedAppVersionKey)
+                        appUpdateToAnnounce = release
+                        return
+                    }
+                    appUpdate = nil
+                    appUpdateStatus = "Distiller is up to date."
+                    appLine = "Distiller \(DistillerVersion.current) is the latest version."
+                } catch {
+                    appLine = "Couldn't check for a new Distiller: \(error.localizedDescription)"
+                }
+            } else {
+                appLine = "This build of Distiller doesn't say where its updates come from, so it can't check for itself."
+            }
+            while isCheckingForUpdates { try? await Task.sleep(for: .milliseconds(200)) }
+            let count = componentUpdates.count
+            let componentLine: String
+            if count > 0 {
+                componentLine = count == 1 ? "1 update for Wine, graphics layers or winetricks is available." : "\(count) updates for Wine, graphics layers or winetricks are available."
+            } else if !componentCheckFailures.isEmpty {
+                componentLine = "Some components couldn't be checked: \(componentCheckFailures.keys.sorted().joined(separator: ", "))."
+            } else {
+                componentLine = "Wine, graphics layers and winetricks are up to date."
+            }
+            updateCheckSummary = UpdateCheckSummary(
+                title: count > 0 ? "Component updates available" : "You're up to date",
+                message: "\(appLine) \(componentLine)",
+                hasComponentUpdates: count > 0
+            )
+        }
+    }
+
     /// Why the app can't be replaced right now, if it can't: something is running that
     /// quitting would interrupt.
     func appUpdateBlocker() async -> String? {
@@ -99,4 +142,12 @@ extension AppModel {
             }
         }
     }
+}
+
+/// What Check for Updates… found, when there's no new Distiller to install.
+struct UpdateCheckSummary: Identifiable {
+    let id = UUID()
+    var title: String
+    var message: String
+    var hasComponentUpdates: Bool
 }
