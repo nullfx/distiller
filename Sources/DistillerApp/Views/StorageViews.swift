@@ -62,8 +62,8 @@ private struct StorageLocationRow: View {
     }
 }
 
-/// Distiller ▸ Settings… (⌘,): standard toolbar tabs for storage, the GitHub account and the
-/// AI assistant.
+/// Distiller ▸ Settings… (⌘,): standard toolbar tabs for storage, component updates, the
+/// GitHub account and the AI assistant.
 struct SettingsView: View {
     var body: some View {
         TabView {
@@ -72,6 +72,11 @@ struct SettingsView: View {
                 LogsSettingsSection()
             }
                 .tabItem { Label("Storage", systemImage: "externaldrive") }
+            SettingsPane {
+                AppUpdateSettingsSection()
+                ComponentUpdateSettingsSection()
+            }
+                .tabItem { Label("Updates", systemImage: "arrow.triangle.2.circlepath") }
             SettingsPane { GitHubSettingsSection() }
                 .tabItem { Label { Text("GitHub") } icon: { Image(nsImage: .gitHubMarkTemplate) } }
             SettingsPane { AssistantSettingsSection() }

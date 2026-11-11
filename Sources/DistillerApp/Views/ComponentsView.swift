@@ -24,6 +24,8 @@ struct ComponentsView: View {
                 }
             }
 
+            ComponentUpdateNotices()
+
             ForEach(ComponentKind.allCases, id: \.self) { kind in
                 Section(kind.displayName) {
                     let items = model.components.filter { $0.manifest.kind == kind }
@@ -37,7 +39,19 @@ struct ComponentsView: View {
             }
         }
         .navigationTitle("Components")
+        .navigationSubtitle(updateStatus)
         .toolbar {
+            Button {
+                model.checkForComponentUpdates()
+            } label: {
+                if model.isCheckingForUpdates {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Label("Check for Updates", systemImage: "arrow.clockwise")
+                }
+            }
+            .help("Check for newer Wine builds, graphics layers and winetricks")
+            .disabled(model.isCheckingForUpdates || model.busyMessage != nil)
             Button {
                 model.isShowingSetup = true
             } label: {
@@ -80,6 +94,15 @@ struct ComponentsView: View {
         }
     }
 
+    /// Under the title: what the last check found, and when.
+    private var updateStatus: String {
+        if model.isCheckingForUpdates { return "Checking for updates…" }
+        let count = model.componentUpdates.count
+        if count > 0 { return count == 1 ? "1 update available" : "\(count) updates available" }
+        guard let date = model.lastComponentCheck else { return "" }
+        return "Up to date · checked \(date.formatted(.relative(presentation: .named)))"
+    }
+
     private func emptyText(for kind: ComponentKind) -> String {
         switch kind {
         case .wine: return "Import a Wine build to create bottles."
@@ -93,6 +116,17 @@ struct ComponentRow: View {
     @Environment(AppModel.self) private var model
     let component: InstalledComponent
 
+    /// An update for this component, shown on the row of its active version.
+    private var update: ComponentUpdate? {
+        guard model.activeComponentIDs.contains(component.id) else { return nil }
+        return model.componentUpdates.first { $0.id == component.manifest.id }
+    }
+
+    /// Whether more than one version of this component is installed (only then does "active" mean anything).
+    private var hasOtherVersions: Bool {
+        model.components.contains { $0.manifest.id == component.manifest.id && $0.id != component.id }
+    }
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
@@ -104,10 +138,143 @@ struct ComponentRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
+            if let update {
+                Text("\(update.availableVersion) available")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .help(update.heldVersion.map { "You're keeping \($0) active, so automatic updates skip this one." } ?? "")
+                Button("Update") { model.installComponentUpdate(update) }
+                    .controlSize(.small)
+                    .disabled(model.busyMessage != nil)
+            } else if hasOtherVersions {
+                if model.activeComponentIDs.contains(component.id) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.tint)
+                        .help("Active: new games use this version, and games that follow updates move to it.")
+                } else if model.unusedComponents.contains(component) {
+                    Text("Not needed").font(.caption).foregroundStyle(.secondary)
+                        .help("No game needs this version any more. It's removed with the next update.")
+                }
+            }
         }
         .contextMenu {
+            if !model.activeComponentIDs.contains(component.id) {
+                Button("Make Active") { model.makeActive(component) }
+                    .help("Use this version for new games and games that follow updates. Choosing an older version keeps this component there: automatic updates skip it.")
+            }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([component.directory]) }
             Button("Move to Trash", role: .destructive) { model.removeComponent(component) }
+        }
+    }
+}
+
+/// Shown above the component list only when there's something to act on: several updates at
+/// once, a source that couldn't be checked, the result of an update, or old versions to remove.
+struct ComponentUpdateNotices: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if hasNotices {
+            Section {
+                if model.componentUpdates.count > 1 {
+                    HStack {
+                        Text("\(model.componentUpdates.count) updates available")
+                        Spacer()
+                        Button("Update All") { model.installComponentUpdates(model.componentUpdates) }
+                            .disabled(model.busyMessage != nil)
+                    }
+                }
+                ForEach(model.componentCheckFailures.sorted(by: { $0.key < $1.key }), id: \.key) { name, reason in
+                    Label("Couldn't check \(name) for updates", systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                        .help(reason)
+                }
+                if let message = model.componentUpdateMessage, message != "Everything is up to date." {
+                    Text(message).foregroundStyle(.secondary)
+                }
+                if !model.unusedComponents.isEmpty {
+                    HStack {
+                        Text(model.unusedComponents.count == 1 ? "1 old version no game needs" : "\(model.unusedComponents.count) old versions no game needs")
+                            .foregroundStyle(.secondary)
+                            .help(model.unusedComponents.map(\.manifest.displayName).joined(separator: ", "))
+                        Spacer()
+                        Button("Remove") { model.removeUnusedComponents() }
+                            .disabled(model.busyMessage != nil)
+                    }
+                }
+            }
+        }
+    }
+
+    private var hasNotices: Bool {
+        model.componentUpdates.count > 1 || !model.componentCheckFailures.isEmpty || !model.unusedComponents.isEmpty
+            || (model.componentUpdateMessage.map { $0 != "Everything is up to date." } ?? false)
+    }
+}
+
+/// Settings ▸ Updates ▸ Distiller: this copy's version, and a newer release from the repository
+/// it was built from.
+struct AppUpdateSettingsSection: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Section {
+            LabeledContent("Version", value: DistillerVersion.current)
+            if let release = model.appUpdate {
+                LabeledContent("Distiller \(release.version) is available") {
+                    HStack {
+                        Link("Release Notes", destination: release.page)
+                        Button("Install and Relaunch") { model.installAppUpdate(release) }
+                            .disabled(model.isInstallingAppUpdate)
+                    }
+                }
+            }
+            if let status = model.appUpdateStatus {
+                HStack {
+                    if model.isInstallingAppUpdate { ProgressView().controlSize(.small) }
+                    Text(status).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        } header: {
+            Text("Distiller")
+        } footer: {
+            Group {
+                if let repository = model.appUpdateRepository {
+                    Text("Updates come from the releases of github.com/\(repository). Before installing one, Distiller checks the download against the release's checksums, and that it's signed by the same developer as this copy and notarized by Apple. The copy it replaces goes to the Trash.")
+                } else {
+                    Text("This build doesn't say where its updates come from (it wasn't built from a GitHub repository), so it can't check for them.")
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// Settings ▸ Updates: how Distiller keeps Wine builds, graphics layers and winetricks up to date.
+struct ComponentUpdateSettingsSection: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Section {
+            Picker("Component updates", selection: Binding(get: { model.componentUpdateMode }, set: { model.setComponentUpdateMode($0) })) {
+                ForEach(ComponentUpdateMode.allCases, id: \.self) { mode in
+                    Text(mode.displayName).tag(mode)
+                }
+            }
+            .pickerStyle(.radioGroup)
+            LabeledContent("Last checked") {
+                HStack {
+                    Text(model.lastComponentCheck.map { $0.formatted(.relative(presentation: .named)) } ?? "Not yet")
+                        .foregroundStyle(.secondary)
+                    Button("Check Now") { model.checkForComponentUpdates() }
+                        .disabled(model.isCheckingForUpdates || model.busyMessage != nil)
+                }
+            }
+        } header: {
+            Text("Wine builds, graphics layers and winetricks")
+        } footer: {
+            Text("Distiller checks for these and for itself when it starts and once a day (a new Distiller always waits for you to install it, since that restarts the app). An update installs next to the version it replaces and becomes the active one: new games use it, and games move to it the next time they start. Versions no game needs are then removed. D3DMetal and Wine builds you imported aren't checked, since they come from your own downloads.")
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

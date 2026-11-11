@@ -42,6 +42,14 @@ The app opens the **Setup Assistant** when something required is missing (it's a
 
 From a terminal: `swift run distiller setup` shows the status and `swift run distiller setup install --all` installs what's missing.
 
+### Keeping components up to date
+
+**Settings ▸ Updates** sets how Distiller keeps Wine, DXVK, DXMT and winetricks current: **check, and ask before installing** (the default: it checks when the app starts and once a day, and Components shows **Update** next to anything new), **install updates automatically**, or **don't check**. **Check for Updates** in the Components toolbar works in every mode. An update installs next to the version it replaces and becomes the **active** version: new games use it, and games move to it the next time they start (a game's Wine only ever moves forward, because Wine updates a bottle in a way older builds can't read). **Make Active** on an older version (right-click it) keeps that component there; automatic updates then skip it. Versions no game needs are removed after an update, or with **Remove** in Components. D3DMetal and Wine builds you imported aren't checked or removed automatically, since they come from your own downloads.
+
+Settings ▸ Updates also checks for a newer **Distiller**, from the GitHub releases of the repository your copy was built from (a fork's copies update from the fork). It's announced once (and **Distiller ▸ Check for Updates…** checks Distiller and the components on demand, always saying what it found), and installs only when you choose **Install and Relaunch**: Distiller downloads the disk image, checks it against the release's checksums and that it's signed by the same developer as your copy and notarized by Apple, moves your current copy to the Trash and reopens the new one. If it can't replace itself where it is, it opens the checked disk image for you to drag to Applications. `distiller app check` and `distiller app download` do the same from a terminal (without installing).
+
+From a terminal: `distiller components check`, `distiller components update [<id>]`, `distiller components use <id>@<version>`, `distiller components clean` and `distiller components updates [ask|auto|off]`.
+
 ## Creating recipes
 
 **Create Recipe…** in My Library (⌘N) walks through three starting points:

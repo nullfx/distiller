@@ -29,7 +29,9 @@ struct ContentView: View {
 
         NavigationSplitView {
             List(SidebarItem.allCases, selection: $model.sidebarSelection) { item in
-                Label(item.rawValue, systemImage: item.symbol).tag(item)
+                Label(item.rawValue, systemImage: item.symbol)
+                    .badge(item == .components ? model.componentUpdates.count : 0)
+                    .tag(item)
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200)
             .safeAreaInset(edge: .bottom) {
@@ -81,6 +83,31 @@ struct ContentView: View {
             Button("OK") {}
         } message: {
             Text(model.errorMessage ?? "")
+        }
+        .alert(
+            "Distiller \(model.appUpdateToAnnounce?.version ?? "") is available",
+            isPresented: Binding(get: { model.appUpdateToAnnounce != nil }, set: { if !$0 { model.appUpdateToAnnounce = nil } }),
+            presenting: model.appUpdateToAnnounce
+        ) { release in
+            Button("Install and Relaunch") { model.installAppUpdate(release) }
+            Button("Release Notes") { NSWorkspace.shared.open(release.page) }
+            Button("Later", role: .cancel) {}
+        } message: { release in
+            Text("You have \(DistillerVersion.current). You can also install it later from Settings ▸ Updates.")
+        }
+        .alert(
+            model.updateCheckSummary?.title ?? "",
+            isPresented: Binding(get: { model.updateCheckSummary != nil }, set: { if !$0 { model.updateCheckSummary = nil } }),
+            presenting: model.updateCheckSummary
+        ) { summary in
+            if summary.hasComponentUpdates {
+                Button("Show Components") { model.sidebarSelection = .components }
+                Button("Later", role: .cancel) {}
+            } else {
+                Button("OK") {}
+            }
+        } message: { summary in
+            Text(summary.message)
         }
         .fileImporter(isPresented: $model.isImportingRecipe, allowedContentTypes: [.yaml]) { result in
             if case .success(let url) = result { model.addGame(fromRecipeFile: url) }

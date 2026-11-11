@@ -43,6 +43,10 @@ struct DistillerApp: App {
         .handlesExternalEvents(matching: ["*"])
         .defaultSize(width: 920, height: 580)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { model.checkForUpdatesFromMenu() }
+                    .disabled(model.isCheckingForUpdates || model.isInstallingAppUpdate)
+            }
             CommandGroup(after: .newItem) {
                 Button("Create Recipe…") { model.isCreatingRecipe = true }
                     .keyboardShortcut("n")

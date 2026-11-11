@@ -26,6 +26,7 @@ struct Distiller: AsyncParsableCommand {
             McpCommand.self,
             AssistantCommand.self,
             LogsCommand.self,
+            AppCommand.self,
         ]
     )
 }
@@ -99,7 +100,7 @@ struct ComponentsCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "components",
         abstract: "Manage Wine builds, graphics layers and winetricks.",
-        subcommands: [List.self, Import.self, ImportGPTK.self],
+        subcommands: [List.self, Check.self, Update.self, Use.self, Clean.self, Updates.self, Import.self, ImportGPTK.self],
         defaultSubcommand: List.self
     )
 
@@ -107,14 +108,17 @@ struct ComponentsCommand: AsyncParsableCommand {
         static let configuration = CommandConfiguration(abstract: "List installed components.")
 
         func run() throws {
-            let components = try makeEngine().components.installed()
+            let engine = try makeEngine()
+            let components = engine.components.installed()
+            let active = Set(engine.components.activeComponents().map(\.id))
             if components.isEmpty {
                 print("No components yet. Import a Wine build with: distiller components import <folder> --kind wine …")
                 return
             }
             for component in components {
                 let extra = component.manifest.family ?? component.manifest.provides?.rawValue ?? ""
-                print("\(component.manifest.kind.rawValue)\t\(component.id)\t\(component.manifest.arch.rawValue)\t\(extra)\t\(component.manifest.displayName)")
+                let state = active.contains(component.id) ? "active" : ""
+                print("\(component.manifest.kind.rawValue)\t\(component.id)\t\(component.manifest.arch.rawValue)\t\(extra)\t\(component.manifest.displayName)\t\(state)")
             }
         }
     }

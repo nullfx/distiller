@@ -50,6 +50,28 @@ final class AppModel {
     /// Set after a play session, to offer a compatibility report.
     var gameToReport: Game?
 
+    // Component updates. See AppModel+ComponentUpdates.swift.
+    var componentUpdates: [ComponentUpdate] = []
+    var componentCheckFailures: [String: String] = [:]
+    var isCheckingForUpdates = false
+    var hasCheckedComponentsThisSession = false
+    var componentUpdateTimer: Task<Void, Never>?
+    /// The active version of each component, and old versions nothing needs, as of the last reload.
+    var activeComponentIDs: Set<String> = []
+    var unusedComponents: [InstalledComponent] = []
+    var componentUpdateMessage: String?
+    /// Distiller's own update (Settings ▸ Updates). See AppModel+AppUpdate.swift.
+    var appUpdate: AppRelease?
+    var appUpdateStatus: String?
+    var isInstallingAppUpdate = false
+    /// Set when an automatic check finds a version not announced before; shows an alert.
+    var appUpdateToAnnounce: AppRelease?
+    /// The result of Distiller ▸ Check for Updates…, when there's no new Distiller to offer.
+    var updateCheckSummary: UpdateCheckSummary?
+    /// `settings.json`'s update mode and last check, kept here so views update when they change.
+    var componentUpdateMode: ComponentUpdateMode = .ask
+    var lastComponentCheck: Date?
+
     // Setup, recipe building and submission. See AppModel+Authoring.swift.
     var environment: EnvironmentReport?
     var isShowingSetup = false
@@ -108,7 +130,13 @@ final class AppModel {
         loadMissingPublishedRecipes()
         bottles = engine.bottles.list()
         components = engine.components.installed()
+        activeComponentIDs = Set(engine.components.activeComponents().map(\.id))
+        unusedComponents = engine.unusedComponents()
+        let settings = StorageSettings.load(fromSupportFolder: engine.paths.root)
+        componentUpdateMode = settings.effectiveComponentUpdates
+        lastComponentCheck = settings.lastComponentCheck
         environment = setup?.check()
+        checkForComponentUpdatesIfDue()
     }
 
     func resolved(_ game: Game) -> ResolvedRecipe? {
