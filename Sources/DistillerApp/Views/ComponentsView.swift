@@ -24,7 +24,7 @@ struct ComponentsView: View {
                 }
             }
 
-            ComponentUpdatesSection()
+            ComponentUpdateNotices()
 
             ForEach(ComponentKind.allCases, id: \.self) { kind in
                 Section(kind.displayName) {
@@ -39,7 +39,19 @@ struct ComponentsView: View {
             }
         }
         .navigationTitle("Components")
+        .navigationSubtitle(updateStatus)
         .toolbar {
+            Button {
+                model.checkForComponentUpdates()
+            } label: {
+                if model.isCheckingForUpdates {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Label("Check for Updates", systemImage: "arrow.clockwise")
+                }
+            }
+            .help("Check for newer Wine builds, graphics layers and winetricks")
+            .disabled(model.isCheckingForUpdates || model.busyMessage != nil)
             Button {
                 model.isShowingSetup = true
             } label: {
@@ -82,6 +94,15 @@ struct ComponentsView: View {
         }
     }
 
+    /// Under the title: what the last check found, and when.
+    private var updateStatus: String {
+        if model.isCheckingForUpdates { return "Checking for updates…" }
+        let count = model.componentUpdates.count
+        if count > 0 { return count == 1 ? "1 update available" : "\(count) updates available" }
+        guard let date = model.lastComponentCheck else { return "" }
+        return "Up to date · checked \(date.formatted(.relative(presentation: .named)))"
+    }
+
     private func emptyText(for kind: ComponentKind) -> String {
         switch kind {
         case .wine: return "Import a Wine build to create bottles."
@@ -95,6 +116,17 @@ struct ComponentRow: View {
     @Environment(AppModel.self) private var model
     let component: InstalledComponent
 
+    /// An update for this component, shown on the row of its active version.
+    private var update: ComponentUpdate? {
+        guard model.activeComponentIDs.contains(component.id) else { return nil }
+        return model.componentUpdates.first { $0.id == component.manifest.id }
+    }
+
+    /// Whether more than one version of this component is installed (only then does "active" mean anything).
+    private var hasOtherVersions: Bool {
+        model.components.contains { $0.manifest.id == component.manifest.id && $0.id != component.id }
+    }
+
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
@@ -106,18 +138,23 @@ struct ComponentRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            if model.activeComponentIDs.contains(component.id) {
-                Text("Active")
-                    .font(.caption)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(.tint.opacity(0.15), in: Capsule())
-                    .help("New games use this version, and games that follow updates move to it.")
-            } else if model.unusedComponents.contains(component) {
-                Text("Not needed")
+            if let update {
+                Text("\(update.availableVersion) available")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .help("No game needs this version any more. It's removed with the next update, or with Remove Old Versions.")
+                    .help(update.heldVersion.map { "You're keeping \($0) active, so automatic updates skip this one." } ?? "")
+                Button("Update") { model.installComponentUpdate(update) }
+                    .controlSize(.small)
+                    .disabled(model.busyMessage != nil)
+            } else if hasOtherVersions {
+                if model.activeComponentIDs.contains(component.id) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.tint)
+                        .help("Active: new games use this version, and games that follow updates move to it.")
+                } else if model.unusedComponents.contains(component) {
+                    Text("Not needed").font(.caption).foregroundStyle(.secondary)
+                        .help("No game needs this version any more. It's removed with the next update.")
+                }
             }
         }
         .contextMenu {
@@ -131,81 +168,76 @@ struct ComponentRow: View {
     }
 }
 
-/// Components ▸ Updates: how Distiller keeps components up to date, Check Now, what's available,
-/// and old versions nothing needs.
-struct ComponentUpdatesSection: View {
+/// Shown above the component list only when there's something to act on: several updates at
+/// once, a source that couldn't be checked, the result of an update, or old versions to remove.
+struct ComponentUpdateNotices: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if hasNotices {
+            Section {
+                if model.componentUpdates.count > 1 {
+                    HStack {
+                        Text("\(model.componentUpdates.count) updates available")
+                        Spacer()
+                        Button("Update All") { model.installComponentUpdates(model.componentUpdates) }
+                            .disabled(model.busyMessage != nil)
+                    }
+                }
+                ForEach(model.componentCheckFailures.sorted(by: { $0.key < $1.key }), id: \.key) { name, reason in
+                    Label("Couldn't check \(name) for updates", systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                        .help(reason)
+                }
+                if let message = model.componentUpdateMessage, message != "Everything is up to date." {
+                    Text(message).foregroundStyle(.secondary)
+                }
+                if !model.unusedComponents.isEmpty {
+                    HStack {
+                        Text(model.unusedComponents.count == 1 ? "1 old version no game needs" : "\(model.unusedComponents.count) old versions no game needs")
+                            .foregroundStyle(.secondary)
+                            .help(model.unusedComponents.map(\.manifest.displayName).joined(separator: ", "))
+                        Spacer()
+                        Button("Remove") { model.removeUnusedComponents() }
+                            .disabled(model.busyMessage != nil)
+                    }
+                }
+            }
+        }
+    }
+
+    private var hasNotices: Bool {
+        model.componentUpdates.count > 1 || !model.componentCheckFailures.isEmpty || !model.unusedComponents.isEmpty
+            || (model.componentUpdateMessage.map { $0 != "Everything is up to date." } ?? false)
+    }
+}
+
+/// Settings ▸ Updates: how Distiller keeps Wine builds, graphics layers and winetricks up to date.
+struct ComponentUpdateSettingsSection: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
         Section {
-            Picker("Updates", selection: Binding(get: { model.componentUpdateMode }, set: { model.setComponentUpdateMode($0) })) {
+            Picker("Component updates", selection: Binding(get: { model.componentUpdateMode }, set: { model.setComponentUpdateMode($0) })) {
                 ForEach(ComponentUpdateMode.allCases, id: \.self) { mode in
                     Text(mode.displayName).tag(mode)
                 }
             }
-            HStack {
-                Text(lastCheckedText).foregroundStyle(.secondary)
-                Spacer()
-                if model.isCheckingForUpdates {
-                    ProgressView().controlSize(.small)
-                }
-                Button("Check Now") { model.checkForComponentUpdates() }
-                    .disabled(model.isCheckingForUpdates || model.busyMessage != nil)
-            }
-            ForEach(model.componentUpdates) { update in
+            .pickerStyle(.radioGroup)
+            LabeledContent("Last checked") {
                 HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(update.displayName) \(update.availableVersion)")
-                        Text(detail(for: update)).font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button("Update") { model.installComponentUpdate(update) }
-                        .disabled(model.busyMessage != nil)
-                }
-            }
-            if model.componentUpdates.count > 1 {
-                HStack {
-                    Spacer()
-                    Button("Update All") { model.installComponentUpdates(model.componentUpdates) }
-                        .disabled(model.busyMessage != nil)
-                }
-            }
-            ForEach(model.componentCheckFailures.sorted(by: { $0.key < $1.key }), id: \.key) { name, reason in
-                Label("Couldn't check \(name): \(reason)", systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if let message = model.componentUpdateMessage {
-                Text(message).foregroundStyle(.secondary)
-            }
-            if !model.unusedComponents.isEmpty {
-                HStack {
-                    Text("Old versions no game needs: \(model.unusedComponents.map(\.manifest.displayName).joined(separator: ", "))")
+                    Text(model.lastComponentCheck.map { $0.formatted(.relative(presentation: .named)) } ?? "Not yet")
                         .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer()
-                    Button("Remove Old Versions") { model.removeUnusedComponents() }
-                        .disabled(model.busyMessage != nil)
+                    Button("Check Now") { model.checkForComponentUpdates() }
+                        .disabled(model.isCheckingForUpdates || model.busyMessage != nil)
                 }
             }
         } header: {
-            Text("Updates")
+            Text("Wine builds, graphics layers and winetricks")
         } footer: {
-            Text("Updates install next to the version they replace and become active. Games move to the active version the next time they start; a game's Wine can only move forward. Old versions are removed once nothing needs them. D3DMetal and imported Wine builds aren't checked: they come from your own downloads.")
+            Text("Distiller checks when it starts and once a day. An update installs next to the version it replaces and becomes the active one: new games use it, and games move to it the next time they start. Versions no game needs are then removed. D3DMetal and Wine builds you imported aren't checked, since they come from your own downloads.")
+                .fixedSize(horizontal: false, vertical: true)
         }
-    }
-
-    private var lastCheckedText: String {
-        if model.isCheckingForUpdates { return "Checking…" }
-        guard let date = model.lastComponentCheck else { return "Not checked yet" }
-        return "Last checked \(date.formatted(.relative(presentation: .named)))"
-    }
-
-    private func detail(for update: ComponentUpdate) -> String {
-        var parts = ["Installed: \(update.installedVersion)"]
-        if let size = update.size { parts.append(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)) }
-        if let held = update.heldVersion { parts.append("You're keeping \(held) active; automatic updates skip it") }
-        return parts.joined(separator: " · ")
     }
 }
 
