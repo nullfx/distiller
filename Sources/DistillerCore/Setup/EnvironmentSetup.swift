@@ -435,15 +435,25 @@ public final class EnvironmentSetup: @unchecked Sendable {
 
     // MARK: Winetricks
 
-    @discardableResult
-    public func installWinetricks() async throws -> InstalledComponent {
-        try engine.paths.requireAvailable(.wine)
+    /// The latest winetricks release's tag (its version, such as "20260125").
+    public func latestWinetricksVersion() async throws -> String {
         let latest = URL(string: "https://api.github.com/repos/Winetricks/winetricks/releases/latest")!
-        let release = try await getJSON(GitHubRelease.self, from: latest)
-        let tag = release.tagName
+        let tag = try await getJSON(GitHubRelease.self, from: latest).tagName
+        guard tag.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil else {
+            throw DistillerError.setupFailed("The latest winetricks release has an unexpected name, \(tag).")
+        }
+        return tag
+    }
+
+    /// Installs winetricks `version` (a release tag), or the latest release.
+    @discardableResult
+    public func installWinetricks(version: String? = nil) async throws -> InstalledComponent {
+        try engine.paths.requireAvailable(.wine)
+        let tag: String
+        if let version { tag = version } else { tag = try await latestWinetricksVersion() }
         guard tag.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil,
               let script = URL(string: "https://raw.githubusercontent.com/Winetricks/winetricks/\(tag)/src/winetricks") else {
-            throw DistillerError.setupFailed("The latest winetricks release has an unexpected name, \(tag).")
+            throw DistillerError.setupFailed("The winetricks release has an unexpected name, \(tag).")
         }
         let staging = engine.paths.components.appendingPathComponent(".download-\(UUID().uuidString)", isDirectory: true)
         defer { try? FileManager.default.removeItem(at: staging) }

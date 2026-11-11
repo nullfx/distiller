@@ -29,7 +29,9 @@ struct ContentView: View {
 
         NavigationSplitView {
             List(SidebarItem.allCases, selection: $model.sidebarSelection) { item in
-                Label(item.rawValue, systemImage: item.symbol).tag(item)
+                Label(item.rawValue, systemImage: item.symbol)
+                    .badge(item == .components ? model.componentUpdates.count : 0)
+                    .tag(item)
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200)
             .safeAreaInset(edge: .bottom) {

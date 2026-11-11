@@ -57,11 +57,7 @@ public final class DistillerEngine: @unchecked Sendable {
         if let bottle {
             let made = BottleWine(bottle.wine)
             let original = components.installed().first { $0.manifest.kind == .wine && $0.manifest.id == made.id }
-            allowed = candidates.filter { candidate in
-                let sameKind = candidate.manifest.id == made.id
-                    || (original?.manifest.family != nil && candidate.manifest.family == original?.manifest.family)
-                return sameKind && VersionNumber(candidate.manifest.version) >= VersionNumber(made.version)
-            }
+            allowed = candidates.filter { Self.wine($0, canOpen: bottle, madeBy: original) }
             if allowed.isEmpty {
                 let name = original.map { "\($0.manifest.displayName.components(separatedBy: " ").dropLast().joined(separator: " ")) \(made.version)" }
                     ?? "\(made.id) \(made.version)"
@@ -75,6 +71,16 @@ public final class DistillerEngine: @unchecked Sendable {
             throw DistillerError.graphicsNeedsOtherWine(WineCapabilities.whyNot(resolved.graphics))
         }
         return wine
+    }
+
+    /// Whether `candidate` can run `bottle` without harming it: the same build, or the same
+    /// family as `original` (the build that made it, if still installed), at the same or a
+    /// newer version than the bottle last ran with.
+    static func wine(_ candidate: InstalledComponent, canOpen bottle: Bottle, madeBy original: InstalledComponent?) -> Bool {
+        let made = BottleWine(bottle.wine)
+        let sameKind = candidate.manifest.id == made.id
+            || (original?.manifest.family != nil && candidate.manifest.family == original?.manifest.family)
+        return sameKind && VersionNumber(candidate.manifest.version) >= VersionNumber(made.version)
     }
 
     /// The Wine build (with its graphics layer merged in, when needed) to run `resolved` with.

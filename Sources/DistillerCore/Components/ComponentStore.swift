@@ -49,18 +49,66 @@ public final class ComponentStore: @unchecked Sendable {
                 return component.manifest.arch == arch || component.manifest.arch == .universal
             }
             .sorted { VersionNumber($0.manifest.version) > VersionNumber($1.manifest.version) }
+            .activeFirst(activeIDs())
     }
 
+    /// The active version of the layer that provides `backend`.
     public func graphicsLayer(_ backend: GraphicsBackend) -> InstalledComponent? {
         installed()
             .filter { $0.manifest.kind == .graphics && $0.manifest.provides == backend }
-            .max { VersionNumber($0.manifest.version) < VersionNumber($1.manifest.version) }
+            .sorted { VersionNumber($0.manifest.version) > VersionNumber($1.manifest.version) }
+            .activeFirst(activeIDs())
+            .first
     }
 
+    /// The active winetricks.
     public func winetricks() -> InstalledComponent? {
         installed()
             .filter { $0.manifest.kind == .winetricks }
+            .sorted { VersionNumber($0.manifest.version) > VersionNumber($1.manifest.version) }
+            .activeFirst(activeIDs())
+            .first
+    }
+
+    // MARK: Active versions
+
+    /// The versions the player chose as active (`settings.json` `active_components`).
+    public func chosenActiveVersions() -> [String: String] {
+        StorageSettings.load(fromSupportFolder: paths.root).activeComponents ?? [:]
+    }
+
+    /// One version per component id: the one the player chose, or the newest installed. New
+    /// games use it, and games that follow updates move to it.
+    public func activeComponents() -> [InstalledComponent] {
+        Self.active(in: installed(), chosen: chosenActiveVersions())
+    }
+
+    public func isActive(_ component: InstalledComponent) -> Bool {
+        activeIDs().contains(component.id)
+    }
+
+    func activeIDs() -> Set<String> {
+        Set(activeComponents().map(\.id))
+    }
+
+    static func active(in installed: [InstalledComponent], chosen: [String: String]) -> [InstalledComponent] {
+        Dictionary(grouping: installed, by: { $0.manifest.id }).compactMap { id, versions in
+            let newestFirst = versions.sorted { VersionNumber($0.manifest.version) > VersionNumber($1.manifest.version) }
+            if let version = chosen[id], let match = newestFirst.first(where: { $0.manifest.version == version }) { return match }
+            return newestFirst.first
+        }
+    }
+
+    /// Makes `component` the active version of its id. The newest version needs no choice, so
+    /// later updates become active by themselves.
+    public func makeActive(_ component: InstalledComponent) throws {
+        var settings = StorageSettings.load(fromSupportFolder: paths.root)
+        var chosen = settings.activeComponents ?? [:]
+        let newest = installed().filter { $0.manifest.id == component.manifest.id }
             .max { VersionNumber($0.manifest.version) < VersionNumber($1.manifest.version) }
+        chosen[component.manifest.id] = newest?.id == component.id ? nil : component.manifest.version
+        settings.activeComponents = chosen.isEmpty ? nil : chosen
+        try settings.save(toSupportFolder: paths.root)
     }
 
     func composed() -> [InstalledComponent] {
@@ -200,5 +248,12 @@ public enum WineBuildLocator {
             fileManager.isExecutableFile(atPath: url.appendingPathComponent($0).path)
         }
         return hasLoader && fileManager.fileExists(atPath: url.appendingPathComponent("lib").path)
+    }
+}
+
+extension Array where Element == InstalledComponent {
+    /// The same order, with active versions moved to the front.
+    func activeFirst(_ active: Set<String>) -> [InstalledComponent] {
+        filter { active.contains($0.id) } + filter { !active.contains($0.id) }
     }
 }

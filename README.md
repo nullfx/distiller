@@ -42,6 +42,12 @@ The app opens the **Setup Assistant** when something required is missing (it's a
 
 From a terminal: `swift run distiller setup` shows the status and `swift run distiller setup install --all` installs what's missing.
 
+### Keeping components up to date
+
+**Components ▸ Updates** sets how Distiller keeps Wine, DXVK, DXMT and winetricks current: **check, and ask before installing** (the default: it checks when the app starts and once a day, and Components shows what's new), **install updates automatically**, or **don't check**. **Check Now** works in every mode. An update installs next to the version it replaces and becomes the **active** version: new games use it, and games move to it the next time they start (a game's Wine only ever moves forward, because Wine updates a bottle in a way older builds can't read). **Make Active** on an older version (right-click it) keeps that component there; automatic updates then skip it. Versions no game needs are removed after an update, or with **Remove Old Versions**. D3DMetal and Wine builds you imported aren't checked or removed automatically, since they come from your own downloads.
+
+From a terminal: `distiller components check`, `distiller components update [<id>]`, `distiller components use <id>@<version>`, `distiller components clean` and `distiller components updates [ask|auto|off]`.
+
 ## Creating recipes
 
 **Create Recipe…** in My Library (⌘N) walks through three starting points:

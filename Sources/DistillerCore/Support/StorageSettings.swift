@@ -24,6 +24,14 @@ public struct StorageSettings: Codable, Equatable, Sendable {
     /// The most the Logs folder may hold, in megabytes; the oldest go first (0 means no limit).
     /// Nil means the default.
     public var logLimitMB: Int?
+    /// Whether Distiller checks for newer Wine builds, graphics layers and winetricks, and
+    /// whether it installs them by itself. Nil means the default (`ask`).
+    public var componentUpdates: ComponentUpdateMode?
+    /// Versions the player chose as active, by component id ("wine-staging": "11.21"). A
+    /// component with no choice uses its newest installed version.
+    public var activeComponents: [String: String]?
+    /// When Distiller last looked for component updates.
+    public var lastComponentCheck: Date?
 
     enum CodingKeys: String, CodingKey {
         case wineLocation = "wine_location"
@@ -32,6 +40,9 @@ public struct StorageSettings: Codable, Equatable, Sendable {
         case assistantEnabled = "assistant_enabled"
         case logRetentionDays = "log_retention_days"
         case logLimitMB = "log_limit_mb"
+        case componentUpdates = "component_updates"
+        case activeComponents = "active_components"
+        case lastComponentCheck = "last_component_check"
     }
 
     public init(wineLocation: String? = nil, bottlesLocation: String? = nil, locationsConfirmed: Bool? = nil, assistantEnabled: Bool? = nil) {
@@ -47,6 +58,7 @@ public struct StorageSettings: Codable, Equatable, Sendable {
     public static let defaultLogLimitMB = 1024
     public var effectiveLogRetentionDays: Int { max(0, logRetentionDays ?? Self.defaultLogRetentionDays) }
     public var effectiveLogLimitMB: Int { max(0, logLimitMB ?? Self.defaultLogLimitMB) }
+    public var effectiveComponentUpdates: ComponentUpdateMode { componentUpdates ?? .ask }
 
     public static let fileName = "settings.json"
 

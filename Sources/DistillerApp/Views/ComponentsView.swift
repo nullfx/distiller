@@ -24,6 +24,8 @@ struct ComponentsView: View {
                 }
             }
 
+            ComponentUpdatesSection()
+
             ForEach(ComponentKind.allCases, id: \.self) { kind in
                 Section(kind.displayName) {
                     let items = model.components.filter { $0.manifest.kind == kind }
@@ -104,11 +106,106 @@ struct ComponentRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
+            if model.activeComponentIDs.contains(component.id) {
+                Text("Active")
+                    .font(.caption)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(.tint.opacity(0.15), in: Capsule())
+                    .help("New games use this version, and games that follow updates move to it.")
+            } else if model.unusedComponents.contains(component) {
+                Text("Not needed")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .help("No game needs this version any more. It's removed with the next update, or with Remove Old Versions.")
+            }
         }
         .contextMenu {
+            if !model.activeComponentIDs.contains(component.id) {
+                Button("Make Active") { model.makeActive(component) }
+                    .help("Use this version for new games and games that follow updates. Choosing an older version keeps this component there: automatic updates skip it.")
+            }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([component.directory]) }
             Button("Move to Trash", role: .destructive) { model.removeComponent(component) }
         }
+    }
+}
+
+/// Components ▸ Updates: how Distiller keeps components up to date, Check Now, what's available,
+/// and old versions nothing needs.
+struct ComponentUpdatesSection: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Section {
+            Picker("Updates", selection: Binding(get: { model.componentUpdateMode }, set: { model.setComponentUpdateMode($0) })) {
+                ForEach(ComponentUpdateMode.allCases, id: \.self) { mode in
+                    Text(mode.displayName).tag(mode)
+                }
+            }
+            HStack {
+                Text(lastCheckedText).foregroundStyle(.secondary)
+                Spacer()
+                if model.isCheckingForUpdates {
+                    ProgressView().controlSize(.small)
+                }
+                Button("Check Now") { model.checkForComponentUpdates() }
+                    .disabled(model.isCheckingForUpdates || model.busyMessage != nil)
+            }
+            ForEach(model.componentUpdates) { update in
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(update.displayName) \(update.availableVersion)")
+                        Text(detail(for: update)).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Update") { model.installComponentUpdate(update) }
+                        .disabled(model.busyMessage != nil)
+                }
+            }
+            if model.componentUpdates.count > 1 {
+                HStack {
+                    Spacer()
+                    Button("Update All") { model.installComponentUpdates(model.componentUpdates) }
+                        .disabled(model.busyMessage != nil)
+                }
+            }
+            ForEach(model.componentCheckFailures.sorted(by: { $0.key < $1.key }), id: \.key) { name, reason in
+                Label("Couldn't check \(name): \(reason)", systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let message = model.componentUpdateMessage {
+                Text(message).foregroundStyle(.secondary)
+            }
+            if !model.unusedComponents.isEmpty {
+                HStack {
+                    Text("Old versions no game needs: \(model.unusedComponents.map(\.manifest.displayName).joined(separator: ", "))")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Button("Remove Old Versions") { model.removeUnusedComponents() }
+                        .disabled(model.busyMessage != nil)
+                }
+            }
+        } header: {
+            Text("Updates")
+        } footer: {
+            Text("Updates install next to the version they replace and become active. Games move to the active version the next time they start; a game's Wine can only move forward. Old versions are removed once nothing needs them. D3DMetal and imported Wine builds aren't checked: they come from your own downloads.")
+        }
+    }
+
+    private var lastCheckedText: String {
+        if model.isCheckingForUpdates { return "Checking…" }
+        guard let date = model.lastComponentCheck else { return "Not checked yet" }
+        return "Last checked \(date.formatted(.relative(presentation: .named)))"
+    }
+
+    private func detail(for update: ComponentUpdate) -> String {
+        var parts = ["Installed: \(update.installedVersion)"]
+        if let size = update.size { parts.append(ByteCountFormatter.string(fromByteCount: size, countStyle: .file)) }
+        if let held = update.heldVersion { parts.append("You're keeping \(held) active; automatic updates skip it") }
+        return parts.joined(separator: " · ")
     }
 }
 
