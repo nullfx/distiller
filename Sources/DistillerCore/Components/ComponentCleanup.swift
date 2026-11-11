@@ -12,10 +12,11 @@ import Foundation
 public enum ComponentCleanup {
     /// The versions that `remove` would take away, given the installed components, the
     /// player's active choices and the bottles.
-    static func removable(installed: [InstalledComponent], chosen: [String: String], bottles: [Bottle]) -> [InstalledComponent] {
+    static func removable(installed: [InstalledComponent], chosen: [String: String], bottles: [Bottle],
+                          keep: Set<String> = []) -> [InstalledComponent] {
         let active = Set(ComponentStore.active(in: installed, chosen: chosen).map(\.id))
-        // Versions a game stays on are needed by that game.
-        let keptByGames = Set(bottles.flatMap { $0.stayOn?.all ?? [] })
+        // Versions a game stays on are needed by that game; `keep` adds others (restore points' Wine).
+        let keptByGames = Set(bottles.flatMap { $0.stayOn?.all ?? [] }).union(keep)
         var remaining = installed
         var result: [InstalledComponent] = []
         // Oldest first, so the newest of the unneeded versions is the last to go.
@@ -58,7 +59,8 @@ extension DistillerEngine {
     /// The component versions `removeUnusedComponents` would remove now.
     public func unusedComponents() -> [InstalledComponent] {
         ComponentCleanup.removable(
-            installed: components.installed(), chosen: components.chosenActiveVersions(), bottles: bottles.list()
+            installed: components.installed(), chosen: components.chosenActiveVersions(), bottles: bottles.list(),
+            keep: winesNeededByRestorePoints()
         )
     }
 

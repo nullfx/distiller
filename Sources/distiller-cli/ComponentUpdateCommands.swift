@@ -249,3 +249,48 @@ struct GameVersionsCommand: ParsableCommand {
         }
     }
 }
+
+// MARK: - games restore
+
+struct GameRestoreCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "restore",
+        abstract: "Show a game's restore point (its bottle from before it moved to a newer Wine), or act on it.",
+        discussion: "How long restore points are kept: settings.json restore_point_days (default 7; 0 until you confirm the game works; -1 until you remove it)."
+    )
+
+    @Argument(help: "The game ID, from 'distiller games'.")
+    var game: String
+
+    @Flag(help: "The game works on its new Wine: remove the restore point (unless you keep them until removed).")
+    var works = false
+
+    @Flag(help: "Put the restore point back and keep the game on the Wine it was on.")
+    var rollback = false
+
+    @Flag(help: "Remove the restore point.")
+    var discard = false
+
+    func run() async throws {
+        let engine = try makeEngine()
+        let entry = try findGame(game, in: engine)
+        let bottle = try engine.bottles.bottle(id: entry.bottleID)
+        guard let point = engine.bottles.restorePoint(of: bottle) else {
+            print("\(entry.title) has no restore point.")
+            return
+        }
+        if rollback {
+            try await engine.rollBack(entry)
+            print("\(entry.title) is back on \(RestorePoint.describe(point.fromWine)), and stays there (distiller games versions \(entry.id) --wine follow to move on again).")
+        } else if works {
+            try engine.confirmWineMove(entry)
+            print(engine.bottles.restorePoint(of: bottle) == nil ? "Removed the restore point." : "Noted; the restore point stays until you remove it.")
+        } else if discard {
+            try engine.bottles.discardRestorePoint(of: bottle)
+            print("Removed the restore point.")
+        } else {
+            print("Saved \(point.createdAt.formatted(date: .abbreviated, time: .shortened)), before moving from \(RestorePoint.describe(point.fromWine)) to \(RestorePoint.describe(point.toWine)).")
+            print("--works, --rollback or --discard.")
+        }
+    }
+}

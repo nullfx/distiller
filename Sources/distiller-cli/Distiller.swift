@@ -391,7 +391,7 @@ struct GamesCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "games",
         abstract: "List the games in your library.",
-        subcommands: [List.self, GameLinkFolder.self, GameIconCommand.self, GameVersionsCommand.self],
+        subcommands: [List.self, GameLinkFolder.self, GameIconCommand.self, GameVersionsCommand.self, GameRestoreCommand.self],
         defaultSubcommand: List.self
     )
 
@@ -463,6 +463,9 @@ struct LaunchCommand: AsyncParsableCommand {
             overrides.env = (overrides.env ?? [:]).merging(DiagnosticLaunch.environment) { _, diagnostic in diagnostic }
             launched.overrides = overrides
             print("Diagnostic launch: Wine logs DLL loads, exceptions and errors; the Metal HUD appears if the game draws with Metal.")
+        }
+        if let point = try await engine.prepareWineMove(for: launched, progress: { print($0) }) {
+            print("Saved a restore point (\(RestorePoint.describe(point.fromWine))). If the game doesn't work: distiller games restore \(entry.id) --rollback")
         }
         let resolved = engine.resolve(launched.recipe, overrides: launched.overrides)
         print("Starting \(entry.title) with \(resolved.graphics.displayName).")

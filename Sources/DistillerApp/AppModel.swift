@@ -70,6 +70,10 @@ final class AppModel {
     var appUpdateToAnnounce: AppRelease?
     /// The result of Distiller ▸ Check for Updates…, when there's no new Distiller to offer.
     var updateCheckSummary: UpdateCheckSummary?
+    /// "Did <game> work on Wine X?" after its first session on a newer Wine. See AppModel+RestorePoints.swift.
+    var restorePointQuestion: RestorePointQuestion?
+    /// `settings.json` `restore_point_days`, kept here so Settings updates when it changes.
+    var restorePointDays = RestorePointRetention.defaultDays
     /// `settings.json`'s update mode and last check, kept here so views update when they change.
     var componentUpdateMode: ComponentUpdateMode = .ask
     var lastComponentCheck: Date?
@@ -126,6 +130,7 @@ final class AppModel {
     func reload() {
         guard let engine else { return }
         cleanUpLogsIfDue()
+        engine.expireRestorePoints()
         unavailableStorage = engine.paths.unavailable
         games = engine.library.load()
         refreshLibraryState()
@@ -143,6 +148,7 @@ final class AppModel {
         let settings = StorageSettings.load(fromSupportFolder: engine.paths.root)
         componentUpdateMode = settings.effectiveComponentUpdates
         lastComponentCheck = settings.lastComponentCheck
+        restorePointDays = settings.effectiveRestorePointDays
         environment = setup?.check()
         checkForComponentUpdatesIfDue()
     }
@@ -268,14 +274,25 @@ final class AppModel {
 
     func launch(_ game: Game) {
         guard let engine, running[game.id] == nil else { return }
-        let started = Date()
-        do {
-            let process = try engine.launch(game) { [weak self] _ in
-                Task { @MainActor in self?.finished(game, started: started) }
+        Task {
+            // A game moving to a newer Wine gets a restore point and its bottle updated first.
+            if (try? engine.pendingWineMove(for: game)) != nil {
+                do {
+                    try await prepareWineMove(for: game)
+                } catch {
+                    errorMessage = error.localizedDescription
+                    return
+                }
             }
-            running[game.id] = process
-        } catch {
-            errorMessage = error.localizedDescription
+            let started = Date()
+            do {
+                let process = try engine.launch(game) { [weak self] _ in
+                    Task { @MainActor in self?.finished(game, started: started) }
+                }
+                running[game.id] = process
+            } catch {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 
@@ -295,6 +312,13 @@ final class AppModel {
         updated.secondsPlayed += seconds
         try? engine.library.upsert(updated)
         reload()
+        // First session on a newer Wine: ask whether it worked (once), before any report.
+        if let bottle = try? engine.bottles.bottle(id: game.bottleID),
+           let point = engine.bottles.restorePoint(of: bottle), point.askedAt == nil, point.confirmedAt == nil {
+            engine.markRestorePointAsked(updated)
+            restorePointQuestion = RestorePointQuestion(game: updated, point: point)
+            return
+        }
         // Only ask for a report after a real session, not a launch that failed at once.
         if seconds > 120 { gameToReport = updated }
     }

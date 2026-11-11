@@ -32,6 +32,9 @@ public struct StorageSettings: Codable, Equatable, Sendable {
     public var activeComponents: [String: String]?
     /// When Distiller last looked for component updates.
     public var lastComponentCheck: Date?
+    /// How long a restore point (a bottle's copy from before it moved to a newer Wine) is kept:
+    /// days, or `RestorePointRetention.untilConfirmed` / `.untilRemoved`. Nil means 7 days.
+    public var restorePointDays: Int?
 
     enum CodingKeys: String, CodingKey {
         case wineLocation = "wine_location"
@@ -43,6 +46,7 @@ public struct StorageSettings: Codable, Equatable, Sendable {
         case componentUpdates = "component_updates"
         case activeComponents = "active_components"
         case lastComponentCheck = "last_component_check"
+        case restorePointDays = "restore_point_days"
     }
 
     public init(wineLocation: String? = nil, bottlesLocation: String? = nil, locationsConfirmed: Bool? = nil, assistantEnabled: Bool? = nil) {
@@ -59,6 +63,7 @@ public struct StorageSettings: Codable, Equatable, Sendable {
     public var effectiveLogRetentionDays: Int { max(0, logRetentionDays ?? Self.defaultLogRetentionDays) }
     public var effectiveLogLimitMB: Int { max(0, logLimitMB ?? Self.defaultLogLimitMB) }
     public var effectiveComponentUpdates: ComponentUpdateMode { componentUpdates ?? .ask }
+    public var effectiveRestorePointDays: Int { restorePointDays ?? RestorePointRetention.defaultDays }
 
     public static let fileName = "settings.json"
 

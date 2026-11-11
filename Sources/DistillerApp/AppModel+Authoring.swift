@@ -161,6 +161,7 @@ extension AppModel {
     func runInstaller(for game: Game) {
         guard let engine, let url = chooseFile(prompt: "Choose a Windows installer (.exe or .msi) to run in \(game.title)'s bottle") else { return }
         perform("Running \(url.lastPathComponent)…") {
+            try await self.prepareWineMove(for: game)
             let updated = try await engine.runInstaller(url, for: game) { progress in
                 Task { @MainActor in self.busyMessage = progress.message }
             }
@@ -170,10 +171,13 @@ extension AppModel {
 
     func runTool(_ tool: WineTool, for game: Game) {
         guard let engine else { return }
-        do {
-            _ = try engine.runTool(tool, for: game)
-        } catch {
-            errorMessage = error.localizedDescription
+        Task {
+            do {
+                try await prepareWineMove(for: game)
+                _ = try engine.runTool(tool, for: game)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 

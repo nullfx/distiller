@@ -160,6 +160,7 @@ struct RecipeWorkshopView: View {
             } footer: {
                 Text("Runs a Windows installer in this bottle and adds it to the recipe, so other players run the same installer.")
             }
+            RestorePointSection(game: game)
             GameVersionsSection(game: game)
             Section("Wine tools") {
                 ForEach(WineTool.allCases, id: \.self) { tool in
@@ -330,6 +331,42 @@ struct GameVersionsSection: View {
             if !choice.options.isEmpty { Divider() }
             ForEach(choice.options) { component in
                 Text("Stay on \(component.manifest.displayName)").tag(String?.some(component.id))
+            }
+        }
+    }
+}
+
+/// Workshop ▸ Bottle ▸ Restore point: the copy of the bottle from before it moved to a newer
+/// Wine, with Roll Back and Remove.
+struct RestorePointSection: View {
+    @Environment(AppModel.self) private var model
+    let game: Game
+    @State private var isConfirmingRollBack = false
+
+    var body: some View {
+        let _ = model.components
+        if let point = model.restorePoint(for: game) {
+            Section {
+                LabeledContent("Saved \(point.createdAt.formatted(date: .abbreviated, time: .shortened))") {
+                    HStack {
+                        Button("Roll Back…") { isConfirmingRollBack = true }
+                            .disabled(model.running[game.id] != nil || model.busyMessage != nil)
+                        Button("Remove") { model.discardRestorePoint(game) }
+                    }
+                }
+                Text("A copy of this bottle from before it moved from \(RestorePoint.describe(point.fromWine)) to \(RestorePoint.describe(point.toWine)).\(point.confirmedAt == nil ? "" : " You said the game works on the new Wine.")")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } header: {
+                Text("Restore point")
+            } footer: {
+                Text("Roll Back puts the copy back, so anything saved inside the bottle since then is lost, and keeps the game on \(RestorePoint.describe(point.fromWine)). How long restore points are kept is in Settings ▸ Updates.")
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .confirmationDialog("Roll \(game.title) back to \(RestorePoint.describe(point.fromWine))?", isPresented: $isConfirmingRollBack) {
+                Button("Roll Back", role: .destructive) { model.rollBack(game) }
+            } message: {
+                Text("The bottle goes back to how it was on \(point.createdAt.formatted(date: .abbreviated, time: .shortened)). Changes since then inside the bottle (including saves a game keeps there) are lost.")
             }
         }
     }
