@@ -59,6 +59,8 @@ final class AppModel {
     /// The active version of each component, and old versions nothing needs, as of the last reload.
     var activeComponentIDs: Set<String> = []
     var unusedComponents: [InstalledComponent] = []
+    /// Games that stay on a component version, by component id ("wine-staging@11.21").
+    var keptForGames: [String: [String]] = [:]
     var componentUpdateMessage: String?
     /// Distiller's own update (Settings ▸ Updates). See AppModel+AppUpdate.swift.
     var appUpdate: AppRelease?
@@ -132,6 +134,12 @@ final class AppModel {
         components = engine.components.installed()
         activeComponentIDs = Set(engine.components.activeComponents().map(\.id))
         unusedComponents = engine.unusedComponents()
+        var kept: [String: [String]] = [:]
+        for game in games {
+            guard let stayOn = (try? engine.bottles.bottle(id: game.bottleID))?.stayOn else { continue }
+            for id in stayOn.all { kept[id, default: []].append(game.title) }
+        }
+        keptForGames = kept
         let settings = StorageSettings.load(fromSupportFolder: engine.paths.root)
         componentUpdateMode = settings.effectiveComponentUpdates
         lastComponentCheck = settings.lastComponentCheck

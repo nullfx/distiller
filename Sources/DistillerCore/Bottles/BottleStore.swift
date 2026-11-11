@@ -4,20 +4,65 @@ import Foundation
 public struct Bottle: Codable, Identifiable, Equatable, Sendable, Hashable {
     public var id: String
     public var name: String
-    /// "id@version" of the Wine build the bottle was created with.
+    /// "id@version" of the Wine build the bottle last ran with (it was created with this or an
+    /// older one; Wine only moves a bottle forward).
     public var wine: String
     public var createdAt: Date
+    /// "id@version" of the graphics layer and winetricks it last used, when known.
+    public var graphics: String?
+    public var winetricks: String?
+    /// Versions this bottle stays on instead of following the active ones (a choice on this
+    /// Mac, never part of a recipe).
+    public var stayOn: StayOn?
 
-    enum CodingKeys: String, CodingKey {
-        case id, name, wine
-        case createdAt = "created_at"
+    /// A version per kind of component, as "id@version"; nil follows the active version.
+    public struct StayOn: Codable, Equatable, Sendable, Hashable {
+        public var wine: String?
+        public var graphics: String?
+        public var winetricks: String?
+
+        public init(wine: String? = nil, graphics: String? = nil, winetricks: String? = nil) {
+            self.wine = wine
+            self.graphics = graphics
+            self.winetricks = winetricks
+        }
+
+        public subscript(kind: ComponentKind) -> String? {
+            get {
+                switch kind {
+                case .wine: return wine
+                case .graphics: return graphics
+                case .winetricks: return winetricks
+                }
+            }
+            set {
+                switch kind {
+                case .wine: wine = newValue
+                case .graphics: graphics = newValue
+                case .winetricks: winetricks = newValue
+                }
+            }
+        }
+
+        public var all: [String] { [wine, graphics, winetricks].compactMap { $0 } }
+        public var isEmpty: Bool { all.isEmpty }
     }
 
-    public init(id: String, name: String, wine: String, createdAt: Date) {
+    enum CodingKeys: String, CodingKey {
+        case id, name, wine, graphics, winetricks
+        case createdAt = "created_at"
+        case stayOn = "stay_on"
+    }
+
+    public init(id: String, name: String, wine: String, createdAt: Date,
+                graphics: String? = nil, winetricks: String? = nil, stayOn: StayOn? = nil) {
         self.id = id
         self.name = name
         self.wine = wine
         self.createdAt = createdAt
+        self.graphics = graphics
+        self.winetricks = winetricks
+        self.stayOn = stayOn
     }
 }
 

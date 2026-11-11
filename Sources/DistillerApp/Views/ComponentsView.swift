@@ -146,6 +146,11 @@ struct ComponentRow: View {
                 Button("Update") { model.installComponentUpdate(update) }
                     .controlSize(.small)
                     .disabled(model.busyMessage != nil)
+            } else if let games = model.keptForGames[component.id], !model.activeComponentIDs.contains(component.id) {
+                Text("Kept for \(games.joined(separator: ", "))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .help("These games stay on this version (their Bottle settings in the workshop), so it isn't removed.")
             } else if hasOtherVersions {
                 if model.activeComponentIDs.contains(component.id) {
                     Image(systemName: "checkmark.circle.fill")

@@ -196,3 +196,56 @@ struct AppCommand: AsyncParsableCommand {
         }
     }
 }
+
+// MARK: - games versions
+
+struct GameVersionsCommand: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "versions",
+        abstract: "Show or choose the Wine build, graphics layer and winetricks a game uses.",
+        discussion: """
+        A game follows the active version of each (see 'distiller components'), or stays on one you
+        choose. Staying keeps a working game as it is when the others update, but it may miss fixes
+        or break with newer recipes. Wine can only stay on the build the game's bottle uses now or a
+        newer one.
+          distiller games versions <game> --wine wine-staging@11.21
+          distiller games versions <game> --wine follow
+        """
+    )
+
+    @Argument(help: "The game ID, from 'distiller games'.")
+    var game: String
+
+    @Option(help: "id@version to stay on, or 'follow'.")
+    var wine: String?
+
+    @Option(help: "id@version to stay on, or 'follow'.")
+    var graphics: String?
+
+    @Option(help: "id@version to stay on, or 'follow'.")
+    var winetricks: String?
+
+    func run() throws {
+        let engine = try makeEngine()
+        let entry = try findGame(game, in: engine)
+        let installed = engine.components.installed()
+        for (kind, value) in [(ComponentKind.wine, wine), (.graphics, graphics), (.winetricks, winetricks)] {
+            guard let value else { continue }
+            if value == "follow" {
+                try engine.setStayOn(kind, nil, for: entry)
+            } else {
+                guard let component = installed.first(where: { $0.id == value && $0.manifest.kind == kind }) else {
+                    throw ValidationError("No installed \(kind.rawValue) component \(value). See 'distiller components list'.")
+                }
+                try engine.setStayOn(kind, component, for: entry)
+            }
+        }
+        let versions = try engine.versions(for: entry)
+        for choice in [versions.wine, versions.graphics, versions.winetricks].compactMap({ $0 }) {
+            let current = choice.current?.id ?? "none installed"
+            let mode = choice.stayOn != nil ? "stays on it" : "follows updates"
+            let others = choice.options.map(\.id).filter { $0 != choice.current?.id }
+            print("\(choice.kind.rawValue)\t\(current)\t\(mode)\(others.isEmpty ? "" : "\t(also installed: \(others.joined(separator: ", ")))")")
+        }
+    }
+}

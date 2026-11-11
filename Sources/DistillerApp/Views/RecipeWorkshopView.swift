@@ -160,6 +160,7 @@ struct RecipeWorkshopView: View {
             } footer: {
                 Text("Runs a Windows installer in this bottle and adds it to the recipe, so other players run the same installer.")
             }
+            GameVersionsSection(game: game)
             Section("Wine tools") {
                 ForEach(WineTool.allCases, id: \.self) { tool in
                     Button(tool.displayName) { model.runTool(tool, for: game) }
@@ -294,5 +295,42 @@ struct RecipeWorkshopView: View {
     private func saveYAML(_ game: Game) {
         guard let recipe = try? RecipeLoader.decode(yaml: yaml) else { return }
         Task { _ = await model.save(recipe, for: game) }
+    }
+}
+
+/// Workshop ▸ Bottle ▸ Versions: whether this game follows the active Wine build, graphics layer
+/// and winetricks, or stays on a version. A choice on this Mac only; never part of the recipe.
+struct GameVersionsSection: View {
+    @Environment(AppModel.self) private var model
+    let game: Game
+
+    var body: some View {
+        // Re-read on every reload, so a choice shows at once.
+        let _ = model.components
+        if let versions = model.versions(for: game) {
+            Section {
+                picker("Wine", versions.wine)
+                if let graphics = versions.graphics { picker("Graphics layer", graphics) }
+                picker("winetricks", versions.winetricks)
+            } header: {
+                Text("Versions")
+            } footer: {
+                Text("Staying on a version keeps this game as it is when Distiller updates, but it may miss fixes or stop working with newer recipes. Wine can only stay on the build this game uses now or a newer one: Wine can't move a bottle back.")
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func picker(_ label: String, _ choice: GameVersions.Choice) -> some View {
+        Picker(label, selection: Binding<String?>(
+            get: { choice.stayOn },
+            set: { model.setStayOn(choice.kind, id: $0, for: game) }
+        )) {
+            Text("Follow updates (\(choice.active?.manifest.displayName ?? "none installed"))").tag(String?.none)
+            if !choice.options.isEmpty { Divider() }
+            ForEach(choice.options) { component in
+                Text("Stay on \(component.manifest.displayName)").tag(String?.some(component.id))
+            }
+        }
     }
 }

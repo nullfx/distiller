@@ -54,7 +54,15 @@ public final class DistillerEngine: @unchecked Sendable {
             throw DistillerError.componentNotFound("a \(family)Wine build\(minimum)")
         }
         var allowed = candidates
-        if let bottle {
+        if let bottle, let kept = bottle.stayOn?.wine {
+            // The player keeps this game on one build.
+            guard let match = candidates.first(where: { $0.id == kept }) else {
+                throw DistillerError.componentNotFound(
+                    "\(kept.replacingOccurrences(of: "@", with: " ")), which \(bottle.name) stays on (choose Follow Updates in its Bottle settings to use another)"
+                )
+            }
+            allowed = [match]
+        } else if let bottle {
             let made = BottleWine(bottle.wine)
             let original = components.installed().first { $0.manifest.kind == .wine && $0.manifest.id == made.id }
             allowed = candidates.filter { Self.wine($0, canOpen: bottle, madeBy: original) }
@@ -92,13 +100,30 @@ public final class DistillerEngine: @unchecked Sendable {
         }
         var graphics: InstalledComponent?
         if resolved.graphics != .wined3d {
-            guard let layer = components.graphicsLayer(resolved.graphics) else {
-                throw DistillerError.componentNotFound(resolved.graphics.displayName)
-            }
-            graphics = layer
+            graphics = try graphicsLayer(resolved.graphics, for: bottle)
         }
         let composed = try StackComposer.compose(wine: wine, graphics: graphics, store: components)
         return (composed, graphics)
+    }
+
+    /// The graphics layer for `backend`: the version `bottle` stays on, if it stays on one of
+    /// this layer, otherwise the active version.
+    func graphicsLayer(_ backend: GraphicsBackend, for bottle: Bottle?) throws -> InstalledComponent {
+        if let kept = bottle?.stayOn?.graphics {
+            let installed = components.installed()
+            if let match = installed.first(where: { $0.id == kept }) {
+                if match.manifest.provides == backend { return match }
+            } else if let id = kept.split(separator: "@").first,
+                      installed.contains(where: { $0.manifest.id == id && $0.manifest.provides == backend }) {
+                throw DistillerError.componentNotFound(
+                    "\(kept.replacingOccurrences(of: "@", with: " ")), which \(bottle?.name ?? "this game") stays on (choose Follow Updates in its Bottle settings to use another)"
+                )
+            }
+        }
+        guard let layer = components.graphicsLayer(backend) else {
+            throw DistillerError.componentNotFound(backend.displayName)
+        }
+        return layer
     }
 
     /// `selectStack` for a game in its own bottle. When it picks a newer Wine than the bottle
@@ -110,8 +135,13 @@ public final class DistillerEngine: @unchecked Sendable {
         if recordUpgrade {
             let base = stack.wine.manifest.composedFrom?.first.flatMap(components.component(withID:)) ?? stack.wine
             let made = BottleWine(bottle.wine)
+            var changed = bottle
             if VersionNumber(base.manifest.version) > VersionNumber(made.version) || base.manifest.id != made.id {
-                bottle.wine = base.id
+                changed.wine = base.id
+            }
+            if let graphics = stack.graphics { changed.graphics = graphics.id }
+            if changed != bottle {
+                bottle = changed
                 try bottles.save(bottle)
             }
         }
