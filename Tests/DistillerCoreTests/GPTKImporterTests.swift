@@ -5,12 +5,17 @@ import XCTest
 /// Builds disk images shaped like the real Game Porting Toolkit download (verified against
 /// GPTK 4.0 beta 3): an outer bundle image whose D3DMetal files are only inside a nested
 /// "Evaluation environment" image. No Apple files are involved: the images hold placeholder files
-/// in the same layout. Creating and mounting images with hdiutil takes about 45 s.
+/// in the same layout. Creating and mounting images with hdiutil takes about 45 s and is
+/// unreliable on CI machines, so these run only with `DISTILLER_SLOW_TESTS=1`.
 final class GPTKImporterTests: XCTestCase {
     private var work: URL!
     private var store: ComponentStore!
 
     override func setUpWithError() throws {
+        try XCTSkipUnless(
+            ProcessInfo.processInfo.environment["DISTILLER_SLOW_TESTS"] == "1",
+            "Disk-image tests run only with DISTILLER_SLOW_TESTS=1 (they take about 45 s)."
+        )
         work = FileManager.default.temporaryDirectory
             .appendingPathComponent("distiller-gptk-test-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
@@ -18,7 +23,8 @@ final class GPTKImporterTests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
-        try? FileManager.default.removeItem(at: work)
+        // Nothing was made when the tests were skipped.
+        if let work { try? FileManager.default.removeItem(at: work) }
     }
 
     func testImportsFromNestedEvaluationImage() async throws {

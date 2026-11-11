@@ -27,7 +27,7 @@ This file is the shared reference for the architecture and the rules; the recipe
 ## Commands
 
 - Build: `swift build`
-- Test: `swift test` (about a minute; the disk-image importer tests make real disk images with `hdiutil`).
+- Test: `swift test` (a few seconds). The disk-image importer tests (`GPTKImporterTests`, real disk images made with `hdiutil`, about 45 s and unreliable on CI machines) are skipped unless `DISTILLER_SLOW_TESTS=1`; run them when you change `GPTKImporter`. CI builds in debug, so also check a release build (`swift build -c release`) after large SwiftUI changes: release builds can fail with "unable to type-check this expression in reasonable time". Split long view bodies into properties and `ViewModifier`s.
 - CLI: `swift run distiller <command>`; `swift run distiller --help` lists them (hardware, setup, components, bottles, run, recipe …, install, games, launch, community, github, storage, mcp, assistant, logs).
 - App without bundling: `swift run DistillerApp`. As a bundle: `Scripts/bundle-app.sh [debug|release]` builds `dist/Distiller.app` with its icon.
 - Website: `node --test site/tests/*.test.mjs` tests its data module; preview with `python3 -m http.server --directory site` (it fetches the live catalogue).

@@ -37,19 +37,20 @@ public final class ComponentStore: @unchecked Sendable {
 
     /// Wine builds that satisfy a recipe's runner requirement, newest first.
     public func wineCandidates(for requirement: RunnerRequirement) -> [InstalledComponent] {
-        installed()
-            .filter { $0.manifest.kind == .wine }
-            .filter { requirement.family == "any" || $0.manifest.family == requirement.family }
-            .filter { component in
-                guard let minimum = requirement.minVersion else { return true }
-                return VersionNumber(component.manifest.version) >= VersionNumber(minimum)
-            }
-            .filter { component in
-                guard let arch = requirement.arch else { return true }
-                return component.manifest.arch == arch || component.manifest.arch == .universal
-            }
-            .sorted { VersionNumber($0.manifest.version) > VersionNumber($1.manifest.version) }
-            .activeFirst(activeIDs())
+        let matching: [InstalledComponent] = installed().filter { Self.wine($0, meets: requirement) }
+        let newestFirst: [InstalledComponent] = matching.sorted {
+            VersionNumber($0.manifest.version) > VersionNumber($1.manifest.version)
+        }
+        return newestFirst.activeFirst(activeIDs())
+    }
+
+    static func wine(_ component: InstalledComponent, meets requirement: RunnerRequirement) -> Bool {
+        let manifest = component.manifest
+        guard manifest.kind == .wine else { return false }
+        if requirement.family != "any", manifest.family != requirement.family { return false }
+        if let minimum = requirement.minVersion, VersionNumber(manifest.version) < VersionNumber(minimum) { return false }
+        if let arch = requirement.arch, manifest.arch != arch, manifest.arch != .universal { return false }
+        return true
     }
 
     /// The active version of the layer that provides `backend`.
