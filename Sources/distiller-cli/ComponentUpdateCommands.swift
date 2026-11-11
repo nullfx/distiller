@@ -294,3 +294,77 @@ struct GameRestoreCommand: AsyncParsableCommand {
         }
     }
 }
+
+// MARK: - games rebuild
+
+struct GameRebuildCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "rebuild",
+        abstract: "Rebuild a game's bottle with the current components, or decide on a rebuild.",
+        discussion: """
+        Installs the game's recipe into a new bottle with the active Wine build, graphics layer and
+        winetricks, then switches the game to it; the old bottle is kept until you decide (--keep
+        moves it to the Trash, --switch-back returns to it). Files and folders the recipe asked for
+        are reused from the old bottle where possible; supply others with --file / --folder id=path.
+        Anything the game keeps inside its bottle (saves under C:\\users, settings, a launcher's
+        sign-in) isn't carried over.
+        """
+    )
+
+    @Argument(help: "The game ID, from 'distiller games'.")
+    var game: String
+
+    @Flag(help: "Keep the rebuilt bottle and move the old one to the Trash.")
+    var keep = false
+
+    @Flag(help: "Go back to the old bottle and remove the rebuilt one.")
+    var switchBack = false
+
+    @Option(name: .customLong("file"), help: "A file for a user_file or user_download step, as id=path.")
+    var files: [String] = []
+
+    @Option(name: .customLong("folder"), help: "A folder for a user_folder step, as id=path.")
+    var folderArguments: [String] = []
+
+    func run() async throws {
+        let engine = try makeEngine()
+        let entry = try findGame(game, in: engine)
+        if keep {
+            try engine.keepRebuild(entry)
+            print("Kept the rebuilt bottle; the old one is in the Trash.")
+            return
+        }
+        if switchBack {
+            _ = try engine.switchBack(entry)
+            print("\(entry.title) is back in its old bottle; the rebuilt one is in the Trash.")
+            return
+        }
+        var supplied = try engine.rebuildItems(for: entry)
+        for item in files {
+            let parts = item.split(separator: "=", maxSplits: 1).map(String.init)
+            guard parts.count == 2 else { throw ValidationError("--file takes id=path, but got \(item).") }
+            supplied.files[parts[0]] = URL(fileURLWithPath: (parts[1] as NSString).expandingTildeInPath)
+        }
+        for item in folderArguments {
+            let parts = item.split(separator: "=", maxSplits: 1).map(String.init)
+            guard parts.count == 2 else { throw ValidationError("--folder takes id=path, but got \(item).") }
+            supplied.folders[parts[0]] = UserFolderSource(url: URL(fileURLWithPath: (parts[1] as NSString).expandingTildeInPath))
+        }
+        var missing: [String] = []
+        for step in entry.recipe.install ?? [] {
+            switch step {
+            case .userFile(let file) where supplied.files[file.id] == nil: missing.append("--file \(file.id)=<path> (\(file.prompt))")
+            case .userDownload(let download) where supplied.files[download.id] == nil: missing.append("--file \(download.id)=<path> (\(download.prompt))")
+            case .userFolder(let folder) where supplied.folders[folder.id] == nil: missing.append("--folder \(folder.id)=<path> (\(folder.prompt))")
+            default: continue
+            }
+        }
+        guard missing.isEmpty else {
+            throw ValidationError("The old bottle doesn't have everything the recipe needs. Add:\n  " + missing.joined(separator: "\n  "))
+        }
+        let rebuilt = try await engine.rebuild(entry, supplied: supplied) { progress in
+            print("[\(progress.step)/\(progress.total)] \(progress.message)")
+        }
+        print("Rebuilt \(rebuilt.title)'s bottle. Play it; then 'distiller games rebuild \(rebuilt.id) --keep' (or --switch-back).")
+    }
+}

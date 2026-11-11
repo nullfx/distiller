@@ -391,7 +391,7 @@ struct GamesCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "games",
         abstract: "List the games in your library.",
-        subcommands: [List.self, GameLinkFolder.self, GameIconCommand.self, GameVersionsCommand.self, GameRestoreCommand.self],
+        subcommands: [List.self, GameLinkFolder.self, GameIconCommand.self, GameVersionsCommand.self, GameRestoreCommand.self, GameRebuildCommand.self],
         defaultSubcommand: List.self
     )
 

@@ -120,6 +120,17 @@ struct ContentView: View {
         } message: { question in
             Text("Distiller saved a copy of its bottle before moving it from \(RestorePoint.describe(question.point.fromWine)). Roll Back puts that copy back and keeps the game on \(RestorePoint.describe(question.point.fromWine)). You can also decide later in the recipe workshop's Bottle tab.")
         }
+        .alert(
+            "Does \(model.rebuildQuestion?.title ?? "the game") work in its rebuilt bottle?",
+            isPresented: Binding(get: { model.rebuildQuestion != nil }, set: { if !$0 { model.rebuildQuestion = nil } }),
+            presenting: model.rebuildQuestion
+        ) { game in
+            Button("Keep New Bottle") { model.keepRebuild(game) }
+            Button("Switch Back") { model.switchBack(game) }
+            Button("Not Sure Yet", role: .cancel) {}
+        } message: { game in
+            Text("Keep New Bottle moves the old bottle to the Trash. Switch Back returns to the old bottle and removes the new one. You can also decide later in the recipe workshop's Bottle tab.")
+        }
         .fileImporter(isPresented: $model.isImportingRecipe, allowedContentTypes: [.yaml]) { result in
             if case .success(let url) = result { model.addGame(fromRecipeFile: url) }
         }

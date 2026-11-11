@@ -21,9 +21,31 @@ public struct Game: Codable, Identifiable, Equatable, Sendable, Hashable {
     public var communityCheck: CommunityCheckResult?
     /// The player keeps this recipe for themselves, so the library doesn't suggest sharing it.
     public var justForMe: Bool?
+    /// Set after the game's bottle was rebuilt, until the player keeps the new bottle or
+    /// switches back to the old one (`DistillerEngine.rebuild`).
+    public var rebuild: Rebuild?
+
+    public struct Rebuild: Codable, Equatable, Sendable, Hashable {
+        public var previousBottleID: String
+        public var rebuiltAt: Date
+        /// When Distiller asked whether the game works in its rebuilt bottle, so it asks once.
+        public var askedAt: Date?
+
+        enum CodingKeys: String, CodingKey {
+            case previousBottleID = "previous_bottle_id"
+            case rebuiltAt = "rebuilt_at"
+            case askedAt = "asked_at"
+        }
+
+        public init(previousBottleID: String, rebuiltAt: Date, askedAt: Date? = nil) {
+            self.previousBottleID = previousBottleID
+            self.rebuiltAt = rebuiltAt
+            self.askedAt = askedAt
+        }
+    }
 
     enum CodingKeys: String, CodingKey {
-        case id, title, recipe, overrides, authored, submission
+        case id, title, recipe, overrides, authored, submission, rebuild
         case communityCheck = "community_check"
         case justForMe = "just_for_me"
         case bottleID = "bottle_id"

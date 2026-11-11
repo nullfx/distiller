@@ -72,6 +72,8 @@ final class AppModel {
     var updateCheckSummary: UpdateCheckSummary?
     /// "Did <game> work on Wine X?" after its first session on a newer Wine. See AppModel+RestorePoints.swift.
     var restorePointQuestion: RestorePointQuestion?
+    /// "Does <game> work in its rebuilt bottle?" after its first session there.
+    var rebuildQuestion: Game?
     /// `settings.json` `restore_point_days`, kept here so Settings updates when it changes.
     var restorePointDays = RestorePointRetention.defaultDays
     /// `settings.json`'s update mode and last check, kept here so views update when they change.
@@ -245,11 +247,16 @@ final class AppModel {
 
     /// Asks for every file and folder the recipe's steps need, and opens the publisher's page
     /// for each file the player downloads there. Returns nil if the player cancels.
-    func askForUserItems(_ recipe: Recipe) async -> UserSupplied? {
-        var supplied = UserSupplied()
+    /// `already` holds items known before asking (a rebuild reuses the old bottle's); only the
+    /// rest are asked for.
+    func askForUserItems(_ recipe: Recipe, already: UserSupplied = UserSupplied()) async -> UserSupplied? {
+        var supplied = already
         let pages = Dictionary(RecipeInstaller.pageDownloads(in: recipe).map { ($0.step.id, $0) }, uniquingKeysWith: { first, _ in first })
         for step in recipe.install ?? [] {
             switch step {
+            case .userFile(let file) where supplied.files[file.id] != nil: continue
+            case .userFolder(let folder) where supplied.folders[folder.id] != nil: continue
+            case .userDownload(let download) where supplied.files[download.id] != nil: continue
             case .userFile(let file):
                 guard let url = chooseFile(prompt: file.prompt) else { return nil }
                 supplied.files[file.id] = url
@@ -312,6 +319,12 @@ final class AppModel {
         updated.secondsPlayed += seconds
         try? engine.library.upsert(updated)
         reload()
+        // First session in a rebuilt bottle: ask whether it works (once).
+        if let rebuild = updated.rebuild, rebuild.askedAt == nil {
+            engine.markRebuildAsked(updated)
+            rebuildQuestion = updated
+            return
+        }
         // First session on a newer Wine: ask whether it worked (once), before any report.
         if let bottle = try? engine.bottles.bottle(id: game.bottleID),
            let point = engine.bottles.restorePoint(of: bottle), point.askedAt == nil, point.confirmedAt == nil {
@@ -329,6 +342,10 @@ final class AppModel {
             try engine.library.remove(id: game.id)
             engine.removeIcons(for: game)
             if let bottle = try? engine.bottles.bottle(id: game.bottleID) {
+                try engine.bottles.delete(bottle)
+            }
+            // A rebuild not yet decided still has the old bottle.
+            if let previous = game.rebuild?.previousBottleID, let bottle = try? engine.bottles.bottle(id: previous) {
                 try engine.bottles.delete(bottle)
             }
         }

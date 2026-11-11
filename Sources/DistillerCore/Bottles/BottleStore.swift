@@ -116,8 +116,15 @@ public final class BottleStore: @unchecked Sendable {
 
     /// Moves the bottle to the Trash, so a mistaken delete can be undone in Finder.
     public func delete(_ bottle: Bottle) throws {
-        try FileManager.default.trashItem(at: root(of: bottle), resultingItemURL: nil)
+        if deletesToTrash {
+            try FileManager.default.trashItem(at: root(of: bottle), resultingItemURL: nil)
+        } else {
+            try FileManager.default.removeItem(at: root(of: bottle))
+        }
     }
+
+    /// Off in tests, so test runs don't fill the player's Trash.
+    var deletesToTrash = true
 
     public func makeBottle(name: String, wine: InstalledComponent, runner: WineRunner) async throws -> Bottle {
         try paths.requireAvailable(.bottles)
