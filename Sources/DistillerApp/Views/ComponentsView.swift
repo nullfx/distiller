@@ -40,7 +40,24 @@ struct ComponentsView: View {
         }
         .navigationTitle("Components")
         .navigationSubtitle(updateStatus)
-        .toolbar {
+        .toolbar { toolbarContent }
+        .fileImporter(isPresented: $isImporting, allowedContentTypes: [.folder, .diskImage, .archive]) { result in
+            guard case .success(let url) = result else { return }
+            switch importKind {
+            case .gptk: model.importGPTK(from: url)
+            case .wine: pendingWineImport = PendingImport(url: url)
+            case nil: break
+            }
+        }
+        .sheet(item: $pendingWineImport) { pending in
+            ImportWineSheet(source: pending.url)
+        }
+    }
+
+    /// Check for Updates, the Setup Assistant, and Add Component (kept out of `body`, which is
+    /// otherwise slow to type-check).
+    @ToolbarContentBuilder private var toolbarContent: some ToolbarContent {
+        ToolbarItemGroup {
             Button {
                 model.checkForComponentUpdates()
             } label: {
@@ -80,17 +97,6 @@ struct ComponentsView: View {
                 Label("Add Component", systemImage: "square.and.arrow.down")
             }
             .help("Download DXMT or DXVK, or import D3DMetal or a Wine build")
-        }
-        .fileImporter(isPresented: $isImporting, allowedContentTypes: [.folder, .diskImage, .archive]) { result in
-            guard case .success(let url) = result else { return }
-            switch importKind {
-            case .gptk: model.importGPTK(from: url)
-            case .wine: pendingWineImport = PendingImport(url: url)
-            case nil: break
-            }
-        }
-        .sheet(item: $pendingWineImport) { pending in
-            ImportWineSheet(source: pending.url)
         }
     }
 
