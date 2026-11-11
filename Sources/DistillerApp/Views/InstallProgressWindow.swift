@@ -15,8 +15,11 @@ final class InstallSession {
         case cancelled
     }
 
+    enum Purpose { case install, rebuild }
+
     let title: String
     let tasks: [InstallTask]
+    var purpose = Purpose.install
     let cancellation = InstallCancellation()
     let startedAt = Date()
     /// The running step, from 1.
@@ -27,9 +30,10 @@ final class InstallSession {
     private(set) var state = State.running
     var isConfirmingCancel = false
 
-    init(title: String, tasks: [InstallTask]) {
+    init(title: String, tasks: [InstallTask], purpose: Purpose = .install) {
         self.title = title
         self.tasks = tasks
+        self.purpose = purpose
     }
 
     func update(_ progress: InstallProgress) {
@@ -71,7 +75,7 @@ final class InstallProgressWindow: NSObject, NSWindowDelegate {
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered, defer: false
         )
-        window.title = "Installing \(session.title)"
+        window.title = session.purpose == .rebuild ? "Rebuilding \(session.title)" : "Installing \(session.title)"
         window.isReleasedWhenClosed = false
         window.contentMinSize = NSSize(width: 420, height: 360)
         let hosting = NSHostingView(rootView: InstallProgressView(session: session) { [weak controller] in controller?.close() })
@@ -139,11 +143,12 @@ private struct InstallProgressView: View {
     }
 
     private var headline: String {
+        let rebuild = session.purpose == .rebuild
         switch session.state {
-        case .running: return "Installing \(session.title)"
-        case .installed: return "\(session.title) is installed"
-        case .failed: return "\(session.title) didn't install"
-        case .cancelled: return "The install was cancelled"
+        case .running: return rebuild ? "Rebuilding \(session.title)'s bottle" : "Installing \(session.title)"
+        case .installed: return rebuild ? "\(session.title)'s bottle is rebuilt" : "\(session.title) is installed"
+        case .failed: return rebuild ? "\(session.title)'s bottle wasn't rebuilt" : "\(session.title) didn't install"
+        case .cancelled: return rebuild ? "The rebuild was cancelled" : "The install was cancelled"
         }
     }
 
@@ -152,11 +157,13 @@ private struct InstallProgressView: View {
         case .running:
             return "Step \(session.step) of \(session.tasks.count) · \(Self.duration(now.timeIntervalSince(session.startedAt))) so far"
         case .installed:
-            return "It's in your library, ready to play."
+            return session.purpose == .rebuild
+                ? "Play it to check it works. Its old bottle is kept until you decide (you'll be asked after playing, or use the Bottle tab in its recipe workshop)."
+                : "It's in your library, ready to play."
         case .failed(let reason):
             return reason
         case .cancelled:
-            return "Its bottle was removed."
+            return session.purpose == .rebuild ? "The new bottle was removed; the game still uses its old one." : "Its bottle was removed."
         }
     }
 

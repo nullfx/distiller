@@ -161,6 +161,7 @@ struct RecipeWorkshopView: View {
                 Text("Runs a Windows installer in this bottle and adds it to the recipe, so other players run the same installer.")
             }
             RestorePointSection(game: game)
+            RebuildSection(game: game)
             GameVersionsSection(game: game)
             Section("Wine tools") {
                 ForEach(WineTool.allCases, id: \.self) { tool in
@@ -368,6 +369,46 @@ struct RestorePointSection: View {
             } message: {
                 Text("The bottle goes back to how it was on \(point.createdAt.formatted(date: .abbreviated, time: .shortened)). Changes since then inside the bottle (including saves a game keeps there) are lost.")
             }
+        }
+    }
+}
+
+/// Workshop ▸ Bottle ▸ Rebuild: a new bottle from the recipe with the current components, the
+/// last resort when a game won't move to newer ones; then keep it or switch back.
+struct RebuildSection: View {
+    @Environment(AppModel.self) private var model
+    let game: Game
+    @State private var isConfirming = false
+
+    var body: some View {
+        Section {
+            if let rebuild = game.rebuild {
+                LabeledContent("Rebuilt \(rebuild.rebuiltAt.formatted(date: .abbreviated, time: .shortened))") {
+                    HStack {
+                        Button("Switch Back") { model.switchBack(game) }
+                            .disabled(model.running[game.id] != nil)
+                        Button("Keep New Bottle") { model.keepRebuild(game) }
+                    }
+                }
+                Text("The old bottle is kept until you decide. Keep New Bottle moves it to the Trash; Switch Back returns to it and removes the new one.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Button("Rebuild with Current Components…") { isConfirming = true }
+                    .disabled(model.running[game.id] != nil || model.busyMessage != nil)
+            }
+        } header: {
+            Text("Rebuild")
+        } footer: {
+            if game.rebuild == nil {
+                Text("Installs the recipe into a new bottle with the active Wine build, graphics layer and winetricks, for when the game doesn't work after moving to newer ones. The old bottle is kept until you decide.")
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .confirmationDialog("Rebuild \(game.title)'s bottle?", isPresented: $isConfirming) {
+            Button("Rebuild") { model.rebuild(game) }
+        } message: {
+            Text("The recipe is installed again into a new bottle, with the same steps as a fresh install. Files and folders you chose before are reused from the old bottle where possible; anything else is asked for again. Anything the game keeps inside its bottle (saved games under C:\\users, its settings, a launcher's sign-in) isn't carried over: copy it from the old bottle's C: drive if you need it. The old bottle is kept until you decide.")
         }
     }
 }
