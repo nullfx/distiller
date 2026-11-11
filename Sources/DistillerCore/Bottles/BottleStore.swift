@@ -69,7 +69,7 @@ public struct Bottle: Codable, Identifiable, Equatable, Sendable, Hashable {
 /// Bottles live in `Bottles/<id>/` with `bottle.json`, `prefix/` and `cache/`.
 ///
 /// New bottles are APFS clones of a template prefix made once per Wine build, so per-game
-/// isolation costs almost no disk space and creating a bottle takes seconds.
+/// bottles cost almost no disk space and creating one takes seconds.
 public final class BottleStore: @unchecked Sendable {
     public let paths: DistillerPaths
     static let metadataName = "bottle.json"

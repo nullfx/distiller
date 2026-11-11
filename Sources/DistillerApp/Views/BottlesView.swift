@@ -11,7 +11,7 @@ struct BottlesView: View {
                 ContentUnavailableView(
                     "No bottles yet",
                     systemImage: "shippingbox",
-                    description: Text("Each game you add gets its own bottle, an isolated Windows environment.")
+                    description: Text("Each game you add gets its own bottle: a separate Windows setup with its own settings. It isn't a sandbox; Windows programs run with your permissions.")
                 )
             } else {
                 Table(model.bottles, selection: $selection) {
