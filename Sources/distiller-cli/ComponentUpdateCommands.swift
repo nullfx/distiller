@@ -130,3 +130,69 @@ func describe(_ update: ComponentUpdate) -> String {
     let held = update.heldVersion.map { "; you're keeping \($0) active" } ?? ""
     return "\(update.id)\t\(update.displayName) \(update.installedVersion) → \(update.availableVersion)\(size)\(held)"
 }
+
+// MARK: - app
+
+struct AppCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "app",
+        abstract: "Check for a newer Distiller, from the repository this copy was built from.",
+        subcommands: [Check.self, Download.self],
+        defaultSubcommand: Check.self
+    )
+
+    static func updater() throws -> AppUpdater {
+        guard let repository = AppUpdater.configuredRepository else {
+            throw DistillerError.setupFailed("This build doesn't say where its updates come from (run the distiller inside Distiller.app).")
+        }
+        return AppUpdater(repository: repository)
+    }
+
+    struct Check: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Say whether a newer Distiller is available.")
+
+        func run() async throws {
+            let updater = try AppCommand.updater()
+            let release = try await updater.latestRelease()
+            if AppUpdater.isNewer(release.version, than: DistillerVersion.current) {
+                print("Distiller \(release.version) is available (you have \(DistillerVersion.current)): \(release.page.absoluteString)")
+                print("Install it from Settings ▸ Updates in the app, or download it with: distiller app download")
+            } else {
+                print("Distiller \(DistillerVersion.current) is up to date (latest release on github.com/\(updater.repository): \(release.version)).")
+            }
+        }
+    }
+
+    struct Download: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Download the latest Distiller.dmg and check it, without installing it.",
+            discussion: "Checks the release's checksum, and that the app is signed by the same developer as this copy and notarized. Installing (which replaces the app) is done from the app's Settings ▸ Updates, or by opening the disk image."
+        )
+
+        @Option(help: "Where to save Distiller.dmg (default: ~/Downloads).")
+        var to: String?
+
+        func run() async throws {
+            let updater = try AppCommand.updater()
+            guard let current = DistillerVersion.appBundle else {
+                throw DistillerError.setupFailed("Run the distiller inside Distiller.app, so the download can be checked against it.")
+            }
+            let release = try await updater.latestRelease()
+            let folder = URL(fileURLWithPath: ((to ?? "~/Downloads") as NSString).expandingTildeInPath, isDirectory: true)
+                .appendingPathComponent("Distiller \(release.version)", isDirectory: true)
+            print("Downloading Distiller \(release.version)…")
+            let image = try await updater.download(release, into: folder)
+            print("Checking it…")
+            let mounted = try await AppBundleCheck.attach(image)
+            do {
+                try await AppBundleCheck.verify(mounted.app, replacing: current, version: release.version)
+            } catch {
+                await AppBundleCheck.detach(mounted.mountPoint)
+                print("Not using \(image.path).")
+                throw error
+            }
+            await AppBundleCheck.detach(mounted.mountPoint)
+            print("Checked: \(image.path)")
+        }
+    }
+}

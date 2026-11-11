@@ -84,6 +84,17 @@ struct ContentView: View {
         } message: {
             Text(model.errorMessage ?? "")
         }
+        .alert(
+            "Distiller \(model.appUpdateToAnnounce?.version ?? "") is available",
+            isPresented: Binding(get: { model.appUpdateToAnnounce != nil }, set: { if !$0 { model.appUpdateToAnnounce = nil } }),
+            presenting: model.appUpdateToAnnounce
+        ) { release in
+            Button("Install and Relaunch") { model.installAppUpdate(release) }
+            Button("Release Notes") { NSWorkspace.shared.open(release.page) }
+            Button("Later", role: .cancel) {}
+        } message: { release in
+            Text("You have \(DistillerVersion.current). You can also install it later from Settings ▸ Updates.")
+        }
         .fileImporter(isPresented: $model.isImportingRecipe, allowedContentTypes: [.yaml]) { result in
             if case .success(let url) = result { model.addGame(fromRecipeFile: url) }
         }

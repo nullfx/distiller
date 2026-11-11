@@ -30,6 +30,7 @@ Distiller makes security promises that its design depends on. A way to break any
 - **The AI assistant only reads.** The MCP server's tools must not change files, run programs, or read outside a game's own folders. The server must not be reachable from the network, and must serve nothing while the assistant is turned off.
 - **Your GitHub account is safe.** The sign-in token must stay in the keychain. Distiller must never ask for more than the `public_repo` scope or push anywhere but a new branch.
 - **Releases are authentic.** A way to get unsigned or tampered code into a release or the disk image counts.
+- **Updates come only from your copy's own developer.** Distiller must never replace itself with a download that doesn't match its release's published checksum, isn't notarized, or is signed by a different team than the running copy, and must never install an update without the player's say-so.
 - **The website is safe.** Catalogue data must never be able to run script on the website or in the app.
 
 ## What's out of scope

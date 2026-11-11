@@ -212,6 +212,44 @@ struct ComponentUpdateNotices: View {
     }
 }
 
+/// Settings ▸ Updates ▸ Distiller: this copy's version, and a newer release from the repository
+/// it was built from.
+struct AppUpdateSettingsSection: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Section {
+            LabeledContent("Version", value: DistillerVersion.current)
+            if let release = model.appUpdate {
+                LabeledContent("Distiller \(release.version) is available") {
+                    HStack {
+                        Link("Release Notes", destination: release.page)
+                        Button("Install and Relaunch") { model.installAppUpdate(release) }
+                            .disabled(model.isInstallingAppUpdate)
+                    }
+                }
+            }
+            if let status = model.appUpdateStatus {
+                HStack {
+                    if model.isInstallingAppUpdate { ProgressView().controlSize(.small) }
+                    Text(status).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        } header: {
+            Text("Distiller")
+        } footer: {
+            Group {
+                if let repository = model.appUpdateRepository {
+                    Text("Updates come from the releases of github.com/\(repository). Before installing one, Distiller checks the download against the release's checksums, and that it's signed by the same developer as this copy and notarized by Apple. The copy it replaces goes to the Trash.")
+                } else {
+                    Text("This build doesn't say where its updates come from (it wasn't built from a GitHub repository), so it can't check for them.")
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
 /// Settings ▸ Updates: how Distiller keeps Wine builds, graphics layers and winetricks up to date.
 struct ComponentUpdateSettingsSection: View {
     @Environment(AppModel.self) private var model
@@ -235,7 +273,7 @@ struct ComponentUpdateSettingsSection: View {
         } header: {
             Text("Wine builds, graphics layers and winetricks")
         } footer: {
-            Text("Distiller checks when it starts and once a day. An update installs next to the version it replaces and becomes the active one: new games use it, and games move to it the next time they start. Versions no game needs are then removed. D3DMetal and Wine builds you imported aren't checked, since they come from your own downloads.")
+            Text("Distiller checks for these and for itself when it starts and once a day (a new Distiller always waits for you to install it, since that restarts the app). An update installs next to the version it replaces and becomes the active one: new games use it, and games move to it the next time they start. Versions no game needs are then removed. D3DMetal and Wine builds you imported aren't checked, since they come from your own downloads.")
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

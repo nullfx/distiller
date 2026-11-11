@@ -116,6 +116,12 @@ From a terminal: `gh workflow run release.yml --ref main`.
 
 Tags are created only by the workflow. Don't push `v*` tags by hand: a stray tag would shift the next revision.
 
+## How players get updates (and forks)
+
+Each build records the GitHub repository it updates from as `DistillerUpdateRepository` in its Info.plist: in Actions, the repository running the workflow (`GITHUB_REPOSITORY`); locally, the checkout's `origin`; `DISTILLER_UPDATE_REPOSITORY` overrides it (empty turns update checks off). The app reads that repository's latest release, downloads `Distiller.dmg`, checks it against `SHA256SUMS.txt`, and installs it only if the app inside is signed by **the same team** as the running copy and notarized. So keep both assets in every release (the workflow does), and keep the `Distiller.dmg` name.
+
+A fork that runs this workflow with its own Developer ID gets the same: its builds update from the fork's releases, signed by the fork's team. Copies from different teams never replace each other.
+
 ## Building a signed copy locally
 
 `Scripts/bundle-app.sh` reads the same settings as the workflow:

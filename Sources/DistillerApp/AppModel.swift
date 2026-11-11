@@ -60,6 +60,12 @@ final class AppModel {
     var activeComponentIDs: Set<String> = []
     var unusedComponents: [InstalledComponent] = []
     var componentUpdateMessage: String?
+    /// Distiller's own update (Settings ▸ Updates). See AppModel+AppUpdate.swift.
+    var appUpdate: AppRelease?
+    var appUpdateStatus: String?
+    var isInstallingAppUpdate = false
+    /// Set when an automatic check finds a version not announced before; shows an alert.
+    var appUpdateToAnnounce: AppRelease?
     /// `settings.json`'s update mode and last check, kept here so views update when they change.
     var componentUpdateMode: ComponentUpdateMode = .ask
     var lastComponentCheck: Date?

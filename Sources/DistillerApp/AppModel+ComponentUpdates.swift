@@ -42,6 +42,7 @@ extension AppModel {
         guard let setup, !isCheckingForUpdates else { return }
         isCheckingForUpdates = true
         hasCheckedComponentsThisSession = true
+        checkForAppUpdate(automatic: automatic)
         if !automatic { componentUpdateMessage = nil }
         Task {
             let check = await setup.checkForUpdates()

@@ -8,13 +8,25 @@ public enum DistillerVersion {
     public static let development = "development"
 
     public static var current: String {
-        if let version = version(fromInfo: Bundle.main.infoDictionary) { return version }
-        if let executable = Bundle.main.executableURL?.resolvingSymlinksInPath() {
-            // Distiller.app/Contents/Helpers/distiller → Distiller.app/Contents/Info.plist
-            let plist = executable.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Info.plist")
-            if let version = version(fromInfo: NSDictionary(contentsOf: plist) as? [String: Any]) { return version }
-        }
-        return development
+        version(fromInfo: appInfo()) ?? development
+    }
+
+    /// The Distiller.app this code runs from: the app itself, or the app around the `distiller`
+    /// command in Contents/Helpers. Nil outside a bundle (`swift run`).
+    public static var appBundle: URL? {
+        if version(fromInfo: Bundle.main.infoDictionary) != nil { return Bundle.main.bundleURL }
+        guard let executable = Bundle.main.executableURL?.resolvingSymlinksInPath() else { return nil }
+        // Distiller.app/Contents/Helpers/distiller → Distiller.app
+        let app = executable.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let info = NSDictionary(contentsOf: app.appendingPathComponent("Contents/Info.plist")) as? [String: Any]
+        return version(fromInfo: info) != nil ? app : nil
+    }
+
+    /// That app's Info.plist.
+    static func appInfo() -> [String: Any]? {
+        if version(fromInfo: Bundle.main.infoDictionary) != nil { return Bundle.main.infoDictionary }
+        guard let app = appBundle else { return nil }
+        return NSDictionary(contentsOf: app.appendingPathComponent("Contents/Info.plist")) as? [String: Any]
     }
 
     /// The full version (with any pre-release suffix) from an Info.plist dictionary, if it's

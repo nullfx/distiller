@@ -13,6 +13,9 @@
 #                       kept in DistillerVersion and dropped from CFBundleShortVersionString
 #   DISTILLER_BUILD     CFBundleVersion (default 1)
 #   DISTILLER_OUT       the folder for Distiller.app (default dist)
+#   DISTILLER_UPDATE_REPOSITORY  owner/name whose GitHub releases this build updates from
+#                       (default: GITHUB_REPOSITORY in Actions, else the origin remote;
+#                       set it empty to build without update checks)
 #   DISTILLER_HARDENED=1  sign with the hardened runtime and a secure timestamp, as
 #                         notarization requires (needs a Developer ID identity and network).
 set -euo pipefail
@@ -25,6 +28,20 @@ if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
   exit 1
 fi
 SHORT_VERSION="${VERSION%%-*}"
+# Where this build looks for its own updates (GitHub releases of owner/name): the repository
+# whose workflow builds it (GITHUB_REPOSITORY), else this checkout's origin, so a fork's builds
+# update from the fork. DISTILLER_UPDATE_REPOSITORY overrides; empty leaves updates off.
+UPDATE_REPOSITORY="${DISTILLER_UPDATE_REPOSITORY-${GITHUB_REPOSITORY:-}}"
+if [ -z "${DISTILLER_UPDATE_REPOSITORY+set}" ] && [ -z "$UPDATE_REPOSITORY" ]; then
+  origin="$(git remote get-url origin 2>/dev/null || true)"
+  UPDATE_REPOSITORY="$(printf '%s' "$origin" | sed -nE 's#^(https://github\.com/|git@github\.com:)([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)$#\2#p' | sed -E 's/\.git$//')"
+fi
+if [ -n "$UPDATE_REPOSITORY" ] && [[ ! "$UPDATE_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+  echo "'$UPDATE_REPOSITORY' isn't a GitHub repository like owner/name." >&2
+  exit 1
+fi
+UPDATE_KEY=""
+[ -n "$UPDATE_REPOSITORY" ] && UPDATE_KEY="<key>DistillerUpdateRepository</key><string>$UPDATE_REPOSITORY</string>"
 BUILD="${DISTILLER_BUILD:-1}"
 swift build -c "$CONFIG" --product DistillerApp
 swift build -c "$CONFIG" --product distiller
@@ -54,6 +71,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$SHORT_VERSION</string>
   <key>DistillerVersion</key><string>$VERSION</string>
+  $UPDATE_KEY
   <key>CFBundleVersion</key><string>$BUILD</string>
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.games</string>

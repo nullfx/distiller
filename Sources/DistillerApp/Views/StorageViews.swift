@@ -72,7 +72,10 @@ struct SettingsView: View {
                 LogsSettingsSection()
             }
                 .tabItem { Label("Storage", systemImage: "externaldrive") }
-            SettingsPane { ComponentUpdateSettingsSection() }
+            SettingsPane {
+                AppUpdateSettingsSection()
+                ComponentUpdateSettingsSection()
+            }
                 .tabItem { Label("Updates", systemImage: "arrow.triangle.2.circlepath") }
             SettingsPane { GitHubSettingsSection() }
                 .tabItem { Label { Text("GitHub") } icon: { Image(nsImage: .gitHubMarkTemplate) } }
