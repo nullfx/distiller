@@ -302,7 +302,9 @@ struct RecipeRunInstaller: AsyncParsableCommand {
     func run() async throws {
         let engine = try makeEngine()
         let url = URL(fileURLWithPath: (installer as NSString).expandingTildeInPath)
-        try await engine.runInstaller(url, for: try findGame(game, in: engine), record: !noRecord) { progress in
+        let entry = try findGame(game, in: engine)
+        try await engine.prepareWineMove(for: entry, progress: { print($0) })
+        try await engine.runInstaller(url, for: entry, record: !noRecord) { progress in
             print("[\(progress.step)/\(progress.total)] \(progress.message)")
         }
         print(noRecord ? "Done." : "Done, and added to the recipe.")

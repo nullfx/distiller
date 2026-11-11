@@ -267,6 +267,12 @@ struct ComponentUpdateSettingsSection: View {
                 }
             }
             .pickerStyle(.radioGroup)
+            Picker("Keep restore points", selection: Binding(get: { model.restorePointDays }, set: { model.setRestorePointDays($0) })) {
+                ForEach(RestorePointRetention.choices, id: \.self) { days in
+                    Text(RestorePointRetention.describe(days)).tag(days)
+                }
+            }
+            .help("Before a game moves to a newer Wine, Distiller saves a copy of its bottle so the move can be undone.")
             LabeledContent("Last checked") {
                 HStack {
                     Text(model.lastComponentCheck.map { $0.formatted(.relative(presentation: .named)) } ?? "Not yet")
@@ -278,7 +284,7 @@ struct ComponentUpdateSettingsSection: View {
         } header: {
             Text("Wine builds, graphics layers and winetricks")
         } footer: {
-            Text("Distiller checks for these and for itself when it starts and once a day (a new Distiller always waits for you to install it, since that restarts the app). An update installs next to the version it replaces and becomes the active one: new games use it, and games move to it the next time they start. Versions no game needs are then removed. D3DMetal and Wine builds you imported aren't checked, since they come from your own downloads.")
+            Text("Distiller checks for these and for itself when it starts and once a day (a new Distiller always waits for you to install it, since that restarts the app). An update installs next to the version it replaces and becomes the active one: new games use it, and games move to it the next time they start. Before a game moves to a newer Wine, Distiller saves a copy of its bottle (a restore point) and asks after its first session whether it works; It Works removes the copy, Roll Back puts it back. A copy takes almost no space at first and grows only as the game's bottle changes. Versions no game needs are then removed. D3DMetal and Wine builds you imported aren't checked, since they come from your own downloads.")
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

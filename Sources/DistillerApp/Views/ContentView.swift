@@ -109,6 +109,17 @@ struct ContentView: View {
         } message: { summary in
             Text(summary.message)
         }
+        .alert(
+            "Did \(model.restorePointQuestion?.game.title ?? "the game") work on \(model.restorePointQuestion.map { RestorePoint.describe($0.point.toWine) } ?? "the new Wine")?",
+            isPresented: Binding(get: { model.restorePointQuestion != nil }, set: { if !$0 { model.restorePointQuestion = nil } }),
+            presenting: model.restorePointQuestion
+        ) { question in
+            Button("It Works") { model.confirmWineMove(question.game) }
+            Button("Roll Back") { model.rollBack(question.game) }
+            Button("Not Sure Yet", role: .cancel) {}
+        } message: { question in
+            Text("Distiller saved a copy of its bottle before moving it from \(RestorePoint.describe(question.point.fromWine)). Roll Back puts that copy back and keeps the game on \(RestorePoint.describe(question.point.fromWine)). You can also decide later in the recipe workshop's Bottle tab.")
+        }
         .fileImporter(isPresented: $model.isImportingRecipe, allowedContentTypes: [.yaml]) { result in
             if case .success(let url) = result { model.addGame(fromRecipeFile: url) }
         }
