@@ -108,4 +108,67 @@ final class AuthenticodeTests: XCTestCase {
         }
         XCTAssertGreaterThan(checked, 1200, "Most of the signature is protected")
     }
+
+    // MARK: Timestamps
+
+    /// Far enough ahead that every test certificate (valid 100 years) has expired.
+    let afterExpiry = Date(timeIntervalSinceNow: 200 * 365 * 86_400)
+
+    func testATimestampKeepsAnExpiredCertificateValid() throws {
+        for name in ["authenticode-timestamped", "authenticode-timestamped-rfc3161"] {
+            let program = try Data(contentsOf: fixtureURL(name, "exe"))
+            let now = try verify(program)
+            let stamped = try XCTUnwrap(now.signedAt, name)
+            XCTAssertLessThan(stamped, Date(), name)
+            XCTAssertGreaterThan(stamped, Date(timeIntervalSince1970: 1_700_000_000), name)
+            // Long after the certificate expired, the timestamp still vouches for it.
+            XCTAssertEqual(try verify(program, date: afterExpiry).signedAt, stamped, name)
+            XCTAssertEqual(try verify(program, signer: "Distiller Test Publisher", date: afterExpiry).signer, "Distiller Test Publisher")
+        }
+    }
+
+    func testWithoutATimestampAnExpiredCertificateFails() {
+        assertFails(signed, with: .untrusted(""), date: afterExpiry)
+        XCTAssertNil(try verify(signed).signedAt)
+    }
+
+    func testABadTimestampIsIgnoredNotTrusted() throws {
+        // A countersignature vouching for other bytes, and one from a certificate that isn't a
+        // timestamp authority's: the program still verifies now (the timestamp is ignored), but
+        // nothing rescues the certificate once it has expired.
+        for name in ["authenticode-timestamp-forged", "authenticode-timestamp-not-tsa"] {
+            let program = try Data(contentsOf: fixtureURL(name, "exe"))
+            XCTAssertNil(try verify(program).signedAt, name)
+            assertFails(program, with: .untrusted(""), date: afterExpiry)
+        }
+    }
+
+    func testAChangedTimestampIsIgnored() throws {
+        var program = try Data(contentsOf: fixtureURL("authenticode-timestamped", "exe"))
+        // The countersignature is the last thing in the signature, before the padding: flip a
+        // byte of its signature value.
+        let directory = 0x98 + 112 + 4 * 8
+        let table = Int(program.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: directory, as: UInt32.self) })
+        let der = DERReader(program.subdata(in: (table + 8)..<program.count))
+        let end = (table + 8) + (der.element(at: 0)?.encoded.upperBound ?? 0)
+        program[end - 20] ^= 0xFF
+        XCTAssertNil(try verify(program).signedAt, "The program still verifies now, without the timestamp")
+        assertFails(program, with: .untrusted(""), date: afterExpiry)
+    }
+
+    func testReadsBothTimeFormats() throws {
+        func time(_ tag: UInt8, _ text: String) -> Date? {
+            let bytes = Data([tag, UInt8(text.utf8.count)] + Array(text.utf8))
+            let reader = DERReader(bytes)
+            return reader.element(at: 0).flatMap { AuthenticodeTimestamp.time(reader, $0) }
+        }
+        let may2024 = Date(timeIntervalSince1970: 1_716_242_372)   // 2024-05-20 21:59:32 UTC
+        XCTAssertEqual(time(DERElement.utcTime, "240520215932Z"), may2024)
+        XCTAssertEqual(time(DERElement.generalizedTime, "20240520215932Z"), may2024)
+        XCTAssertEqual(time(DERElement.generalizedTime, "20240520215932.123Z"), may2024)
+        XCTAssertEqual(time(DERElement.utcTime, "990101000000Z"), Date(timeIntervalSince1970: 915_148_800), "Years 50-99 are 19xx")
+        XCTAssertNil(time(DERElement.utcTime, "240520215932"), "UTC only")
+        XCTAssertNil(time(DERElement.utcTime, "241320215932Z"), "No 13th month")
+        XCTAssertNil(time(DERElement.octetString, "240520215932Z"))
+    }
 }
