@@ -28,7 +28,7 @@ public enum CommunityCheck {
             }
             name = RecipeDraft.windowsSafeName(url.lastPathComponent.isEmpty ? "setup.exe" : url.lastPathComponent)
             fetch = { target in
-                .download(signer.map { .init(url: link, signer: $0, to: target) } ?? .init(url: link, sha256: sha256, to: target))
+                .download(.init(url: link, sha256: sha256, signer: signer, to: target))
             }
         } else if let page = installer.page {
             guard let url = URL(string: page), url.scheme?.lowercased() == "https" else {
@@ -39,7 +39,7 @@ public enum CommunityCheck {
             let prompt = "Download \(title.map { "\($0)'s" } ?? "the game's") installer from its publisher's download page."
             fetch = { target in
                 .userDownload(.init(id: installerDownloadID, prompt: prompt, page: page,
-                                    sha256: signer == nil ? sha256 : nil, signer: signer, to: target))
+                                    sha256: sha256, signer: signer, to: target))
             }
         } else {
             throw DistillerError.invalidRecipe("game.installer needs its download link (url) or its download page (page).")

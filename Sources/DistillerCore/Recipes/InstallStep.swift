@@ -68,7 +68,7 @@ public enum InstallStep: Codable, Equatable, Sendable {
 
     /// Asks the player for a file they own, such as the game's installer.
     /// A file the player downloads from `page` in Distiller's browser (or downloads
-    /// themselves, from the command line), verified by `sha256` or `signer` (exactly one)
+    /// themselves, from the command line), verified by `sha256`, `signer`, or both (either passing is enough)
     /// before it's copied to `to`.
     public struct UserDownload: Codable, Equatable, Sendable {
         public var id: String

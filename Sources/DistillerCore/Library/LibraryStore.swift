@@ -21,6 +21,9 @@ public struct Game: Codable, Identifiable, Equatable, Sendable, Hashable {
     public var communityCheck: CommunityCheckResult?
     /// The player keeps this recipe for themselves, so the library doesn't suggest sharing it.
     public var justForMe: Bool?
+    /// The publisher's installer has changed since the recipe was checked (it passed by its
+    /// signature, not its checksum): run the community check again to record the new checksum.
+    public var installerChanged: Bool?
     /// Set after the game's bottle was rebuilt, until the player keeps the new bottle or
     /// switches back to the old one (`DistillerEngine.rebuild`).
     public var rebuild: Rebuild?
@@ -46,6 +49,7 @@ public struct Game: Codable, Identifiable, Equatable, Sendable, Hashable {
 
     enum CodingKeys: String, CodingKey {
         case id, title, recipe, overrides, authored, submission, rebuild
+        case installerChanged = "installer_changed"
         case communityCheck = "community_check"
         case justForMe = "just_for_me"
         case bottleID = "bottle_id"

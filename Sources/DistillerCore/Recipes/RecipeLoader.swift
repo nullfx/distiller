@@ -21,21 +21,23 @@ public enum RecipeLoader {
         try YAMLEncoder().encode(recipe)
     }
 
-    /// A download is checked by its SHA-256 or by its publisher's signature: exactly one.
+    /// A download is checked by its SHA-256, by its publisher's signature, or by both (schema 3:
+    /// either passing is enough, `InstallerCheck`).
     static func checkVerification(sha256: String?, signer: String?, of source: String) throws {
-        switch (sha256, signer) {
-        case (let sha256?, nil):
+        guard sha256 != nil || signer != nil else {
+            throw DistillerError.invalidRecipe("The download \(source) needs a sha256, a signer (its publisher), or both.")
+        }
+        if let sha256 {
             guard sha256.range(of: "^[0-9a-fA-F]{64}$", options: .regularExpression) != nil else {
                 throw DistillerError.invalidRecipe("The download \(source) needs a 64-character sha256.")
             }
-        case (nil, let signer?):
+        }
+        if let signer {
             let trimmed = signer.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty, trimmed == signer, signer.count <= 200,
                   !signer.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else {
                 throw DistillerError.invalidRecipe("The download \(source) names its signer oddly: \"\(signer)\".")
             }
-        default:
-            throw DistillerError.invalidRecipe("The download \(source) needs either a sha256 or a signer (its publisher), not both.")
         }
     }
 

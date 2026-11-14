@@ -56,6 +56,7 @@ public final class RecipeInstaller: @unchecked Sendable {
         self.components = components
     }
 
+    @discardableResult
     public func install(
         _ resolved: ResolvedRecipe,
         in bottle: Bottle,
@@ -64,14 +65,14 @@ public final class RecipeInstaller: @unchecked Sendable {
         supplied: UserSupplied,
         cancellation: InstallCancellation? = nil,
         progress: @escaping @Sendable (InstallProgress) -> Void
-    ) async throws {
+    ) async throws -> InstallNotes {
         // Step 1, creating the bottle, is the engine's (`InstallPlan.tasks`).
         let total = InstallPlan.tasks(for: resolved).count
         let configured = Self.configureStepCount(for: resolved)
         try await configurePrefix(resolved, in: bottle, wine: wine, graphics: graphics, cancellation: cancellation) { step, message in
             progress(InstallProgress(step: 1 + step, total: total, message: message))
         }
-        try await runSteps(resolved.install, in: bottle, resolved: resolved, wine: wine, graphics: graphics, supplied: supplied, cancellation: cancellation) { index, message in
+        return try await runSteps(resolved.install, in: bottle, resolved: resolved, wine: wine, graphics: graphics, supplied: supplied, cancellation: cancellation) { index, message in
             progress(InstallProgress(step: 1 + configured + index, total: total, message: message))
         }
     }
@@ -150,6 +151,7 @@ public final class RecipeInstaller: @unchecked Sendable {
     }
 
     /// Runs install steps in order. `progress` gets the 1-based index of each step.
+    @discardableResult
     public func runSteps(
         _ steps: [InstallStep],
         in bottle: Bottle,
@@ -159,11 +161,12 @@ public final class RecipeInstaller: @unchecked Sendable {
         supplied: UserSupplied,
         cancellation: InstallCancellation? = nil,
         progress: @escaping @Sendable (Int, String) -> Void = { _, _ in }
-    ) async throws {
+    ) async throws -> InstallNotes {
         let root = bottles.root(of: bottle)
         let prefix = bottles.prefix(of: bottle)
         let env = WineEnvironment.build(prefix: prefix, wine: wine, graphics: graphics, resolved: resolved)
         let gameProgram = resolved?.launch.flatMap { try? BottlePath.resolve($0.exe, in: root) }
+        var notes = InstallNotes()
         for (index, step) in steps.enumerated() {
             try cancellation?.check()
             progress(index + 1, InstallPlan.step(step).title)
@@ -185,14 +188,18 @@ public final class RecipeInstaller: @unchecked Sendable {
             }
             if case .winetricks(let verbs) = step {
                 try await runner.runWinetricks(verbs, winetricks: try winetricks(for: bottle), wine: wine, environment: env)
-            } else {
-                try await perform(step, root: root, prefix: prefix, wine: wine, environment: env, supplied: supplied)
+            } else if let passed = try await perform(step, root: root, prefix: prefix, wine: wine, environment: env, supplied: supplied),
+                      passed.installerChanged {
+                let name = InstallPlan.fileName(step.downloadTarget ?? "")
+                notes.changedInstallers.append(name)
+                progress(index + 1, "\(name) is signed by its publisher but has changed since this recipe was checked")
             }
             if case .winetricks = step, let resolved {
                 // As in configurePrefix: components can leave a different Windows version.
                 try await runner.setWindowsVersion(resolved.windowsVersion, wine: wine, environment: env)
             }
         }
+        return notes
     }
 
     /// Where to run `program` from: itself when it's on the bottle's Windows drive, otherwise a
@@ -228,6 +235,8 @@ public final class RecipeInstaller: @unchecked Sendable {
         }
     }
 
+    /// Runs one step; for downloads, returns which check the file passed.
+    @discardableResult
     func perform(
         _ step: InstallStep,
         root: URL,
@@ -235,19 +244,13 @@ public final class RecipeInstaller: @unchecked Sendable {
         wine: InstalledComponent,
         environment: [String: String],
         supplied: UserSupplied
-    ) async throws {
+    ) async throws -> InstallerCheck.Passed? {
         let fileManager = FileManager.default
         switch step {
         case .download(let download):
             guard let url = URL(string: download.url) else { throw DistillerError.insecureURL(download.url) }
             let destination = try BottlePath.resolve(download.to, in: root)
-            if let signer = download.signer {
-                try await Downloader.download(url, signer: signer, to: destination)
-            } else if let sha256 = download.sha256 {
-                try await Downloader.download(url, sha256: sha256, to: destination)
-            } else {
-                throw DistillerError.invalidRecipe("The download \(download.url) has neither a sha256 nor a signer.")
-            }
+            return try await Downloader.download(url, sha256: download.sha256, signer: download.signer, to: destination)
 
         case .extract(let extract):
             let archive = try BottlePath.resolve(extract.archive, in: root)
@@ -292,10 +295,11 @@ public final class RecipeInstaller: @unchecked Sendable {
 
         case .userDownload(let download):
             guard let source = supplied.files[download.id] else { throw DistillerError.missingUserFile(download.prompt) }
-            try Self.verify(source, sha256: download.sha256, signer: download.signer)
+            let passed = try Self.verify(source, sha256: download.sha256, signer: download.signer)
             let destination = try BottlePath.resolve(download.to, in: root)
             try fileManager.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
             try APFSClone.replaceItem(at: destination, withCloneOf: source)
+            return passed
 
         case .userFolder(let folder):
             guard let source = supplied.folders[folder.id] else { throw DistillerError.missingUserFile(folder.prompt) }
@@ -313,6 +317,7 @@ public final class RecipeInstaller: @unchecked Sendable {
                 try APFSClone.replaceItem(at: destination, withCloneOf: source.url)
             }
         }
+        return nil
     }
 
     /// The files a recipe's steps ask the player to download from a publisher's page.
@@ -330,17 +335,30 @@ public final class RecipeInstaller: @unchecked Sendable {
     }
 
     /// Checks a file the player downloaded the way a recipe download is checked.
-    static func verify(_ file: URL, sha256: String?, signer: String?, anchors: [SecCertificate]? = nil) throws {
-        if let sha256 {
-            try Checksum.verify(file, expected: sha256)
-        } else if let signer {
-            do {
-                _ = try Authenticode.verify(file, expectedSigner: signer, anchors: anchors)
-            } catch {
-                throw DistillerError.invalidRecipe("\(file.lastPathComponent) can't be trusted: \(error.localizedDescription)")
-            }
-        } else {
-            throw DistillerError.invalidRecipe("\(file.lastPathComponent) has nothing to be checked against.")
+    @discardableResult
+    static func verify(_ file: URL, sha256: String?, signer: String?, anchors: [SecCertificate]? = nil) throws -> InstallerCheck.Passed {
+        try InstallerCheck.verify(file, sha256: sha256, signer: signer, anchors: anchors)
+    }
+}
+
+/// What an install noticed that the player or the recipe's author should know.
+public struct InstallNotes: Equatable, Sendable {
+    /// Installers that passed only by their publisher's signature: the publisher has shipped a
+    /// different file since the recipe was checked, so its checksum needs refreshing.
+    public var changedInstallers: [String] = []
+
+    public init(changedInstallers: [String] = []) {
+        self.changedInstallers = changedInstallers
+    }
+}
+
+extension InstallStep {
+    /// Where a download (or a page download) puts its file.
+    var downloadTarget: String? {
+        switch self {
+        case .download(let download): return download.to
+        case .userDownload(let download): return download.to
+        default: return nil
         }
     }
 }
