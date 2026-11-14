@@ -82,4 +82,25 @@ final class InstallerFinishTests: XCTestCase {
         let installer = prefix.appendingPathComponent("drive_c/Installers/Game.exe")
         XCTAssertEqual(try RecipeInstaller.onDriveC(installer, prefix: prefix, environment: [:]), installer)
     }
+
+    // MARK: Installers that finish silently
+
+    func programs(_ paths: [String]) -> [RunningWindowsProgram] {
+        paths.enumerated().map { RunningWindowsProgram(pid: $0 + 32, windowsPath: $1) }
+    }
+
+    func testASilentInstallIsDoneWhenOnlyWineIsLeft() {
+        let game = driveC.appendingPathComponent("Program Files (x86)/Steam/steam.exe")
+        let wineOnly = programs([
+            #"C:\windows\system32\services.exe"#, #"C:\windows\system32\winedevice.exe"#, #"C:\windows\system32\explorer.exe"#,
+            #"C:\windows\system32\rpcss.exe"#, #"C:\windows\system32\wbem\wmic.exe"#,
+        ])
+        XCTAssertTrue(RecipeInstaller.installFinished(wineOnly, driveC: driveC, gameProgram: game))
+        // The installer (or anything else) still running: not done yet.
+        for other in [#"C:\users\player\Downloads\SteamSetup.exe"#, #"C:\windows\system32\msiexec.exe"#, #"C:\windows\explorer.exe.bak\x.exe"#] {
+            XCTAssertFalse(RecipeInstaller.installFinished(wineOnly + programs([other]), driveC: driveC, gameProgram: game), other)
+        }
+        // A program named like Wine's but elsewhere isn't Wine's.
+        XCTAssertFalse(RecipeInstaller.installFinished(programs([#"C:\Games\explorer.exe"#]), driveC: driveC, gameProgram: game))
+    }
 }
