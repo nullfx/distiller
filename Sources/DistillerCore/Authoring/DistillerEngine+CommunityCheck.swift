@@ -238,15 +238,16 @@ extension DistillerEngine {
         } else {
             throw DistillerError.invalidRecipe("game.installer needs its download link (url) or its download page (page).")
         }
-        // An installer that changes with every update is verified by its publisher's signature,
-        // which goes in the shared recipe instead of this copy's checksum.
+        // The shared recipe gets this copy's checksum and, when the installer carries a valid
+        // publisher signature, the signer too: either then lets players' copies through
+        // (`InstallerCheck`), so a publisher shipping a new installer doesn't break the recipe.
         var signer: String?
-        if publicInstaller.updates == true {
-            progress("Checking \(installerName)'s publisher signature")
-            do {
-                signer = try Authenticode.verify(destination).signer
-            } catch {
-                throw DistillerError.invalidRecipe("the installer is marked as changing with updates, so it's checked by its publisher's signature, but \(installerName) can't be: \(error.localizedDescription)")
+        progress("Checking \(installerName)'s publisher signature")
+        do {
+            signer = try Authenticode.verify(destination).signer
+        } catch {
+            if publicInstaller.updates == true {
+                throw DistillerError.invalidRecipe("the installer is marked as changing with updates, so it must be signed by its publisher, but \(installerName) can't be checked: \(error.localizedDescription)")
             }
         }
 
@@ -330,6 +331,7 @@ extension DistillerEngine {
         )
         var updated = (try? library.game(id: game.id)) ?? game
         updated.communityCheck = check
+        updated.installerChanged = nil
         try library.upsert(updated)
         succeeded = true
         if keepBottle { try? "kept".write(to: root.appendingPathComponent(Self.communityCheckOwnerFile), atomically: true, encoding: .utf8) }

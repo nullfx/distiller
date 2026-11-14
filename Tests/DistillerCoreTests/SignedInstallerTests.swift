@@ -23,14 +23,15 @@ final class SignedInstallerTests: XCTestCase {
         XCTAssertNoThrow(try RecipeLoader.validate(signed))
     }
 
-    func testADownloadNeedsExactlyOneWayToBeChecked() throws {
+    func testADownloadNeedsAWayToBeChecked() throws {
         var recipe = try recipe(updates: false)
-        recipe.schema = 2
+        recipe.schema = 3
         let target = "cache/Setup.exe"
         for (step, valid) in [
             (InstallStep.Download(url: installerURL, sha256: String(repeating: "a", count: 64), to: target), true),
             (InstallStep.Download(url: installerURL, signer: "Example Publisher, Inc.", to: target), true),
-            (InstallStep.Download(url: installerURL, sha256: String(repeating: "a", count: 64), signer: "Example Publisher, Inc.", to: target), false),
+            (InstallStep.Download(url: installerURL, sha256: String(repeating: "a", count: 64), signer: "Example Publisher, Inc.", to: target), true),
+            (InstallStep.Download(url: installerURL, sha256: "short", signer: "Example Publisher, Inc.", to: target), false),
             (InstallStep.Download(url: installerURL, to: target), false),
             (InstallStep.Download(url: installerURL, signer: " Example", to: target), false),
             (InstallStep.Download(url: installerURL, signer: "Example\nPublisher", to: target), false),
@@ -40,13 +41,13 @@ final class SignedInstallerTests: XCTestCase {
         }
     }
 
-    func testSharedRecipesUseTheSignerAndSchemaTwo() throws {
+    func testSharedRecipesCarryTheChecksumAndTheSigner() throws {
         let sha = String(repeating: "b", count: 64)
         let shared = try CommunityCheck.shareableRecipe(from: recipe(updates: true), installerSHA256: sha, installerSigner: "Example Publisher, Inc.", launchExe: "C:\\Program Files\\Example\\Launcher.exe")
         guard case .download(let download)? = shared.install?.dropLast().last else { return XCTFail("\(String(describing: shared.install))") }
         XCTAssertEqual(download.signer, "Example Publisher, Inc.")
-        XCTAssertNil(download.sha256, "No checksum: the file changes with updates")
-        XCTAssertEqual(shared.schema, 2)
+        XCTAssertEqual(download.sha256, sha, "Both: the checksum while the file is unchanged, the signer after")
+        XCTAssertEqual(shared.schema, 3)
         XCTAssertNoThrow(try RecipeLoader.validate(shared))
         let yaml = try RecipeLoader.encode(shared)
         XCTAssertTrue(yaml.contains("signer: Example Publisher, Inc.") && yaml.contains("updates: true"), yaml)
@@ -85,5 +86,40 @@ final class SignedInstallerTests: XCTestCase {
             _ = try await download(signer: "Distiller Test Publisher", anchors: nil)
             XCTFail("An untrusted certificate must be refused")
         } catch {}
+    }
+
+    func testSchemaThreeWhenADownloadHasBothChecks() throws {
+        var recipe = try recipe(updates: false)
+        recipe.install = [.download(.init(url: installerURL, sha256: String(repeating: "a", count: 64), signer: "Example Publisher, Inc.", to: "cache/Setup.exe"))]
+        XCTAssertEqual(recipe.requiredSchema, 3)
+        recipe.schema = 2
+        XCTAssertThrowsError(try RecipeLoader.validate(recipe), "Distiller 1.1 would refuse both, so it's schema 3")
+        recipe.install = [.userDownload(.init(id: "installer", prompt: "Download it", page: "https://example.com/download",
+                                              sha256: String(repeating: "a", count: 64), signer: "Example Publisher, Inc.", to: "cache/Setup.exe"))]
+        XCTAssertEqual(recipe.requiredSchema, 3)
+    }
+
+    // MARK: Either check passes
+
+    func testEitherCheckIsEnough() throws {
+        let program = try fixtureURL("authenticode-signed", "exe")
+        let root = try XCTUnwrap(SecCertificateCreateWithData(nil, try Data(contentsOf: fixtureURL("authenticode-root", "cer")) as CFData))
+        let right = try Checksum.sha256(of: program)
+        let wrong = String(repeating: "0", count: 64)
+        func check(_ sha256: String?, _ signer: String?) throws -> InstallerCheck.Passed {
+            try InstallerCheck.verify(program, sha256: sha256, signer: signer, anchors: [root])
+        }
+        XCTAssertEqual(try check(right, nil), .checksum)
+        XCTAssertEqual(try check(right, "Distiller Test Publisher"), .checksum, "The checksum is tried first")
+        XCTAssertEqual(try check(right, "Someone Else"), .checksum, "A matching checksum is enough on its own")
+        XCTAssertEqual(try check(nil, "Distiller Test Publisher"), .signer(changed: false))
+        let changed = try check(wrong, "Distiller Test Publisher")
+        XCTAssertEqual(changed, .signer(changed: true), "A new installer from the same publisher")
+        XCTAssertTrue(changed.installerChanged)
+        XCTAssertThrowsError(try check(wrong, nil))
+        XCTAssertThrowsError(try check(wrong, "Someone Else")) { error in
+            XCTAssertTrue(error.localizedDescription.contains("checksum") && error.localizedDescription.contains("Someone Else"), error.localizedDescription)
+        }
+        XCTAssertThrowsError(try check(nil, nil))
     }
 }

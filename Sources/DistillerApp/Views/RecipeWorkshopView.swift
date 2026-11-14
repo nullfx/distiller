@@ -105,13 +105,20 @@ struct RecipeWorkshopView: View {
                 TextField("Download page", text: $installerPage, prompt: Text("The publisher's page with the download, https://…"))
                 TextField("Installer arguments", text: $installerArgs, prompt: Text("Optional, such as /S for a silent install"))
                 Toggle("The installer changes with updates", isOn: $installerUpdates)
-                    .help("For installers whose file changes with every release, such as a game launcher's: the recipe checks the publisher's signature instead of a fixed checksum.")
+                    .help("For installers whose file changes with every release, such as a game launcher's: the installer must be signed by its publisher, and the recipe accepts any copy they signed.")
                 Button("Get from Download Page…") { isCapturingInstaller = true }
                     .help("Open the publisher's download page, download the installer there, and let Distiller find a link players can download it from directly.")
             } header: {
                 Text("Official installer")
             } footer: {
-                Text("The publisher's own download, never a copy hosted elsewhere. Shared recipes install from it, and the community check proves that works before you submit. If no link works on its own, leave the link empty and give the download page: players then download the installer there, in Distiller's browser. If its file changes with every release (a game launcher's, for example), turn on “changes with updates”: the shared recipe then checks the publisher's signature instead of a fixed checksum.")
+                VStack(alignment: .leading, spacing: 6) {
+                    if game.installerChanged == true {
+                        Label("The publisher's installer has changed since this recipe was checked. It still installed, because it's signed by the same publisher. Run the community check again to record the new installer's checksum.", systemImage: "info.circle")
+                            .foregroundStyle(.orange)
+                    }
+                    Text("The publisher's own download, never a copy hosted elsewhere. Shared recipes install from it, and the community check proves that works before you submit. If no link works on its own, leave the link empty and give the download page: players then download the installer there, in Distiller's browser. The community check records the installer's checksum and, if it's signed, its publisher, so the recipe keeps working when the publisher ships a new installer. Turn on “changes with updates” when the installer must be signed (a game launcher's, for example).")
+                }
+                .fixedSize(horizontal: false, vertical: true)
             }
             RecipeSettingsSections(
                 settings: $settings,

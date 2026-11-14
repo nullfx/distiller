@@ -25,7 +25,7 @@ public enum CPUArch: String, Codable, CaseIterable, Sendable {
 /// The JSON Schema in the distiller-recipes repository is the reference for this format.
 public struct Recipe: Codable, Equatable, Sendable {
     /// The newest recipe schema this version of Distiller reads.
-    public static let supportedSchema = 2
+    public static let supportedSchema = 3
     /// The schema new recipes start at: 1, unless they use something newer (`requiredSchema`),
     /// so older versions of Distiller can still read them.
     public static let baseSchema = 1
@@ -360,9 +360,18 @@ public struct StringList: Codable, Equatable, Sendable, ExpressibleByArrayLitera
 }
 
 extension Recipe {
-    /// The oldest schema that can describe this recipe: 2 if anything is verified by a
-    /// publisher's signature (a `signer` download, or an installer that `updates`), else 1.
+    /// The oldest schema that can describe this recipe: 3 if a download carries both a checksum
+    /// and a signer (either may pass), 2 if anything is verified by a publisher's signature (a
+    /// `signer` download, or an installer that `updates`), else 1.
     public var requiredSchema: Int {
+        let both = (install ?? []).contains { step in
+            switch step {
+            case .download(let download): return download.sha256 != nil && download.signer != nil
+            case .userDownload(let download): return download.sha256 != nil && download.signer != nil
+            default: return false
+            }
+        }
+        if both { return 3 }
         let newer = (install ?? []).contains { step in
             switch step {
             case .download(let download): return download.signer != nil

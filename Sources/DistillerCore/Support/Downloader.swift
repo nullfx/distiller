@@ -44,6 +44,28 @@ public enum Downloader {
         try FileManager.default.moveItem(at: temporary, to: destination)
     }
 
+    /// Downloads over HTTPS and keeps the file only if it passes `InstallerCheck` (its checksum,
+    /// or its publisher's signature), returning which check it passed.
+    @discardableResult
+    public static func download(_ url: URL, sha256: String?, signer: String?, to destination: URL,
+                                session: URLSession = .shared, anchors: [SecCertificate]? = nil) async throws -> InstallerCheck.Passed {
+        guard url.scheme?.lowercased() == "https" else {
+            throw DistillerError.insecureURL(url.absoluteString)
+        }
+        let (temporary, response) = try await session.download(from: url)
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw DistillerError.processFailed(command: "Download of \(url.absoluteString)", status: Int32(http.statusCode), logFile: nil)
+        }
+        let passed = try InstallerCheck.verify(temporary, name: url.lastPathComponent, sha256: sha256, signer: signer, anchors: anchors)
+        try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if FileManager.default.fileExists(atPath: destination.path) {
+            try FileManager.default.removeItem(at: destination)
+        }
+        try FileManager.default.moveItem(at: temporary, to: destination)
+        return passed
+    }
+
     /// Downloads over HTTPS without a known checksum and returns the SHA-256 of what arrived,
     /// so it can be recorded. Only for setup downloads from fixed, well-known HTTPS sources;
     /// recipe downloads always go through `download(_:sha256:to:)`.

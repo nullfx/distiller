@@ -98,7 +98,8 @@ final class PageDownloadTests: XCTestCase {
                                                          installerSHA256: sha, installerSigner: "Example Publisher, Inc.", installerFileName: "Setup.exe", launchExe: nil)
         guard case .userDownload(let bySignature)? = signed.install?.dropLast().last else { return XCTFail() }
         XCTAssertEqual(bySignature.signer, "Example Publisher, Inc.")
-        XCTAssertNil(bySignature.sha256, "The file changes with updates, so there's no checksum")
+        XCTAssertEqual(bySignature.sha256, sha, "Both: either may pass")
+        XCTAssertEqual(signed.schema, 3)
     }
 
     func testPageOnlyMSIInstallersRunThroughMsiexec() throws {
