@@ -505,6 +505,7 @@ struct RecipeCheckSignature: ParsableCommand {
 
     func run() throws {
         let signature = try Authenticode.verify(URL(fileURLWithPath: file), expectedSigner: signer)
-        print("Signed by \(signature.signer) (\(signature.digestAlgorithm)); unchanged since signing; certificate trusted for code signing.")
+        let when = signature.signedAt.map { "; timestamped \($0.formatted(date: .abbreviated, time: .shortened)), so its certificate was checked as of then" } ?? ""
+        print("Signed by \(signature.signer) (\(signature.digestAlgorithm)); unchanged since signing; certificate trusted for code signing\(when).")
     }
 }

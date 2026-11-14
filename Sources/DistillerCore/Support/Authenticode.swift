@@ -8,6 +8,9 @@ public struct AuthenticodeSignature: Equatable, Sendable {
     public var signer: String
     /// "SHA-256", "SHA-1", …: what the publisher signed the program's contents with.
     public var digestAlgorithm: String
+    /// When a trusted timestamp authority vouches the program was signed, if it has a valid
+    /// timestamp. The certificate was then checked as of that time.
+    public var signedAt: Date?
 }
 
 public enum AuthenticodeError: LocalizedError, Equatable {
@@ -47,8 +50,13 @@ public enum AuthenticodeError: LocalizedError, Equatable {
 /// certificate's key; the certificate chain leads to a root macOS trusts (or to `anchors`, for
 /// tests); and the certificate is for code signing. Parsing is bounds-checked throughout.
 ///
-/// Not checked yet: timestamp countersignatures, so a signature made with a certificate that
-/// has since expired is reported as untrusted.
+/// A signature with a valid timestamp (`AuthenticodeTimestamp`: an RFC 3161 token or the older
+/// PKCS #9 countersignature, from a timestamp authority macOS trusts) is checked as of the time
+/// it was made, so an installer signed while its certificate was valid stays valid after the
+/// certificate expires, as on Windows. Without one, the certificate must be valid now. A broken
+/// or untrusted timestamp is ignored (never trusted, never better than none). Revocation is
+/// checked where the certificate authority answers (soft-fail): a revoked certificate fails
+/// even with a timestamp.
 public enum Authenticode {
     public static func verify(_ url: URL, expectedSigner: String? = nil, anchors: [SecCertificate]? = nil, date: Date = Date()) throws -> AuthenticodeSignature {
         let data: Data
@@ -73,40 +81,60 @@ public enum Authenticode {
         }
 
         // 3. The signature over the attributes verifies with the signing certificate's key.
-        guard let certificate = SecCertificateCreateWithData(nil, signature.signerCertificate as CFData),
-              let key = SecCertificateCopyKey(certificate) else { throw AuthenticodeError.malformed("signing certificate") }
-        let algorithm = try signatureAlgorithm(for: key, digest: signature.signerDigestAlgorithm)
-        var error: Unmanaged<CFError>?
-        guard SecKeyVerifySignature(key, algorithm, signature.signedAttributes as CFData, signature.encryptedDigest as CFData, &error) else {
-            throw AuthenticodeError.badSignature
-        }
+        let certificate = try verifySignature(certificate: signature.signerCertificate, digest: signature.signerDigestAlgorithm,
+                                              signed: signature.signedAttributes, signature: signature.encryptedDigest)
 
-        // 4. The chain leads to a trusted root, at `date`.
-        let others = signature.certificates.filter { $0 != signature.signerCertificate }.compactMap { SecCertificateCreateWithData(nil, $0 as CFData) }
-        var trust: SecTrust?
-        guard SecTrustCreateWithCertificates(([certificate] + others) as CFArray, SecPolicyCreateBasicX509(), &trust) == errSecSuccess, let trust else {
-            throw AuthenticodeError.untrusted("its certificates can't be checked")
-        }
-        if let anchors {
-            SecTrustSetAnchorCertificates(trust, anchors as CFArray)
-            SecTrustSetAnchorCertificatesOnly(trust, true)
-        }
-        SecTrustSetNetworkFetchAllowed(trust, false)
-        SecTrustSetVerifyDate(trust, date as CFDate)
-        var trustError: CFError?
-        guard SecTrustEvaluateWithError(trust, &trustError) else {
-            throw AuthenticodeError.untrusted(trustError.map { CFErrorCopyDescription($0) as String } ?? "no reason given")
-        }
+        // 4. The chain leads to a trusted root: as of a valid timestamp's time, else at `date`.
+        let signedAt = AuthenticodeTimestamp.signingTime(of: signature.signer, certificates: signature.certificates, anchors: anchors)
+        try evaluateTrust(certificate, with: signature.certificates, anchors: anchors, at: signedAt ?? date)
 
         // 5. It's a code-signing certificate, from the signer the recipe names.
-        guard isForCodeSigning(certificate) else { throw AuthenticodeError.notForCodeSigning }
+        guard hasExtendedKeyUsage(certificate, OID.codeSigning) else { throw AuthenticodeError.notForCodeSigning }
         var name: CFString?
         SecCertificateCopyCommonName(certificate, &name)
         let signer = (name as String?) ?? ""
         if let expectedSigner, signer.compare(expectedSigner, options: [.caseInsensitive]) != .orderedSame {
             throw AuthenticodeError.wrongSigner(expected: expectedSigner, found: signer.isEmpty ? "an unnamed signer" : signer)
         }
-        return AuthenticodeSignature(signer: signer, digestAlgorithm: signature.indirectDigestAlgorithm.name)
+        return AuthenticodeSignature(signer: signer, digestAlgorithm: signature.indirectDigestAlgorithm.name, signedAt: signedAt)
+    }
+
+    // MARK: Signatures and trust (shared with timestamps)
+
+    /// Verifies `signature` over `signed` with `certificate`'s key, and returns the certificate.
+    static func verifySignature(certificate data: Data, digest: DigestAlgorithm, signed: Data, signature: Data) throws -> SecCertificate {
+        guard let certificate = SecCertificateCreateWithData(nil, data as CFData),
+              let key = SecCertificateCopyKey(certificate) else { throw AuthenticodeError.malformed("signing certificate") }
+        let algorithm = try signatureAlgorithm(for: key, digest: digest)
+        var error: Unmanaged<CFError>?
+        guard SecKeyVerifySignature(key, algorithm, signed as CFData, signature as CFData, &error) else {
+            throw AuthenticodeError.badSignature
+        }
+        return certificate
+    }
+
+    /// Checks `certificate`'s chain (using the other certificates the signature carries) leads
+    /// to a trusted root (or one of `anchors`) and was valid at `date`, and that no certificate
+    /// in it is reported revoked. Revocation is soft-fail: an authority that can't be reached
+    /// doesn't fail the check.
+    static func evaluateTrust(_ certificate: SecCertificate, with certificates: [Data], anchors: [SecCertificate]?, at date: Date) throws {
+        let mine = SecCertificateCopyData(certificate) as Data
+        let others = certificates.filter { $0 != mine }.compactMap { SecCertificateCreateWithData(nil, $0 as CFData) }
+        let policies = [SecPolicyCreateBasicX509(), SecPolicyCreateRevocation(kSecRevocationUseAnyAvailableMethod)].compactMap { $0 }
+        var trust: SecTrust?
+        guard SecTrustCreateWithCertificates(([certificate] + others) as CFArray, policies as CFArray, &trust) == errSecSuccess, let trust else {
+            throw AuthenticodeError.untrusted("its certificates can't be checked")
+        }
+        if let anchors {
+            SecTrustSetAnchorCertificates(trust, anchors as CFArray)
+            SecTrustSetAnchorCertificatesOnly(trust, true)
+        }
+        SecTrustSetNetworkFetchAllowed(trust, true)
+        SecTrustSetVerifyDate(trust, date as CFDate)
+        var trustError: CFError?
+        guard SecTrustEvaluateWithError(trust, &trustError) else {
+            throw AuthenticodeError.untrusted(trustError.map { CFErrorCopyDescription($0) as String } ?? "no reason given")
+        }
     }
 
     // MARK: The program
@@ -212,11 +240,35 @@ public enum Authenticode {
         throw AuthenticodeError.malformed("an unsupported key type")
     }
 
-    static func isForCodeSigning(_ certificate: SecCertificate) -> Bool {
+    static func hasExtendedKeyUsage(_ certificate: SecCertificate, _ purpose: Data) -> Bool {
         guard let values = SecCertificateCopyValues(certificate, [kSecOIDExtendedKeyUsage] as CFArray, nil) as? [CFString: Any],
               let usage = values[kSecOIDExtendedKeyUsage] as? [CFString: Any],
               let purposes = usage[kSecPropertyKeyValue] as? [Data] else { return false }
-        return purposes.contains(OID.codeSigning)
+        return purposes.contains(purpose)
+    }
+
+    /// The certificate among `certificates` that `signer` names: by issuer and serial number,
+    /// or by subject key identifier.
+    static func certificate(for signer: SignerInfoParts, in certificates: [Data]) -> Data? {
+        certificates.first { certificate in
+            let reader = DERReader(certificate)
+            guard let tbs = reader.element(at: 0).flatMap(reader.children)?.first, let fields = reader.children(of: tbs) else { return false }
+            let start = fields.first?.tag == DERElement.context(0) ? 1 : 0     // optional [0] version
+            guard fields.count > start + 2 else { return false }
+            if let serial = signer.serial, let issuer = signer.issuer {
+                return reader.value(fields[start]) == serial && reader.encoded(fields[start + 2]) == issuer
+            }
+            guard let wanted = signer.subjectKeyIdentifier,
+                  let extensions = fields.first(where: { $0.tag == DERElement.context(3) }).flatMap(reader.children)?.first.flatMap(reader.children)
+            else { return false }
+            for item in extensions {
+                guard let parts = reader.children(of: item), parts.count >= 2, reader.value(parts[0]) == OID.subjectKeyIdentifier,
+                      let value = parts.last, value.tag == DERElement.octetString else { continue }
+                let inner = DERReader(reader.value(value))
+                return inner.element(at: 0).map(inner.value) == wanted
+            }
+            return false
+        }
     }
 }
 
@@ -231,6 +283,7 @@ struct SignedData {
     var signedAttributes: Data             // re-tagged as a SET, as they were signed
     var messageDigest: Data
     var encryptedDigest: Data
+    var signer: SignerInfoParts
 
     init(_ der: DERReader) throws {
         func fail(_ what: String) -> AuthenticodeError { .malformed(what) }
@@ -271,40 +324,80 @@ struct SignedData {
 
         // SignerInfo { version, issuerAndSerialNumber, digestAlgorithm, [0] authenticatedAttributes,
         //              digestEncryptionAlgorithm, encryptedDigest, [1] unauthenticatedAttributes }
-        let signer = try kids(signerInfo)
-        guard signer.count >= 6 else { throw fail("signer") }
-        let issuerAndSerial = try kids(signer[1])
-        guard issuerAndSerial.count == 2, issuerAndSerial[1].tag == DERElement.integer else { throw fail("signer identity") }
-        let issuer = der.encoded(issuerAndSerial[0])
-        let serial = der.value(issuerAndSerial[1])
-        guard let digestAlgorithm = try kids(signer[2]).first else { throw fail("signer digest") }
-        signerDigestAlgorithm = try Authenticode.DigestAlgorithm(oid: oid(digestAlgorithm) ?? Data())
-        guard signer[3].tag == DERElement.context(0) else { throw fail("signed attributes") }
-        var attributes = der.encoded(signer[3])
-        attributes[attributes.startIndex] = DERElement.set
-        signedAttributes = attributes
-        guard signer[5].tag == DERElement.octetString else { throw fail("signature") }
-        encryptedDigest = der.value(signer[5])
-
-        var found: Data?
-        for attribute in try kids(signer[3], DERElement.context(0)) {
-            let parts = try kids(attribute)
-            guard parts.count == 2, parts[0].tag == DERElement.oid, der.value(parts[0]) == OID.messageDigest,
-                  let value = try kids(parts[1], DERElement.set).first, value.tag == DERElement.octetString else { continue }
-            found = der.value(value)
-        }
-        guard let found else { throw fail("message digest") }
+        signer = try SignerInfoParts(der, signerInfo)
+        guard signer.issuer != nil else { throw fail("signer identity") }
+        signerDigestAlgorithm = signer.digestAlgorithm
+        signedAttributes = signer.signedAttributes
+        encryptedDigest = signer.encryptedDigest
+        guard let found = signer.messageDigest else { throw fail("message digest") }
         messageDigest = found
 
         // The signing certificate: the one whose issuer and serial number the signer names.
-        let signing = certificates.first { certificate in
-            let reader = DERReader(certificate)
-            guard let tbs = reader.element(at: 0).flatMap(reader.children)?.first, let fields = reader.children(of: tbs) else { return false }
-            let start = fields.first?.tag == DERElement.context(0) ? 1 : 0     // optional [0] version
-            guard fields.count > start + 2 else { return false }
-            return reader.value(fields[start]) == serial && reader.encoded(fields[start + 2]) == issuer
-        }
+        let signing = Authenticode.certificate(for: signer, in: certificates)
         guard let signing else { throw fail("the signing certificate isn't included") }
         signerCertificate = signing
+    }
+}
+
+/// A SignerInfo (PKCS #7 / CMS): who signed, and what. Used for the program's signature and for
+/// its timestamps. Only signers with signed attributes are accepted (Authenticode requires them).
+struct SignerInfoParts {
+    var issuer: Data?                 // the signer's issuer Name, encoded
+    var serial: Data?                 // its serial number's value
+    var subjectKeyIdentifier: Data?   // or its key identifier (CMS version 3)
+    var digestAlgorithm: Authenticode.DigestAlgorithm
+    var signedAttributes: Data        // re-tagged as a SET, as they were signed
+    var attributes: [(oid: Data, values: [Data])]
+    var encryptedDigest: Data
+    var unsignedAttributes: [(oid: Data, values: [Data])]
+
+    init(_ der: DERReader, _ element: DERElement) throws {
+        func fail(_ what: String) -> AuthenticodeError { .malformed(what) }
+        guard element.tag == DERElement.sequence, let fields = der.children(of: element), fields.count >= 6 else { throw fail("signer") }
+        switch fields[1].tag {
+        case DERElement.sequence:
+            guard let parts = der.children(of: fields[1]), parts.count == 2, parts[1].tag == DERElement.integer else { throw fail("signer identity") }
+            issuer = der.encoded(parts[0])
+            serial = der.value(parts[1])
+        case 0x80:                                                       // [0] IMPLICIT SubjectKeyIdentifier
+            subjectKeyIdentifier = der.value(fields[1])
+        default:
+            throw fail("signer identity")
+        }
+        guard fields[2].tag == DERElement.sequence, let algorithm = der.children(of: fields[2])?.first, algorithm.tag == DERElement.oid else {
+            throw fail("signer digest")
+        }
+        digestAlgorithm = try Authenticode.DigestAlgorithm(oid: der.value(algorithm))
+        guard fields[3].tag == DERElement.context(0) else { throw fail("signed attributes") }
+        var encoded = der.encoded(fields[3])
+        encoded[encoded.startIndex] = DERElement.set
+        signedAttributes = encoded
+        attributes = try Self.attributes(der, fields[3])
+        guard fields[5].tag == DERElement.octetString else { throw fail("signature") }
+        encryptedDigest = der.value(fields[5])
+        unsignedAttributes = fields.count > 6 && fields[6].tag == DERElement.context(1) ? try Self.attributes(der, fields[6]) : []
+    }
+
+    static func attributes(_ der: DERReader, _ container: DERElement) throws -> [(oid: Data, values: [Data])] {
+        guard let list = der.children(of: container) else { throw AuthenticodeError.malformed("attributes") }
+        return try list.map { attribute in
+            guard attribute.tag == DERElement.sequence, let parts = der.children(of: attribute), parts.count == 2,
+                  parts[0].tag == DERElement.oid, parts[1].tag == DERElement.set, let values = der.children(of: parts[1]) else {
+                throw AuthenticodeError.malformed("attributes")
+            }
+            return (der.value(parts[0]), values.map(der.encoded))
+        }
+    }
+
+    /// The first value of a signed attribute, as an element of its own reader.
+    func attribute(_ oid: Data) -> (DERReader, DERElement)? {
+        guard let value = attributes.first(where: { $0.oid == oid })?.values.first else { return nil }
+        let reader = DERReader(value)
+        return reader.element(at: 0).map { (reader, $0) }
+    }
+
+    var messageDigest: Data? {
+        guard let (reader, element) = attribute(OID.messageDigest), element.tag == DERElement.octetString else { return nil }
+        return reader.value(element)
     }
 }
