@@ -50,6 +50,10 @@ Settings ▸ Updates also checks for a newer **Distiller**, from the GitHub rele
 
 From a terminal: `distiller components check`, `distiller components update [<id>]`, `distiller components use <id>@<version>`, `distiller components clean` and `distiller components updates [ask|auto|off]`.
 
+### Steam and other game launchers
+
+Install Steam like any game (a recipe that runs its installer). Every game Steam then installs, whether you install it from Distiller or inside Steam's own window, appears in My Library under Steam's entry (expand or collapse it with its arrow), with its own icon. **Play** starts the game through Steam (starting Steam first if needed); **Stop** ends just the game; **Uninstall in Steam…** asks Steam to remove it, and its entry goes once Steam has. A game's recipe holds its own launch options; Steam's bottle settings (Wine, graphics layer, Windows version, components) are Steam's and shared by all its games. Steam's window needs a Wine build derived from CrossOver's source; standard Wine builds draw it black.
+
 ## Creating recipes
 
 **Create Recipe…** in My Library (⌘N) walks through three starting points:
