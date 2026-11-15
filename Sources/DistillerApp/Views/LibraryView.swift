@@ -31,25 +31,16 @@ struct LibraryView: View {
                 LibraryList()
             }
         }
-        .safeAreaInset(edge: .top, spacing: 0) {
+        // A floating card rather than a bar inset at the top: changing a list's insets while
+        // the window is open (a bar appearing and going) can leave the list, and the sidebar,
+        // drawn under the toolbar until the window is resized.
+        .overlay(alignment: .bottom) {
             if let notice = model.libraryNotice {
-                HStack(spacing: 10) {
-                    Image(systemName: "info.circle").foregroundStyle(.tint)
-                    Text(notice).fixedSize(horizontal: false, vertical: true)
-                    Spacer()
-                    Button {
-                        model.libraryNotice = nil
-                    } label: {
-                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Dismiss")
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(.bar)
+                LibraryNoticeCard(text: notice) { model.libraryNotice = nil }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: model.libraryNotice)
         .navigationTitle("My Library")
         .toolbar {
             Picker("View", selection: $layout) {
@@ -66,6 +57,31 @@ struct LibraryView: View {
             }
             .help("Create a recipe or add a game from a recipe file")
         }
+    }
+}
+
+/// What Steam just added to or removed from the library.
+private struct LibraryNoticeCard: View {
+    let text: String
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: "info.circle").foregroundStyle(.tint)
+            Text(text).fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Button(action: dismiss) {
+                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss")
+        }
+        .padding(12)
+        .frame(maxWidth: 560)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.separator))
+        .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
+        .padding(16)
     }
 }
 

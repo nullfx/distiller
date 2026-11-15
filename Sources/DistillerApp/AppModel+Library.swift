@@ -18,9 +18,9 @@ extension AppModel {
             if state == .ready, iconSources[game.id] != source, !engine.hasCustomIcon(game) {
                 toRead.append(game)
             }
-            loadIcon(for: game)
+            if icons[game.id] == nil { loadIcon(for: game) }
         }
-        self.availability = availability
+        if availability != self.availability { self.availability = availability }
         guard !toRead.isEmpty else { return }
         for game in toRead { iconSources[game.id] = resolved(game)?.launch?.exe ?? "" }
         // Reading an icon means opening the program, which may be large or on a slow drive.
@@ -36,9 +36,11 @@ extension AppModel {
         availability[game.id] ?? .ready
     }
 
+    /// Reads a game's icon from disk. Reloads keep icons already loaded (a new image would
+    /// redraw every row); it's read again when it changes (a new program, or the player's choice).
     private func loadIcon(for game: Game) {
         guard let url = engine?.iconURL(for: game) else {
-            icons[game.id] = nil
+            if icons[game.id] != nil { icons[game.id] = nil }
             return
         }
         icons[game.id] = NSImage(contentsOf: url)
@@ -70,6 +72,7 @@ extension AppModel {
         do {
             try engine.removeCustomIcon(for: game)
             iconSources[game.id] = nil
+            icons[game.id] = nil
             refreshLibraryState()
         } catch {
             errorMessage = error.localizedDescription

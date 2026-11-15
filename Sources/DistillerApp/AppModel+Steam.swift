@@ -17,7 +17,7 @@ extension AppModel {
             var notes: [String] = []
             if !sync.added.isEmpty { notes.append("\(Self.list(sync.added.map(\.title))) \(sync.added.count == 1 ? "was" : "were") installed in Steam and added to your library.") }
             if !sync.removed.isEmpty { notes.append("\(Self.list(sync.removed.map(\.title))) \(sync.removed.count == 1 ? "was" : "were") uninstalled in Steam and removed from your library.") }
-            libraryNotice = notes.joined(separator: " ")
+            showLibraryNotice(notes.joined(separator: " "))
         }
         let launchers = engine.steamLaunchers(in: games)
         if steamTimer == nil, !launchers.isEmpty {
@@ -101,7 +101,7 @@ extension AppModel {
         guard let engine else { return }
         do {
             try engine.uninstallSteamGame(game)
-            libraryNotice = "Steam asks you to confirm uninstalling \(game.title). It leaves your library once Steam has removed it."
+            showLibraryNotice("Steam asks you to confirm uninstalling \(game.title). It leaves your library once Steam has removed it.")
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -116,6 +116,17 @@ extension AppModel {
         try? engine.library.upsert(updated)
         reload()
         if seconds > 120 { gameToReport = updated }
+    }
+
+    /// Shows a notice over the library for a few seconds (longer for longer notices).
+    func showLibraryNotice(_ text: String) {
+        libraryNotice = text
+        libraryNoticeTask?.cancel()
+        libraryNoticeTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(min(20, 8 + Double(text.count) / 25)))
+            guard !Task.isCancelled else { return }
+            self?.libraryNotice = nil
+        }
     }
 
     static func list(_ names: [String]) -> String {

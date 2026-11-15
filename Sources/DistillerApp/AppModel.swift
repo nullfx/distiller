@@ -30,8 +30,10 @@ final class AppModel {
     var lastSteamSync = Date.distantPast
     /// Flipped when a launcher is expanded or collapsed, so views redraw.
     var launcherExpansionChanged = false
-    /// A short notice at the top of the library (games Steam added or removed).
+    /// A short notice floating over the library (games Steam added or removed); it goes by
+    /// itself after a few seconds. Set with `showLibraryNotice`.
     var libraryNotice: String?
+    var libraryNoticeTask: Task<Void, Never>?
     /// Storage locations on drives that aren't connected. See AppModel+Storage.swift.
     var unavailableStorage: [UnavailableStorage] = []
     /// Whether each game can be played now, and its icon. See AppModel+Library.swift.
@@ -143,8 +145,12 @@ final class AppModel {
         guard let engine else { return }
         cleanUpLogsIfDue()
         engine.expireRestorePoints()
-        unavailableStorage = engine.paths.unavailable
-        games = engine.library.load()
+        // Assign only what changed: reloads run often (every time the app comes to the front,
+        // and when Steam adds games), and every assignment redraws the views that read it.
+        let unavailable = engine.paths.unavailable
+        if unavailable != unavailableStorage { unavailableStorage = unavailable }
+        let loaded = engine.library.load()
+        if loaded != games { games = loaded }
         refreshSteam()
         refreshLibraryState()
         loadMissingPublishedRecipes()
