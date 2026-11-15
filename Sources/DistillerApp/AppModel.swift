@@ -22,6 +22,18 @@ final class AppModel {
     var publishedRecipes: [String: Recipe] = [:]
     var publishedRecipeFetches: Set<String> = []
     var running: [String: Process] = [:]
+    /// Steam entries running now, Steam games just started, and their sessions. See AppModel+Steam.swift.
+    var steamRunning: Set<String> = []
+    var steamLaunching: [String: Date] = [:]
+    var steamSessions: [String: Date] = [:]
+    var steamTimer: Task<Void, Never>?
+    var lastSteamSync = Date.distantPast
+    /// Flipped when a launcher is expanded or collapsed, so views redraw.
+    var launcherExpansionChanged = false
+    /// A short notice floating over the library (games Steam added or removed); it goes by
+    /// itself after a few seconds. Set with `showLibraryNotice`.
+    var libraryNotice: String?
+    var libraryNoticeTask: Task<Void, Never>?
     /// Storage locations on drives that aren't connected. See AppModel+Storage.swift.
     var unavailableStorage: [UnavailableStorage] = []
     /// Whether each game can be played now, and its icon. See AppModel+Library.swift.
@@ -133,8 +145,13 @@ final class AppModel {
         guard let engine else { return }
         cleanUpLogsIfDue()
         engine.expireRestorePoints()
-        unavailableStorage = engine.paths.unavailable
-        games = engine.library.load()
+        // Assign only what changed: reloads run often (every time the app comes to the front,
+        // and when Steam adds games), and every assignment redraws the views that read it.
+        let unavailable = engine.paths.unavailable
+        if unavailable != unavailableStorage { unavailableStorage = unavailable }
+        let loaded = engine.library.load()
+        if loaded != games { games = loaded }
+        refreshSteam()
         refreshLibraryState()
         loadMissingPublishedRecipes()
         bottles = engine.bottles.list()
@@ -281,6 +298,10 @@ final class AppModel {
 
     func launch(_ game: Game) {
         guard let engine, running[game.id] == nil else { return }
+        if game.steam != nil {
+            guard !isSteamActive(game) else { return }
+            return launchSteamGame(game)
+        }
         Task {
             // A game moving to a newer Wine gets a restore point and its bottle updated first.
             if (try? engine.pendingWineMove(for: game)) != nil {
@@ -305,6 +326,7 @@ final class AppModel {
 
     func stop(_ game: Game) {
         guard let engine else { return }
+        if game.steam != nil { return stopSteamGame(game) }
         perform("Stopping \(game.title)…") {
             try await engine.stop(game)
         }
@@ -313,6 +335,11 @@ final class AppModel {
     private func finished(_ game: Game, started: Date) {
         running[game.id] = nil
         guard let engine else { return }
+        // Steam itself: no report or questions (its games get those).
+        if engine.isSteamLauncher(game) {
+            reload()
+            return
+        }
         let seconds = Date().timeIntervalSince(started)
         var updated = (try? engine.library.game(id: game.id)) ?? game
         updated.lastPlayedAt = Date()
@@ -338,10 +365,19 @@ final class AppModel {
 
     func removeGame(_ game: Game) {
         guard let engine else { return }
+        // A game Steam installed is uninstalled by Steam (else the next sync adds it back).
+        if game.steam != nil { return uninstallSteamGame(game) }
         perform("Removing \(game.title)…") {
             try engine.library.remove(id: game.id)
             engine.removeIcons(for: game)
-            if let bottle = try? engine.bottles.bottle(id: game.bottleID) {
+            // Steam's entry takes the games installed in its bottle with it.
+            for steamGame in self.games where steamGame.steam?.launcherID == game.id {
+                try? engine.library.remove(id: steamGame.id)
+                engine.removeIcons(for: steamGame)
+            }
+            // A bottle other entries still use stays.
+            let othersShare = engine.library.load().contains { $0.bottleID == game.bottleID }
+            if !othersShare, let bottle = try? engine.bottles.bottle(id: game.bottleID) {
                 try engine.bottles.delete(bottle)
             }
             // A rebuild not yet decided still has the old bottle.

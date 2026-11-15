@@ -57,6 +57,21 @@ extension DistillerEngine {
         forceReconfigure: Bool = false,
         progress: @escaping @Sendable (InstallProgress) -> Void = { _ in }
     ) async throws -> Game {
+        var recipe = recipe
+        if game.steam != nil {
+            // A Steam game shares Steam's bottle: its bottle settings are always Steam's, and
+            // nothing it saves touches the bottle (or Steam's recipe file in it).
+            guard let launcher = try? library.game(id: game.steam?.launcherID ?? "") else {
+                throw DistillerError.setupFailed("\(game.title)'s Steam is no longer in the library.")
+            }
+            recipe = Self.aligned(recipe, with: launcher.recipe)
+            try RecipeLoader.validate(recipe)
+            var updated = (try? library.game(id: game.id)) ?? game
+            updated.recipe = recipe
+            updated.title = recipe.game.title
+            try library.upsert(updated)
+            return updated
+        }
         try RecipeLoader.validate(recipe)
         var updated = (try? library.game(id: game.id)) ?? game
         let previous = updated.recipe
@@ -148,9 +163,13 @@ extension DistillerEngine {
     // MARK: The editable recipe file
 
     /// `Bottles/<id>/recipe.yaml`: a copy of the game's recipe the player can open in any editor.
+    /// The editable copy of a game's recipe, beside its bottle: `recipe.yaml`, or, for a game
+    /// a launcher installed (which shares the launcher's bottle), `recipe-steam-<app ID>.yaml`,
+    /// so editing it never touches the launcher's file.
     public func recipeFileURL(for game: Game) throws -> URL {
         let bottle = try bottles.bottle(id: game.bottleID)
-        return bottles.root(of: bottle).appendingPathComponent("recipe.yaml")
+        let name = game.steam.map { "recipe-steam-\($0.appID).yaml" } ?? "recipe.yaml"
+        return bottles.root(of: bottle).appendingPathComponent(name)
     }
 
     @discardableResult

@@ -72,7 +72,41 @@ struct RecipeWorkshopView: View {
 
     // MARK: Tabs
 
-    private func settingsTab(_ game: Game) -> some View {
+    @ViewBuilder private func settingsTab(_ game: Game) -> some View {
+        if game.steam != nil {
+            steamGameSettings(game)
+        } else {
+            standardSettings(game)
+        }
+    }
+
+    /// A game Steam installed: only its launch options are its own. Everything else belongs to
+    /// Steam's bottle, shared by Steam and all its games.
+    private func steamGameSettings(_ game: Game) -> some View {
+        Form {
+            Section {
+                TextField("Launch arguments", text: $settings.argumentsText, prompt: Text("-dx11"))
+            } header: {
+                Text("Launch options")
+            } footer: {
+                Text("Steam passes these on to \(game.title) when it starts, like the launch options in the game's properties in Steam.")
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Section {
+                Text("The Wine build, graphics layer, Windows version, winetricks components and other settings belong to Steam's bottle, so Steam and all its games share them. Change them in Steam's recipe.")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let launcher = model.games.first(where: { $0.id == game.steam?.launcherID }) {
+                    Button("Open \(launcher.title)'s Recipe") { model.gameInWorkshop = launcher }
+                }
+            } header: {
+                Text("Steam's settings")
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func standardSettings(_ game: Game) -> some View {
         Form {
             Section {
                 Picker("Program", selection: $launchPath) {
@@ -146,7 +180,7 @@ struct RecipeWorkshopView: View {
             .lineLimit(3)
             HStack {
                 Button("Open in Editor") { model.openRecipeFile(for: game) }
-                    .help("Opens recipe.yaml from the bottle in your YAML editor")
+                    .help("Opens this game's recipe file from its bottle folder in your YAML editor")
                 Button("Reload from File") { model.reloadRecipeFile(for: game) }
                 Button("Export…") { model.exportRecipe(for: game) }
                 Spacer()
@@ -158,7 +192,26 @@ struct RecipeWorkshopView: View {
         .padding(16)
     }
 
-    private func bottleTab(_ game: Game) -> some View {
+    @ViewBuilder private func bottleTab(_ game: Game) -> some View {
+        if game.steam != nil, let launcher = model.games.first(where: { $0.id == game.steam?.launcherID }) {
+            Form {
+                Section {
+                    Text("\(game.title) is in \(launcher.title)'s bottle, which \(launcher.title) and all its games share. Its versions, restore points, Wine tools and rebuilding are on \(launcher.title)'s entry.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("Open \(launcher.title)'s Bottle Settings") { model.gameInWorkshop = launcher }
+                    Button("Show Log") { model.showLog(for: game) }
+                } header: {
+                    Text("Bottle")
+                }
+            }
+            .formStyle(.grouped)
+        } else {
+            standardBottleTab(game)
+        }
+    }
+
+    private func standardBottleTab(_ game: Game) -> some View {
         Form {
             Section {
                 Button("Run Installer…") { model.runInstaller(for: game) }
@@ -277,6 +330,12 @@ struct RecipeWorkshopView: View {
         guard recipe != loadedRecipe else { return }
         loadedRecipe = recipe
         settings = RecipeSettings(recipe: recipe)
+        if let appID = game.steam?.appID {
+            // Steam's own -applaunch <id> isn't the player's to edit; Distiller always adds it.
+            var args = recipe.launch?.args ?? []
+            if args.count >= 2, args[0] == "-applaunch", args[1] == appID { args.removeFirst(2) }
+            settings.argumentsText = RecipeSettings.joinArguments(args)
+        }
         title = recipe.game.title
         recipeName = recipe.name ?? ""
         notes = recipe.notes ?? ""
