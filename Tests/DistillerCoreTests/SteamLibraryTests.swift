@@ -147,6 +147,16 @@ final class SteamLibraryTests: XCTestCase {
         XCTAssertEqual(saved.recipe.launch?.args, ["-applaunch", "440", "-dx11"])
         XCTAssertFalse(FileManager.default.fileExists(atPath: engine.bottles.root(of: bottle).appendingPathComponent("recipe.yaml").path))
 
+        // Its editable file is its own, beside Steam's; reloading it keeps Steam's settings too.
+        let steamFile = try engine.writeRecipeFile(for: launcher)
+        let gameFile = try engine.writeRecipeFile(for: saved)
+        XCTAssertEqual(steamFile.lastPathComponent, "recipe.yaml")
+        XCTAssertEqual(gameFile.lastPathComponent, "recipe-steam-440.yaml")
+        XCTAssertEqual(try RecipeLoader.load(from: steamFile).launch, launcher.recipe.launch, "Steam's file is untouched")
+        let reloaded = try await engine.reloadRecipeFile(for: saved)
+        XCTAssertEqual(reloaded.recipe.launch?.args, ["-applaunch", "440", "-dx11"])
+        XCTAssertEqual(reloaded.recipe.stack.graphics, .dxvk)
+
         // Uninstalled in Steam: the entry goes.
         try FileManager.default.removeItem(at: steam.appendingPathComponent("steamapps/appmanifest_440.acf"))
         XCTAssertEqual(engine.syncSteamGames().removed.map(\.id), [tf2.id])

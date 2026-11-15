@@ -163,9 +163,13 @@ extension DistillerEngine {
     // MARK: The editable recipe file
 
     /// `Bottles/<id>/recipe.yaml`: a copy of the game's recipe the player can open in any editor.
+    /// The editable copy of a game's recipe, beside its bottle: `recipe.yaml`, or, for a game
+    /// a launcher installed (which shares the launcher's bottle), `recipe-steam-<app ID>.yaml`,
+    /// so editing it never touches the launcher's file.
     public func recipeFileURL(for game: Game) throws -> URL {
         let bottle = try bottles.bottle(id: game.bottleID)
-        return bottles.root(of: bottle).appendingPathComponent("recipe.yaml")
+        let name = game.steam.map { "recipe-steam-\($0.appID).yaml" } ?? "recipe.yaml"
+        return bottles.root(of: bottle).appendingPathComponent(name)
     }
 
     @discardableResult

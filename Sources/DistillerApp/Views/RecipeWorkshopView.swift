@@ -180,7 +180,7 @@ struct RecipeWorkshopView: View {
             .lineLimit(3)
             HStack {
                 Button("Open in Editor") { model.openRecipeFile(for: game) }
-                    .help("Opens recipe.yaml from the bottle in your YAML editor")
+                    .help("Opens this game's recipe file from its bottle folder in your YAML editor")
                 Button("Reload from File") { model.reloadRecipeFile(for: game) }
                 Button("Export…") { model.exportRecipe(for: game) }
                 Spacer()
