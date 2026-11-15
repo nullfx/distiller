@@ -21,6 +21,30 @@ public struct Game: Codable, Identifiable, Equatable, Sendable, Hashable {
     public var communityCheck: CommunityCheckResult?
     /// The player keeps this recipe for themselves, so the library doesn't suggest sharing it.
     public var justForMe: Bool?
+    /// For a game Steam installed in a Steam bottle: which app, and the library entry of the
+    /// Steam it belongs to. Its recipe starts it through Steam (`-applaunch`).
+    public var steam: SteamLink?
+
+    public struct SteamLink: Codable, Equatable, Sendable, Hashable {
+        public var appID: String
+        /// The id of the library entry for Steam itself (whose bottle this game shares).
+        public var launcherID: String
+        /// The game's own program (Windows path), for its icon.
+        public var program: String?
+
+        enum CodingKeys: String, CodingKey {
+            case program
+            case appID = "app_id"
+            case launcherID = "launcher_id"
+        }
+
+        public init(appID: String, launcherID: String, program: String?) {
+            self.appID = appID
+            self.launcherID = launcherID
+            self.program = program
+        }
+    }
+
     /// The publisher's installer has changed since the recipe was checked (it passed by its
     /// signature, not its checksum): run the community check again to record the new checksum.
     public var installerChanged: Bool?
@@ -48,7 +72,7 @@ public struct Game: Codable, Identifiable, Equatable, Sendable, Hashable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, title, recipe, overrides, authored, submission, rebuild
+        case id, title, recipe, overrides, authored, submission, rebuild, steam
         case installerChanged = "installer_changed"
         case communityCheck = "community_check"
         case justForMe = "just_for_me"
@@ -70,8 +94,10 @@ public struct Game: Codable, Identifiable, Equatable, Sendable, Hashable {
         authored: Bool? = nil,
         submission: RecipeSubmission? = nil,
         communityCheck: CommunityCheckResult? = nil,
-        justForMe: Bool? = nil
+        justForMe: Bool? = nil,
+        steam: SteamLink? = nil
     ) {
+        self.steam = steam
         self.id = id
         self.title = title
         self.bottleID = bottleID

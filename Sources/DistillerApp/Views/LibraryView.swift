@@ -26,18 +26,28 @@ struct LibraryView: View {
                     Button("Add from Recipe File…") { model.isImportingRecipe = true }
                 }
             } else if layout == .icons {
-                ScrollView {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 18)], spacing: 22) {
-                        ForEach(model.games) { game in
-                            GameTile(game: game)
-                        }
-                    }
-                    .padding(20)
-                }
+                LibraryGrid()
             } else {
-                List(model.games) { game in
-                    GameRow(game: game)
+                LibraryList()
+            }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let notice = model.libraryNotice {
+                HStack(spacing: 10) {
+                    Image(systemName: "info.circle").foregroundStyle(.tint)
+                    Text(notice).fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Button {
+                        model.libraryNotice = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Dismiss")
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.bar)
             }
         }
         .navigationTitle("My Library")
@@ -59,6 +69,72 @@ struct LibraryView: View {
     }
 }
 
+/// The list: games, and launchers whose games are indented beneath them (A to Z), which open
+/// and close.
+private struct LibraryList: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let _ = model.launcherExpansionChanged
+        List {
+            ForEach(model.topLevelGames) { game in
+                let children = model.launcherGames(game)
+                if children.isEmpty {
+                    GameRow(game: game)
+                } else {
+                    DisclosureGroup(isExpanded: Binding(get: { model.isExpanded(game) }, set: { model.setExpanded(game, $0) })) {
+                        ForEach(children) { child in
+                            GameRow(game: child)
+                        }
+                    } label: {
+                        GameRow(game: game)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The icon grid: games and launchers, then each launcher's games in a section of their own,
+/// which opens and closes.
+private struct LibraryGrid: View {
+    @Environment(AppModel.self) private var model
+    private let columns = [GridItem(.adaptive(minimum: 150, maximum: 190), spacing: 18)]
+
+    var body: some View {
+        let _ = model.launcherExpansionChanged
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 22) {
+                ForEach(model.topLevelGames) { game in
+                    GameTile(game: game)
+                }
+            }
+            .padding(20)
+            ForEach(model.topLevelGames.filter { !model.launcherGames($0).isEmpty }) { launcher in
+                let expanded = model.isExpanded(launcher)
+                VStack(alignment: .leading, spacing: 12) {
+                    Button {
+                        model.setExpanded(launcher, !expanded)
+                    } label: {
+                        Label("\(launcher.title) games", systemImage: expanded ? "chevron.down" : "chevron.right")
+                            .font(.headline)
+                    }
+                    .buttonStyle(.plain)
+                    if expanded {
+                        LazyVGrid(columns: columns, spacing: 22) {
+                            ForEach(model.launcherGames(launcher)) { game in
+                                GameTile(game: game)
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+            }
+        }
+    }
+}
+
 /// What a game's row or tile shows and allows, shared by both library layouts.
 private struct GameState {
     let isRunning: Bool
@@ -67,7 +143,7 @@ private struct GameState {
     let unavailable: String?
 
     @MainActor init(_ game: Game, model: AppModel) {
-        isRunning = model.running[game.id] != nil
+        isRunning = model.running[game.id] != nil || model.isSteamActive(game)
         needsSetup = game.recipe.launch == nil
         unavailable = isRunning ? nil : model.availability(of: game).reason
     }
@@ -88,10 +164,10 @@ private struct GamePrimaryButton: View {
             Button("Finish Setup…") { model.gameInWorkshop = game }
                 .help("Choose the program to launch")
         } else {
-            Button("Play") { model.launch(game) }
+            Button(model.isSteamLauncher(game) ? "Open" : "Play") { model.launch(game) }
                 .buttonStyle(.borderedProminent)
                 .disabled(state.unavailable != nil)
-                .help(state.unavailable ?? "Start \(game.title)")
+                .help(state.unavailable ?? (game.steam != nil ? "Start \(game.title) through Steam" : "Start \(game.title)"))
         }
     }
 }
@@ -136,7 +212,7 @@ private struct GameInteractions: ViewModifier {
                 Button("Show Bottle in Finder") { model.revealBottle(id: game.bottleID) }
                 Button("Report How It Ran…") { model.gameToReport = game }
                 Divider()
-                Button("Remove from Library…", role: .destructive) { model.removeGame(game) }
+                Button(game.steam != nil ? "Uninstall in Steam…" : "Remove from Library…", role: .destructive) { model.removeGame(game) }
             }
     }
 }
@@ -181,6 +257,12 @@ struct GameRow: View {
 
     private func details(_ resolved: ResolvedRecipe?) -> String {
         var parts: [String] = []
+        if model.isSteamLauncher(game) {
+            let count = model.games.filter { $0.steam?.launcherID == game.id }.count
+            parts.append(count == 0 ? "Launcher" : "Launcher · \(count) game\(count == 1 ? "" : "s")")
+        } else if game.steam != nil {
+            parts.append("Through Steam")
+        }
         if let resolved { parts.append(resolved.graphics.displayName) }
         if let name = game.recipe.name { parts.append(name) }
         if let community = communityDescription { parts.append(community) }

@@ -57,6 +57,21 @@ extension DistillerEngine {
         forceReconfigure: Bool = false,
         progress: @escaping @Sendable (InstallProgress) -> Void = { _ in }
     ) async throws -> Game {
+        var recipe = recipe
+        if game.steam != nil {
+            // A Steam game shares Steam's bottle: its bottle settings are always Steam's, and
+            // nothing it saves touches the bottle (or Steam's recipe file in it).
+            guard let launcher = try? library.game(id: game.steam?.launcherID ?? "") else {
+                throw DistillerError.setupFailed("\(game.title)'s Steam is no longer in the library.")
+            }
+            recipe = Self.aligned(recipe, with: launcher.recipe)
+            try RecipeLoader.validate(recipe)
+            var updated = (try? library.game(id: game.id)) ?? game
+            updated.recipe = recipe
+            updated.title = recipe.game.title
+            try library.upsert(updated)
+            return updated
+        }
         try RecipeLoader.validate(recipe)
         var updated = (try? library.game(id: game.id)) ?? game
         let previous = updated.recipe

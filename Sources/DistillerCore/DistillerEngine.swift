@@ -250,9 +250,12 @@ public final class DistillerEngine: @unchecked Sendable {
         if !workingDirectory.path.hasPrefix(prefixPath) {
             try DriveMapper.mapVolume(of: workingDirectory, in: prefix)
         }
+        // A Steam game always starts through Steam; the player's arguments follow (Steam passes
+        // them on to the game).
+        let arguments = game.steam.map { Self.steamLaunchArguments(appID: $0.appID, recipeArgs: launch.args) } ?? (launch.args ?? [])
         return try runner.launch(
             program: program.path,
-            arguments: launch.args ?? [],
+            arguments: arguments,
             wine: stack.wine,
             environment: env,
             workingDirectory: workingDirectory,
