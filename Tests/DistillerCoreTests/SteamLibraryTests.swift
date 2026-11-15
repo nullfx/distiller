@@ -69,6 +69,10 @@ final class SteamLibraryTests: XCTestCase {
         let ended = log + "\n[2026-11-15 00:52:50] AppID 440 no longer tracking PID 1680, exit code 0\n[2026-11-15 00:52:50] Remove 440 from running list"
         XCTAssertFalse(SteamLibrary.runningState(appID: "440", log: ended).running)
         XCTAssertFalse(SteamLibrary.runningState(appID: "44", log: log).running, "Another app's ID doesn't count")
+        // Steam writes Windows line endings.
+        let windows = ended.replacingOccurrences(of: "\n", with: "\r\n")
+        XCTAssertFalse(SteamLibrary.runningState(appID: "440", log: windows).running)
+        XCTAssertTrue(SteamLibrary.runningState(appID: "440", log: log.replacingOccurrences(of: "\n", with: "\r\n")).running)
     }
 
     func testFindsWhichBottlesAreActive() {

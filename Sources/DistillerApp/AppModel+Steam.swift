@@ -40,9 +40,12 @@ extension AppModel {
         let active = await engine.activeBottlePrefixes()
         var now: Set<String> = []
         for game in games {
+            // A game counts as running only while its bottle's Wine is up and Steam's log says
+            // so (a log left by a Steam that was stopped mid-game would otherwise say "running").
+            guard engine.isBottleActive(game, active: active) else { continue }
             if game.steam != nil {
                 if engine.steamGameState(game).running { now.insert(game.id) }
-            } else if engine.isSteamLauncher(game), engine.isBottleActive(game, active: active) {
+            } else if engine.isSteamLauncher(game) {
                 now.insert(game.id)
             }
         }

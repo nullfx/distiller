@@ -190,7 +190,9 @@ public enum SteamLibrary {
     public static func runningState(appID: String, log text: String) -> (running: Bool, pid: Int?) {
         var running = false
         var pid: Int?
-        for line in text.split(separator: "\n") {
+        // Steam writes Windows line endings, and Swift treats "\r\n" as one Character, so
+        // split on any newline rather than on "\n".
+        for line in text.split(whereSeparator: \.isNewline) {
             if line.contains("AppID \(appID) adding PID ") {
                 running = true
                 pid = line.components(separatedBy: "adding PID ").last?.split(separator: " ").first.flatMap { Int($0) }
