@@ -54,15 +54,15 @@ struct ContentView: View {
                 }
             }
         } detail: {
-            switch model.sidebarSelection ?? .library {
-            case .library: LibraryView()
-            case .community: CommunityView()
-            case .bottles: BottlesView()
-            case .components: ComponentsView()
-            }
-        }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            UnavailableStorageBanner()
+            // The banner and the status bar belong to this column. Around the whole split view
+            // they'd cover the sidebar's last line and nudge the title bar out of line.
+            detail
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    UnavailableStorageBanner()
+                }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    StatusBar()
+                }
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -73,17 +73,32 @@ struct ContentView: View {
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didMountNotification)) { _ in model.reload() }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didUnmountNotification)) { _ in model.reload() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in model.reload() }
-        .safeAreaInset(edge: .bottom) {
-            if let message = model.busyMessage {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text(message).lineLimit(1)
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(.bar)
+    }
+
+    @ViewBuilder private var detail: some View {
+        switch model.sidebarSelection ?? .library {
+        case .library: LibraryView()
+        case .community: CommunityView()
+        case .bottles: BottlesView()
+        case .components: ComponentsView()
+        }
+    }
+}
+
+/// Long work in progress (`AppModel.perform`), at the bottom of the main column.
+private struct StatusBar: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if let message = model.busyMessage {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text(message).lineLimit(1)
+                Spacer()
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(.bar)
         }
     }
 }
