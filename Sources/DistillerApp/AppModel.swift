@@ -39,6 +39,9 @@ final class AppModel {
     var recorders: [String: PerformanceRecorder] = [:]
     var performanceSessions: [String: PerformanceRecordingSession] = [:]
     var recordPerformanceAlways = false
+    /// Keyboard settings for Windows programs (Settings ▸ Games).
+    var commandAsCtrl = true
+    var optionAsAlt = false
     /// A recipe being installed needs a Wine build Distiller doesn't have. See AppModel+Sources.swift.
     var missingSource: MissingSourceSession?
     /// Storage locations on drives that aren't connected. See AppModel+Storage.swift.
@@ -176,6 +179,8 @@ final class AppModel {
         lastComponentCheck = settings.lastComponentCheck
         restorePointDays = settings.effectiveRestorePointDays
         recordPerformanceAlways = settings.isRecordingPerformanceAlways
+        commandAsCtrl = settings.isCommandCtrl
+        optionAsAlt = settings.isOptionAlt
         environment = setup?.check()
         checkForComponentUpdatesIfDue()
     }

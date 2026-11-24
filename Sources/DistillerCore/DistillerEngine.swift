@@ -248,6 +248,7 @@ public final class DistillerEngine: @unchecked Sendable {
             try GraphicsPlacer.installPrefixDLLs(graphics, prefix: prefix)
         }
         let env = WineEnvironment.build(prefix: prefix, wine: stack.wine, graphics: stack.graphics, resolved: resolved)
+        applyKeyboardSettings(to: prefix)
         // Following links matters for games used in place from another drive: Wine names a
         // file by the drive whose folder is nearest above it, so the real path runs the game
         // from D: (or E:, …) instead of from a link on C:.
@@ -275,6 +276,19 @@ public final class DistillerEngine: @unchecked Sendable {
             logName: game.id,
             onOutput: onOutput,
             onExit: onExit
+        )
+    }
+
+    /// The player's keyboard settings for Windows programs (Settings ▸ Games): Wine's macOS
+    /// driver reads them from the bottle's registry when it starts, so they're written before
+    /// every launch (`UserRegistryFile`); a bottle that's running picks them up next start.
+    public func applyKeyboardSettings(to prefix: URL) {
+        let settings = StorageSettings.load(fromSupportFolder: paths.root)
+        let ctrl = settings.isCommandCtrl ? "y" : "n"
+        let alt = settings.isOptionAlt ? "y" : "n"
+        _ = try? UserRegistryFile.set(
+            [("LeftCommandIsCtrl", ctrl), ("RightCommandIsCtrl", ctrl), ("LeftOptionIsAlt", alt), ("RightOptionIsAlt", alt)],
+            key: #"Software\Wine\Mac Driver"#, in: prefix.appendingPathComponent("user.reg")
         )
     }
 
@@ -312,6 +326,7 @@ public final class DistillerEngine: @unchecked Sendable {
             throw DistillerError.componentNotFound("the Wine build \(bottle.wine) this bottle was made with")
         }
         let env = WineEnvironment.build(prefix: bottles.prefix(of: bottle), wine: wine, graphics: nil, resolved: nil)
+        applyKeyboardSettings(to: bottles.prefix(of: bottle))
         return try runner.launch(
             program: program, arguments: arguments, wine: wine, environment: env,
             workingDirectory: nil, logName: "run-\(bottle.id)", onExit: onExit

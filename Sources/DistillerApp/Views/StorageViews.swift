@@ -77,7 +77,10 @@ struct SettingsView: View {
                 ComponentUpdateSettingsSection()
             }
                 .tabItem { Label("Updates", systemImage: "arrow.triangle.2.circlepath") }
-            SettingsPane { PerformanceSettingsSection() }
+            SettingsPane {
+                KeyboardSettingsSection()
+                PerformanceSettingsSection()
+            }
                 .tabItem { Label("Games", systemImage: "gamecontroller") }
             SettingsPane { GitHubSettingsSection() }
                 .tabItem { Label { Text("GitHub") } icon: { Image(nsImage: .gitHubMarkTemplate) } }
@@ -176,6 +179,28 @@ struct UnavailableStorageBanner: View {
     }
 }
 
+
+/// Settings ▸ Games: how the Mac's ⌘ and Option keys reach Windows programs.
+struct KeyboardSettingsSection: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Section {
+            Toggle("Use ⌘ as Ctrl in Windows programs", isOn: Binding(
+                get: { model.commandAsCtrl },
+                set: { model.setKeyboard(commandAsCtrl: $0) }
+            ))
+            Toggle("Use Option as Alt in Windows programs", isOn: Binding(
+                get: { model.optionAsAlt },
+                set: { model.setKeyboard(optionAsAlt: $0) }
+            ))
+        } header: {
+            Text("Keyboard")
+        } footer: {
+            Text("With ⌘ as Ctrl, ⌘C and ⌘V copy and paste in Windows programs (the clipboard is shared with your Mac), and shortcuts that use Ctrl work with ⌘ too; ⌘Q no longer quits a Windows program the Mac way. With Option as Alt, Option works for Alt shortcuts instead of typing special characters. Changes apply the next time a game (or launcher) starts.")
+        }
+    }
+}
 
 /// Settings ▸ Games: whether every game starts ready to record performance.
 struct PerformanceSettingsSection: View {
