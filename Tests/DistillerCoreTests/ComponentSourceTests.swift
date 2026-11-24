@@ -150,6 +150,59 @@ final class ComponentSourceTests: XCTestCase {
         XCTAssertNil(MachODependencies.libraries(of: file), "A command running past the end")
     }
 
+    func testFindsLibrariesTheWayTheProgramsDo() throws {
+        // Like Sikarugir 11.0_1: wineserver loads libinotify through @rpath with no search
+        // paths of its own; ntdll.so searches its own folder.
+        let build = root.appendingPathComponent("build")
+        let unix = build.appendingPathComponent("lib/wine/x86_64-unix")
+        try FileManager.default.createDirectory(at: unix, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: build.appendingPathComponent("bin"), withIntermediateDirectories: true)
+        try Self.machO(loading: ["@rpath/libinotify.0.dylib", "/usr/lib/libSystem.B.dylib"], executable: true)
+            .write(to: build.appendingPathComponent("bin/wineserver"))
+        try Self.machO(loading: ["@rpath/libinotify.0.dylib", "@rpath/win32u.so"], rpaths: ["@loader_path/"])
+            .write(to: unix.appendingPathComponent("ntdll.so"))
+        try Self.machO(loading: []).write(to: unix.appendingPathComponent("win32u.so"))
+        try Self.machO(loading: []).write(to: unix.appendingPathComponent("libinotify.0.dylib"))
+        XCTAssertEqual(MachODependencies.searchPaths(of: unix.appendingPathComponent("ntdll.so")), ["@loader_path/"])
+
+        XCTAssertEqual(MachODependencies.missingRPathLibraries(in: build), ["libinotify.0.dylib": ["bin/wineserver"]],
+                       "ntdll.so finds it next to itself; wineserver can't")
+        XCTAssertEqual(MachODependencies.missingRPathLibraries(in: build, fallback: [unix]), [:], "With the library folder it can")
+    }
+
+    func testTheLibraryFolderReachesWineAndScripts() throws {
+        var manifest = ComponentManifest(id: "sikarugir", kind: .wine, version: "11.0_1", displayName: "Sikarugir 11.0_1", arch: .x86_64, family: "sikarugir")
+        let directory = root.appendingPathComponent("Components/wine/sikarugir-11.0_1")
+        let prefix = root.appendingPathComponent("prefix")
+        XCTAssertNil(WineEnvironment.build(prefix: prefix, wine: InstalledComponent(manifest: manifest, directory: directory), graphics: nil, resolved: nil)["DYLD_FALLBACK_LIBRARY_PATH"])
+
+        // Installed before library_paths existed: libraries_from implies the folder.
+        manifest.librariesFrom = "wine-staging@11.21"
+        let wine = InstalledComponent(manifest: manifest, directory: directory)
+        let env = WineEnvironment.build(prefix: prefix, wine: wine, graphics: nil, resolved: nil)
+        XCTAssertEqual(env["DYLD_FALLBACK_LIBRARY_PATH"], directory.appendingPathComponent("lib/wine/x86_64-unix").path)
+
+        // A recipe can't change it.
+        let recipe = Recipe(id: "x", game: GameInfo(title: "X", slug: "x"),
+                            stack: StackSpec(runner: RunnerRequirement(family: "sikarugir"), graphics: .wined3d),
+                            env: ["DYLD_FALLBACK_LIBRARY_PATH": "/tmp"], launch: LaunchSpec(exe: #"C:\x.exe"#))
+        let resolved = engine.resolve(recipe)
+        XCTAssertEqual(WineEnvironment.build(prefix: prefix, wine: wine, graphics: nil, resolved: resolved)["DYLD_FALLBACK_LIBRARY_PATH"],
+                       directory.appendingPathComponent("lib/wine/x86_64-unix").path)
+
+        // winetricks runs through /bin/bash, which drops DYLD_* variables: its wrappers set it again.
+        try FileManager.default.createDirectory(at: directory.appendingPathComponent("bin"), withIntermediateDirectories: true)
+        let loader = directory.appendingPathComponent("bin/wine")
+        try Data("#!/bin/sh\n".utf8).write(to: loader)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: loader.path)
+        let wrappers = try XCTUnwrap(WineEnvironment.scriptWrappers(for: wine, environment: env, in: root.appendingPathComponent("wrappers")))
+        let script = try String(contentsOf: wrappers.wine, encoding: .utf8)
+        XCTAssertTrue(script.contains("export DYLD_FALLBACK_LIBRARY_PATH='\(directory.path)/lib/wine/x86_64-unix'"), script)
+        XCTAssertTrue(script.contains("exec '\(loader.path)' \"$@\""), script)
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: wrappers.wineserver.path))
+        XCTAssertNil(try WineEnvironment.scriptWrappers(for: wine, environment: [:], in: root.appendingPathComponent("none")), "Not needed")
+    }
+
     func testInstallsASourceWithAnotherBuildsLibraries() async throws {
         let staging = try addWine(id: "wine-staging", version: "11.21", family: "winehq")
         let stagingLib = staging.directory.appendingPathComponent("lib")
@@ -170,6 +223,7 @@ final class ComponentSourceTests: XCTestCase {
         XCTAssertEqual(result.component.manifest.version, "10.0_8")
         XCTAssertEqual(result.component.manifest.family, "sikarugir")
         XCTAssertEqual(result.component.manifest.librariesFrom, "wine-staging@11.21")
+        XCTAssertEqual(result.component.manifest.libraryPaths, ["lib/wine/x86_64-unix"])
         XCTAssertEqual(result.librariesAdded, 3, "Both libraries and the link")
         XCTAssertFalse(result.containsD3DMetal)
         let unix = result.component.directory.appendingPathComponent("lib/wine/x86_64-unix")
@@ -272,7 +326,9 @@ final class ComponentSourceTests: XCTestCase {
         let wine = bundle.appendingPathComponent("bin/wine")
         try Data("#!/bin/sh\n".utf8).write(to: wine)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: wine.path)
-        try Self.machO(loading: needs + ["@rpath/win32u.so"]).write(to: unix.appendingPathComponent("ntdll.so"))
+        try Self.machO(loading: needs + ["@rpath/win32u.so"], rpaths: ["@loader_path/"]).write(to: unix.appendingPathComponent("ntdll.so"))
+        // Like Sikarugir's: no search paths of its own.
+        try Self.machO(loading: needs, executable: true).write(to: bundle.appendingPathComponent("bin/wineserver"))
         try Self.machO(loading: []).write(to: unix.appendingPathComponent("win32u.so"))
         let archive = folder.appendingPathComponent("engine.tar.xz")
         let tar = Process()
@@ -297,16 +353,24 @@ final class ComponentSourceTests: XCTestCase {
         FakeSourceServer.responses["/dl/\(name)"] = archive
     }
 
-    /// A minimal 64-bit Mach-O whose load commands load `libraries`.
-    static func machO(loading libraries: [String]) -> Data {
+    /// A minimal 64-bit Mach-O whose load commands load `libraries` and search `rpaths`.
+    static func machO(loading libraries: [String], rpaths: [String] = [], executable: Bool = false) -> Data {
         func u32(_ value: UInt32) -> Data { withUnsafeBytes(of: value.littleEndian) { Data($0) } }
+        func padded(_ text: String, after header: Int) -> Data {
+            var name = Data(text.utf8) + Data([0])
+            while (header + name.count) % 8 != 0 { name.append(0) }
+            return name
+        }
         var commands = Data()
         for library in libraries {
-            var name = Data(library.utf8) + Data([0])
-            while (24 + name.count) % 8 != 0 { name.append(0) }
+            let name = padded(library, after: 24)
             commands += u32(0xC) + u32(UInt32(24 + name.count)) + u32(24) + u32(2) + u32(0x10000) + u32(0x10000) + name
         }
-        let header = u32(0xFEED_FACF) + u32(0x0100_0007) + u32(3) + u32(6) + u32(UInt32(libraries.count))
+        for path in rpaths {
+            let name = padded(path, after: 12)
+            commands += u32(0x8000_001C) + u32(UInt32(12 + name.count)) + u32(12) + name
+        }
+        let header = u32(0xFEED_FACF) + u32(0x0100_0007) + u32(3) + u32(executable ? 2 : 6) + u32(UInt32(libraries.count + rpaths.count))
             + u32(UInt32(commands.count)) + u32(0) + u32(0)
         return header + commands
     }

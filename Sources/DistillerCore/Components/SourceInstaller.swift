@@ -1,5 +1,13 @@
 import Foundation
 
+/// Where libraries from another build go in a Wine build installed from a source: next to its
+/// Unix-side Wine libraries, which find them there (`@loader_path`); programs without search
+/// paths of their own (its `wineserver`) find them through `DYLD_FALLBACK_LIBRARY_PATH`
+/// (`ComponentManifest.libraryPaths`).
+public enum SourceLibraries {
+    public static let folder = "lib/wine/x86_64-unix"
+}
+
 /// A downloadable file in a GitHub release.
 public struct ReleaseFile: Equatable, Sendable, Identifiable {
     public var release: String
@@ -111,9 +119,14 @@ extension EnvironmentSetup {
             if let donor {
                 progress("Adding libraries from \(donor.manifest.displayName)")
                 added = try Self.addLibraries(from: donor.directory, to: component.directory)
+                var updated = try engine.components.readManifest(in: component.directory)
+                updated.libraryPaths = [SourceLibraries.folder]
+                try engine.components.writeManifest(updated, in: component.directory)
+                component = InstalledComponent(manifest: updated, directory: component.directory)
             }
             progress("Checking \(source.name) \(version)")
-            let missing = MachODependencies.missingRPathLibraries(in: component.directory)
+            let fallback = component.manifest.effectiveLibraryPaths.map { component.directory.appendingPathComponent($0) }
+            let missing = MachODependencies.missingRPathLibraries(in: component.directory, fallback: fallback)
             guard missing.isEmpty else {
                 let names = missing.keys.sorted()
                 let list = names.prefix(6).joined(separator: ", ") + (names.count > 6 ? " and \(names.count - 6) more" : "")
@@ -154,7 +167,7 @@ extension EnvironmentSetup {
     /// (they look for libraries next to themselves). Clones cost no space on the same volume.
     static func addLibraries(from donor: URL, to target: URL) throws -> Int {
         let fileManager = FileManager.default
-        let unix = target.appendingPathComponent("lib/wine/x86_64-unix", isDirectory: true)
+        let unix = target.appendingPathComponent(SourceLibraries.folder, isDirectory: true)
         let destination = fileManager.fileExists(atPath: unix.path) ? unix : target.appendingPathComponent("lib", isDirectory: true)
         let folders = [donor.appendingPathComponent("lib"), donor.appendingPathComponent("lib/GStreamer.framework/Versions/1.0/lib")]
         var present = Set(MachODependencies.fileNames(in: target))

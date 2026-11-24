@@ -6,7 +6,7 @@ struct SourcesCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "sources",
         abstract: "Where Wine builds come from: list sources, add one for a tag a recipe names, install from it.",
-        subcommands: [List.self, Files.self, Add.self, Install.self]
+        subcommands: [List.self, Files.self, Add.self, Install.self, Check.self]
     )
 
     struct List: ParsableCommand {
@@ -82,6 +82,36 @@ struct SourcesCommand: AsyncParsableCommand {
             case false?: print("  Runs D3DMetal and DXMT: no (its macOS driver doesn't export the functions they need)")
             case nil: print("  Runs D3DMetal and DXMT: couldn't tell")
             }
+        }
+    }
+
+    struct Check: ParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Check that every library an installed Wine build's programs load can be found.")
+
+        @Argument(help: "The build, as id@version or just id (every installed version).")
+        var component: String
+
+        func run() throws {
+            let engine = try makeEngine()
+            let builds = engine.components.installed().filter {
+                $0.manifest.kind == .wine && ($0.id == component || $0.manifest.id == component)
+            }
+            guard !builds.isEmpty else { throw ValidationError("No Wine build \(component) is installed. See: distiller components list") }
+            var failed = false
+            for build in builds {
+                let fallback = build.manifest.effectiveLibraryPaths.map { build.directory.appendingPathComponent($0) }
+                let missing = MachODependencies.missingRPathLibraries(in: build.directory, fallback: fallback)
+                if missing.isEmpty {
+                    print("\(build.id): every library is found" + (fallback.isEmpty ? "" : " (with \(build.manifest.effectiveLibraryPaths.joined(separator: ", ")) as a library folder)"))
+                } else {
+                    failed = true
+                    print("\(build.id): can't find")
+                    for (library, users) in missing.sorted(by: { $0.key < $1.key }) {
+                        print("  \(library), needed by \(users.prefix(3).joined(separator: ", "))\(users.count > 3 ? " and \(users.count - 3) more" : "")")
+                    }
+                }
+            }
+            if failed { throw ExitCode.failure }
         }
     }
 }

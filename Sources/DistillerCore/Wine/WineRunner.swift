@@ -51,6 +51,12 @@ public final class WineRunner: @unchecked Sendable {
         var env = environment
         env["WINE"] = wineBinary.path
         env["WINESERVER"] = wine.wineserverBinary?.path
+        let wrappers = FileManager.default.temporaryDirectory.appendingPathComponent("distiller-wine-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: wrappers) }
+        if let wrapped = try WineEnvironment.scriptWrappers(for: wine, environment: environment, in: wrappers) {
+            env["WINE"] = wrapped.wine.path
+            env["WINESERVER"] = wrapped.wineserver.path
+        }
         let log = logURL(named: "winetricks")
         let process = try ProcessRunner.launch(
             URL(fileURLWithPath: "/bin/bash"),

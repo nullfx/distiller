@@ -44,6 +44,11 @@ public struct ComponentManifest: Codable, Equatable, Sendable {
     /// The installed build ("id@version") whose libraries were added to this one when it was
     /// installed from a source (`ComponentSource.librariesFrom`).
     public var librariesFrom: String?
+    /// Folders (relative to the component) where its programs find shared libraries they load
+    /// through `@rpath` but can't find on their own: given to Wine as
+    /// `DYLD_FALLBACK_LIBRARY_PATH`. Builds made for an app that sets it (Sikarugir's engines)
+    /// need it.
+    public var libraryPaths: [String]?
     /// `wine_lib` layers: DLLs that must also be in each bottle's `system32` (64-bit, from
     /// `lib/wine/x86_64-windows`) and `syswow64` (32-bit, from `lib/wine/i386-windows`),
     /// because Wine won't find them as builtins otherwise. DXMT's `winemetal.dll` is one.
@@ -55,7 +60,14 @@ public struct ComponentManifest: Codable, Equatable, Sendable {
         case dllOverrides = "dll_overrides"
         case composedFrom = "composed_from"
         case librariesFrom = "libraries_from"
+        case libraryPaths = "library_paths"
         case alsoInPrefix = "also_in_prefix"
+    }
+
+    /// `libraryPaths`, with the folder libraries from another build were added to for builds
+    /// installed before the field existed.
+    public var effectiveLibraryPaths: [String] {
+        libraryPaths ?? (librariesFrom != nil ? [SourceLibraries.folder] : [])
     }
 
     /// `alsoInPrefix`, with the known default for DXMT components installed before the field existed.
