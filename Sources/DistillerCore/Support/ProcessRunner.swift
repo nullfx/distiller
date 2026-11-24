@@ -87,6 +87,7 @@ public enum ProcessRunner {
         environment: [String: String],
         currentDirectory: URL?,
         logFile: URL,
+        onOutput: (@Sendable (Data) -> Void)? = nil,
         onExit: (@Sendable (Int32) -> Void)? = nil
     ) throws -> Process {
         let process = Process()
@@ -106,6 +107,7 @@ public enum ProcessRunner {
                 log.finish()
             } else {
                 log.append(chunk)
+                onOutput?(chunk)
             }
         }
         process.standardOutput = pipe

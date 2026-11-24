@@ -116,6 +116,7 @@ public final class WineRunner: @unchecked Sendable {
         environment: [String: String],
         workingDirectory: URL?,
         logName: String,
+        onOutput: (@Sendable (Data) -> Void)? = nil,
         onExit: (@Sendable (Int32) -> Void)? = nil
     ) throws -> Process {
         guard let wineBinary = wine.wineBinary else {
@@ -127,6 +128,7 @@ public final class WineRunner: @unchecked Sendable {
             environment: environment,
             currentDirectory: workingDirectory,
             logFile: logURL(named: logName),
+            onOutput: onOutput,
             onExit: onExit
         )
     }

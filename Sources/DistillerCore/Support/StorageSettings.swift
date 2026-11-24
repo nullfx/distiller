@@ -35,6 +35,9 @@ public struct StorageSettings: Codable, Equatable, Sendable {
     /// How long a restore point (a bottle's copy from before it moved to a newer Wine) is kept:
     /// days, or `RestorePointRetention.untilConfirmed` / `.untilRemoved`. Nil means 7 days.
     public var restorePointDays: Int?
+    /// Start every game ready to record performance (the Metal HUD's frame log, invisible).
+    /// Absent means off: games start that way only when the player records.
+    public var recordPerformanceAlways: Bool?
 
     enum CodingKeys: String, CodingKey {
         case wineLocation = "wine_location"
@@ -47,6 +50,7 @@ public struct StorageSettings: Codable, Equatable, Sendable {
         case activeComponents = "active_components"
         case lastComponentCheck = "last_component_check"
         case restorePointDays = "restore_point_days"
+        case recordPerformanceAlways = "record_performance_always"
     }
 
     public init(wineLocation: String? = nil, bottlesLocation: String? = nil, locationsConfirmed: Bool? = nil, assistantEnabled: Bool? = nil) {
@@ -64,6 +68,7 @@ public struct StorageSettings: Codable, Equatable, Sendable {
     public var effectiveLogLimitMB: Int { max(0, logLimitMB ?? Self.defaultLogLimitMB) }
     public var effectiveComponentUpdates: ComponentUpdateMode { componentUpdates ?? .ask }
     public var effectiveRestorePointDays: Int { restorePointDays ?? RestorePointRetention.defaultDays }
+    public var isRecordingPerformanceAlways: Bool { recordPerformanceAlways ?? false }
 
     public static let fileName = "settings.json"
 

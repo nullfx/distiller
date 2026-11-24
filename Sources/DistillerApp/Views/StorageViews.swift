@@ -77,6 +77,8 @@ struct SettingsView: View {
                 ComponentUpdateSettingsSection()
             }
                 .tabItem { Label("Updates", systemImage: "arrow.triangle.2.circlepath") }
+            SettingsPane { PerformanceSettingsSection() }
+                .tabItem { Label("Games", systemImage: "gamecontroller") }
             SettingsPane { GitHubSettingsSection() }
                 .tabItem { Label { Text("GitHub") } icon: { Image(nsImage: .gitHubMarkTemplate) } }
             SettingsPane { AssistantSettingsSection() }
@@ -174,6 +176,24 @@ struct UnavailableStorageBanner: View {
     }
 }
 
+
+/// Settings ▸ Games: whether every game starts ready to record performance.
+struct PerformanceSettingsSection: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        Section {
+            Toggle("Always start games ready to record performance", isOn: Binding(
+                get: { model.recordPerformanceAlways },
+                set: { model.setRecordPerformanceAlways($0) }
+            ))
+        } header: {
+            Text("Performance")
+        } footer: {
+            Text("Recording uses Apple's Metal performance HUD, kept invisible, to time every frame; it only turns on when a game starts. Off: a game starts that way only when you choose Record Performance… for it. On: you can start recording any time while playing. Recordings stay on this Mac.")
+        }
+    }
+}
 
 /// Settings ▸ AI Assistant: whether `distiller mcp` serves its troubleshooting tools (off until
 /// the player turns it on), and how an AI app connects. Distiller never edits other apps'

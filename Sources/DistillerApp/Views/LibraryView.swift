@@ -227,6 +227,13 @@ private struct GameInteractions: ViewModifier {
                 Button("Show Log") { model.showLog(for: game) }
                 Button("Show Bottle in Finder") { model.revealBottle(id: game.bottleID) }
                 Button("Report How It Ran…") { model.gameToReport = game }
+                if !model.isSteamLauncher(game) {
+                    Button(game.steam == nil ? "Record Performance…" : "Record Performance… (Not Yet for Steam Games)") {
+                        model.recordPerformance(game)
+                    }
+                    .disabled(game.steam != nil)
+                    .help("Measure the frame rate while you play: start when the game is set up and past loading screens")
+                }
                 Divider()
                 Button(game.steam != nil ? "Uninstall in Steam…" : "Remove from Library…", role: .destructive) { model.removeGame(game) }
             }

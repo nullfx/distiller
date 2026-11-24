@@ -54,6 +54,12 @@ From a terminal: `distiller components check`, `distiller components update [<id
 
 Install Steam like any game (a recipe that runs its installer). Every game Steam then installs, whether you install it from Distiller or inside Steam's own window, appears in My Library under Steam's entry (expand or collapse it with its arrow), with its own icon. **Play** starts the game through Steam (starting Steam first if needed); **Stop** ends just the game; **Uninstall in Steam…** asks Steam to remove it, and its entry goes once Steam has. A game's recipe holds its own launch options; Steam's bottle settings (Wine, graphics layer, Windows version, components) are Steam's and shared by all its games. Steam's window needs a Wine build derived from CrossOver's source; standard Wine builds draw it black.
 
+### Recording performance
+
+Choose **Record Performance…** from a game's menu in My Library. Distiller starts the game ready to record and opens a small panel that stays above it. Set the game's resolution and graphics detail first and get past loading screens (they lower the result), then click **Start Recording** and play for at least two minutes. The panel shows the frame rate as you play; **Stop Recording** shows the average, the 1% and 0.1% lows (the frame rate of the slowest frames, where stutter shows) and a per-minute chart, and saves the recording on this Mac. Fill in what only you know (detail preset, frame limit or vsync, the game's own resolution, upscaling); Distiller notes the window size and the screen's refresh rate itself.
+
+Recording uses Apple's Metal performance HUD, kept invisible, so it works when a game draws with D3DMetal, DXMT or DXVK; WineD3D draws with OpenGL and can't be recorded yet, and games started through Steam aren't supported yet. The HUD only turns on when a game starts, so a game already running needs to be quit first, unless Settings ▸ Games ▸ **Always start games ready to record performance** is on. From a terminal: `distiller launch <game> --measure`, `distiller performance summary <launch log>` and `distiller performance list <game>`.
+
 ## Creating recipes
 
 **Create Recipe…** in My Library (⌘N) walks through three starting points:
