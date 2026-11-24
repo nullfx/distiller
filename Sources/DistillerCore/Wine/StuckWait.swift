@@ -17,6 +17,11 @@ public enum StuckWait {
         "explorer.exe", "conhost.exe", "wmic.exe", "start.exe",
     ]
 
+    /// Whether `program` is one of Wine's own (from C:\windows, with a name in `wineServices`).
+    static func isWineOwn(_ program: RunningWindowsProgram) -> Bool {
+        program.isWineSystemProgram && wineServices.contains(program.name.lowercased())
+    }
+
     /// Background services that never exit, by program, with the service names that run it.
     static let neverExiting: [String: [String]] = [
         "mscorsvw.exe": ["clr_optimization_v4.0.30319_32", "clr_optimization_v4.0.30319_64"],
