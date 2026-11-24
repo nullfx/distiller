@@ -38,6 +38,11 @@ public struct StorageSettings: Codable, Equatable, Sendable {
     /// Start every game ready to record performance (the Metal HUD's frame log, invisible).
     /// Absent means off: games start that way only when the player records.
     public var recordPerformanceAlways: Bool?
+    /// The ⌘ keys act as Ctrl in Windows programs, so ⌘C and ⌘V copy and paste. Absent means on.
+    public var commandAsCtrl: Bool?
+    /// The Option keys act as Alt in Windows programs (instead of typing special characters).
+    /// Absent means off.
+    public var optionAsAlt: Bool?
 
     enum CodingKeys: String, CodingKey {
         case wineLocation = "wine_location"
@@ -51,6 +56,8 @@ public struct StorageSettings: Codable, Equatable, Sendable {
         case lastComponentCheck = "last_component_check"
         case restorePointDays = "restore_point_days"
         case recordPerformanceAlways = "record_performance_always"
+        case commandAsCtrl = "command_as_ctrl"
+        case optionAsAlt = "option_as_alt"
     }
 
     public init(wineLocation: String? = nil, bottlesLocation: String? = nil, locationsConfirmed: Bool? = nil, assistantEnabled: Bool? = nil) {
@@ -69,6 +76,8 @@ public struct StorageSettings: Codable, Equatable, Sendable {
     public var effectiveComponentUpdates: ComponentUpdateMode { componentUpdates ?? .ask }
     public var effectiveRestorePointDays: Int { restorePointDays ?? RestorePointRetention.defaultDays }
     public var isRecordingPerformanceAlways: Bool { recordPerformanceAlways ?? false }
+    public var isCommandCtrl: Bool { commandAsCtrl ?? true }
+    public var isOptionAlt: Bool { optionAsAlt ?? false }
 
     public static let fileName = "settings.json"
 

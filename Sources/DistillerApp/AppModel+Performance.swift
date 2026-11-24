@@ -34,6 +34,21 @@ extension AppModel {
         session.show()
     }
 
+    /// ⌘ as Ctrl and Option as Alt in Windows programs; applied to a bottle before each launch.
+    func setKeyboard(commandAsCtrl: Bool? = nil, optionAsAlt: Bool? = nil) {
+        guard let engine else { return }
+        var settings = StorageSettings.load(fromSupportFolder: engine.paths.root)
+        if let commandAsCtrl { settings.commandAsCtrl = commandAsCtrl ? nil : false }
+        if let optionAsAlt { settings.optionAsAlt = optionAsAlt ? true : nil }
+        do {
+            try settings.save(toSupportFolder: engine.paths.root)
+            self.commandAsCtrl = settings.isCommandCtrl
+            self.optionAsAlt = settings.isOptionAlt
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func setRecordPerformanceAlways(_ always: Bool) {
         guard let engine else { return }
         var settings = StorageSettings.load(fromSupportFolder: engine.paths.root)
