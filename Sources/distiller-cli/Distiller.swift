@@ -423,6 +423,9 @@ struct LaunchCommand: AsyncParsableCommand {
     @Flag(help: "For this launch only: log DLL loads, exceptions and Wine errors, and show Apple's Metal HUD while the game draws with Metal. Nothing is saved to the recipe.")
     var diagnose = false
 
+    @Flag(help: "For this launch only: record the frame rate (Apple's Metal performance HUD, kept invisible, logs every frame to the game's launch log). Works when the game draws with Metal (D3DMetal, DXMT, DXVK). Nothing is saved to the recipe.")
+    var measure = false
+
     @Option(name: .customLong("dll"), help: "For this launch only, override a DLL, such as nvapi64=disabled or d3dcompiler_47=native. Repeat for more.")
     var dlls: [String] = []
 
@@ -467,6 +470,12 @@ struct LaunchCommand: AsyncParsableCommand {
             overrides.env = (overrides.env ?? [:]).merging(DiagnosticLaunch.environment) { _, diagnostic in diagnostic }
             launched.overrides = overrides
             print("Diagnostic launch: Wine logs DLL loads, exceptions and errors; the Metal HUD appears if the game draws with Metal.")
+        }
+        if measure {
+            var overrides = launched.overrides ?? LocalOverrides()
+            overrides.env = (overrides.env ?? [:]).merging(MeasuredLaunch.environment) { _, measured in measured }
+            launched.overrides = overrides
+            print("Measured launch: every frame's timing goes to the launch log (when the game draws with Metal).")
         }
         if let point = try await engine.prepareWineMove(for: launched, progress: { print($0) }) {
             print("Saved a restore point (\(RestorePoint.describe(point.fromWine))). If the game doesn't work: distiller games restore \(entry.id) --rollback")
