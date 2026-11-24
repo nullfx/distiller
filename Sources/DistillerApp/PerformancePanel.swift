@@ -120,9 +120,9 @@ final class PerformanceRecordingSession {
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true
         panel.standardWindowButton(.closeButton)?.isHidden = true
-        let hosting = NSHostingView(rootView: PerformancePanelView(session: self))
-        hosting.sizingOptions = [.preferredContentSize]
+        let hosting = FittingHostingView(rootView: PerformancePanelView(session: self))
         panel.contentView = hosting
+        hosting.fitWindow()
         if let screen = NSScreen.main?.visibleFrame {
             panel.setFrameTopLeftPoint(NSPoint(x: screen.maxX - panel.frame.width - 24, y: screen.maxY - 24))
         }
@@ -336,12 +336,14 @@ private struct SummaryView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if summary.timelineFPS.count >= 2 {
-                Chart(Array(summary.timelineFPS.enumerated()), id: \.offset) { minute, fps in
-                    LineMark(x: .value("Minute", minute + 1), y: .value("fps", fps))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Frames per second, each minute").font(.caption).foregroundStyle(.secondary)
+                    Chart(Array(summary.timelineFPS.enumerated()), id: \.offset) { minute, fps in
+                        BarMark(x: .value("Minute", "\(minute + 1)"), y: .value("fps", fps))
+                    }
+                    .chartYAxis { AxisMarks(values: .automatic(desiredCount: 3)) }
+                    .frame(height: 110)
                 }
-                .chartXAxisLabel("minute")
-                .chartYAxisLabel("fps")
-                .frame(height: 80)
             }
             Text("Saved on this Mac.").font(.caption).foregroundStyle(.secondary)
         }
