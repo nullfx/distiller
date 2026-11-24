@@ -50,8 +50,39 @@ public enum WineEnvironment {
             env["WINEDLLOVERRIDES"] = dllOverrideString(overrides)
         }
 
+        // Builds that load libraries through @rpath without search paths of their own (made
+        // for an app that sets this) find them here. Set last, so recipes can't change it.
+        let libraries = wine.manifest.effectiveLibraryPaths.map { wine.directory.appendingPathComponent($0).path }
+        if !libraries.isEmpty {
+            env[Self.libraryPathKey] = libraries.joined(separator: ":")
+        }
+
         env["WINEPREFIX"] = prefix.path
         return env
+    }
+
+    static let libraryPathKey = "DYLD_FALLBACK_LIBRARY_PATH"
+
+    /// macOS removes `DYLD_*` variables when it starts a system program such as `/bin/bash`, so
+    /// Wine started from a script (winetricks) loses them. For builds that need them, scripts
+    /// get small wrappers (in `folder`) as `WINE` and `WINESERVER` that set the variable again
+    /// just before starting Wine. Nil when the build doesn't need them.
+    static func scriptWrappers(for wine: InstalledComponent, environment: [String: String], in folder: URL) throws -> (wine: URL, wineserver: URL)? {
+        guard let paths = environment[libraryPathKey], let wineBinary = wine.wineBinary,
+              let server = wine.wineserverBinary else { return nil }
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        func wrapper(_ name: String, _ target: URL) throws -> URL {
+            let url = folder.appendingPathComponent(name)
+            let script = "#!/bin/sh\nexport \(libraryPathKey)=\(shellQuoted(paths))\nexec \(shellQuoted(target.path)) \"$@\"\n"
+            try script.write(to: url, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+            return url
+        }
+        return (try wrapper("wine", wineBinary), try wrapper("wineserver", server))
+    }
+
+    static func shellQuoted(_ text: String) -> String {
+        "'" + text.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
     /// Formats overrides the way `WINEDLLOVERRIDES` expects: "d3d11=n,b;dxgi=n".

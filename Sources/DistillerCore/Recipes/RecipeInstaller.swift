@@ -177,12 +177,12 @@ public final class RecipeInstaller: @unchecked Sendable {
                 let runner = self.runner
                 let driveC = prefix.appendingPathComponent("drive_c", isDirectory: true)
                 let exited = try await runner.waitForServer(wine: wine, environment: env) {
-                    guard let gameProgram, FileManager.default.fileExists(atPath: gameProgram.followingSymlinks.path) else { return false }
-                    let running = (try? await runner.runningPrograms(wine: wine, environment: env)) ?? []
-                    return Self.programStartedByInstaller(CommunityCheckSession.programs(from: running, driveC: driveC), gameProgram: gameProgram) != nil
+                    guard let gameProgram, FileManager.default.fileExists(atPath: gameProgram.followingSymlinks.path),
+                          let running = try? await runner.runningPrograms(wine: wine, environment: env) else { return false }
+                    return Self.installFinished(running, driveC: driveC, gameProgram: gameProgram)
                 }
                 if !exited, let gameProgram {
-                    progress(index + 1, "The installer left \(gameProgram.deletingLastPathComponent().lastPathComponent) running; the install is done")
+                    progress(index + 1, "\(gameProgram.lastPathComponent) is installed; the install is done")
                 }
                 continue
             }
@@ -218,6 +218,18 @@ public final class RecipeInstaller: @unchecked Sendable {
         let staged = downloads.appendingPathComponent(program.lastPathComponent)
         try APFSClone.replaceItem(at: staged, withCloneOf: program)
         return staged
+    }
+
+    /// Whether an installer that's waited for is done, once the game's program exists: it left
+    /// the launcher or the game running, or only Wine's own programs are left. The second
+    /// matters because asking Wine what's running (as this check does every few seconds) starts
+    /// Wine's helper programs, which would otherwise keep the bottle from going idle, so a
+    /// silent installer that finished (Steam's) would be waited for forever.
+    static func installFinished(_ running: [RunningWindowsProgram], driveC: URL, gameProgram: URL) -> Bool {
+        if programStartedByInstaller(CommunityCheckSession.programs(from: running, driveC: driveC), gameProgram: gameProgram) != nil {
+            return true
+        }
+        return running.allSatisfy { StuckWait.isWineOwn($0) }
     }
 
     /// A program the installer started from the game's own folder (its launcher, or the game),

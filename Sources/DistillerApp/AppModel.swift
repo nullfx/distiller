@@ -39,6 +39,8 @@ final class AppModel {
     var recorders: [String: PerformanceRecorder] = [:]
     var performanceSessions: [String: PerformanceRecordingSession] = [:]
     var recordPerformanceAlways = false
+    /// A recipe being installed needs a Wine build Distiller doesn't have. See AppModel+Sources.swift.
+    var missingSource: MissingSourceSession?
     /// Storage locations on drives that aren't connected. See AppModel+Storage.swift.
     var unavailableStorage: [UnavailableStorage] = []
     /// Whether each game can be played now, and its icon. See AppModel+Library.swift.
@@ -240,6 +242,7 @@ final class AppModel {
 
     func install(_ recipe: Recipe) async throws {
         guard let engine else { return }
+        guard await resolveMissingComponents(for: recipe) else { return }
         guard let supplied = await askForUserItems(recipe) else { return }
         // Files downloaded from publishers' pages are cloned into the bottle; remove the
         // temporary copies however the install ends.

@@ -11,9 +11,15 @@ public final class WineRunner: @unchecked Sendable {
     // MARK: Prefix setup
 
     /// Creates a fresh prefix with `wineboot --init` and waits for wineserver to finish.
+    /// Wine's errors, without its many "not implemented" notes.
+    static let errorsOnly = "err+all,fixme-all"
+
     public func initializePrefix(_ prefix: URL, wine: InstalledComponent) async throws {
         try FileManager.default.createDirectory(at: prefix, withIntermediateDirectories: true)
-        let env = WineEnvironment.build(prefix: prefix, wine: wine, graphics: nil, resolved: nil)
+        var env = WineEnvironment.build(prefix: prefix, wine: wine, graphics: nil, resolved: nil)
+        // Done once per Wine build, and when it fails Wine's errors are the only clue (a new
+        // build that can't start): log them rather than nothing.
+        env["WINEDEBUG"] = WineRunner.errorsOnly
         try await wineCommand(["wineboot", "--init"], wine: wine, environment: env, logName: "wineboot")
         try await waitForServer(wine: wine, environment: env)
     }
@@ -51,6 +57,12 @@ public final class WineRunner: @unchecked Sendable {
         var env = environment
         env["WINE"] = wineBinary.path
         env["WINESERVER"] = wine.wineserverBinary?.path
+        let wrappers = FileManager.default.temporaryDirectory.appendingPathComponent("distiller-wine-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: wrappers) }
+        if let wrapped = try WineEnvironment.scriptWrappers(for: wine, environment: environment, in: wrappers) {
+            env["WINE"] = wrapped.wine.path
+            env["WINESERVER"] = wrapped.wineserver.path
+        }
         let log = logURL(named: "winetricks")
         let process = try ProcessRunner.launch(
             URL(fileURLWithPath: "/bin/bash"),

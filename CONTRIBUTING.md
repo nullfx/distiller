@@ -50,7 +50,7 @@ For the website: `node --test site/tests/*.test.mjs`, and preview with `python3 
 The full list is in [AGENTS.md](AGENTS.md). The ones contributors most often run into:
 
 - **Clean-room and MIT.** Distiller is MIT-licensed. Never copy, port or paraphrase code from copyleft (GPL, AGPL) or proprietary projects, including other Wine launchers. Learning from their documentation and behaviour is fine; reproducing their code isn't. Dependencies must have MIT-compatible licences. Note where anything you didn't write came from, and its licence, next to it.
-- **Never include Apple's software.** D3DMetal and the rest of Apple's Game Porting Toolkit are never bundled, downloaded or redistributed. Players import them from their own download.
+- **Never include Apple's software.** D3DMetal and the rest of Apple's Game Porting Toolkit are never bundled, hosted or redistributed by Distiller or this repository's projects. Players import them from their own download. A third-party Wine build listed as a source that includes D3DMetal is its publisher's responsibility under Apple's terms; its source must say so (`contains_d3dmetal: true`).
 - **Recipes are data.** A recipe can never run a command on the player's Mac, and every path in a recipe stays inside the game's bottle. Changes to what recipes can do need a maintainer's agreement first.
 - **No secrets, no telemetry.** Never commit tokens, keys or certificates, not even in tests. Nothing is sent anywhere without the player choosing to.
 - **No game files or art.** Don't add games' files, art or screenshots to this repository; tests use generated placeholders.

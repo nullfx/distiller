@@ -518,10 +518,12 @@ struct GitHubRelease: Decodable {
         var browserDownloadURL: String
         var size: Int64?
         var digest: String?
+        var updatedAt: String?
 
         enum CodingKeys: String, CodingKey {
             case name, size, digest
             case browserDownloadURL = "browser_download_url"
+            case updatedAt = "updated_at"
         }
     }
 
