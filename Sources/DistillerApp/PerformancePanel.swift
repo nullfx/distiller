@@ -33,6 +33,7 @@ final class PerformanceRecordingSession {
     var renderText = ""
 
     private var panel: NSPanel?
+    private var panelDelegate: PanelCloseButton?
     private var refresh: Task<Void, Never>?
 
     init(game: Game, recorder: PerformanceRecorder, engine: DistillerEngine, onClose: @escaping () -> Void) {
@@ -119,7 +120,10 @@ final class PerformanceRecordingSession {
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true
-        panel.standardWindowButton(.closeButton)?.isHidden = true
+        // The close button does what Done does (stops a recording and saves it first).
+        let delegate = PanelCloseButton { [weak self] in self?.close() }
+        panel.delegate = delegate
+        panelDelegate = delegate
         let hosting = FittingHostingView(rootView: PerformancePanelView(session: self))
         panel.contentView = hosting
         hosting.fitWindow()
@@ -141,6 +145,17 @@ final class PerformanceRecordingSession {
     private func updateDisplay() {
         guard let pid = live.pid, let info = GameDisplay.info(pid: pid) else { return }
         display = info
+    }
+}
+
+/// Routes a panel's close button to the session, which closes the panel itself.
+private final class PanelCloseButton: NSObject, NSWindowDelegate {
+    let action: @MainActor () -> Void
+    init(action: @escaping @MainActor () -> Void) { self.action = action }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        MainActor.assumeIsolated { action() }
+        return false
     }
 }
 
