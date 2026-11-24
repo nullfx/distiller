@@ -66,10 +66,15 @@ public enum WineEnvironment {
     /// macOS removes `DYLD_*` variables when it starts a system program such as `/bin/bash`, so
     /// Wine started from a script (winetricks) loses them. For builds that need them, scripts
     /// get small wrappers (in `folder`) as `WINE` and `WINESERVER` that set the variable again
-    /// just before starting Wine. Nil when the build doesn't need them.
-    static func scriptWrappers(for wine: InstalledComponent, environment: [String: String], in folder: URL) throws -> (wine: URL, wineserver: URL)? {
+    /// just before starting Wine, and one for `wine64` when the build has it (winetricks looks
+    /// for it next to `WINE`). `environment` gets what winetricks needs to use them: the
+    /// wrappers, and `WINE_BINDIR` (the real programs, which winetricks inspects to tell the
+    /// kind of Wine; scripts tell it nothing, and it then guesses a `wine64` that isn't there).
+    /// False when the build doesn't need them.
+    @discardableResult
+    static func useScriptWrappers(for wine: InstalledComponent, environment: inout [String: String], in folder: URL) throws -> Bool {
         guard let paths = environment[libraryPathKey], let wineBinary = wine.wineBinary,
-              let server = wine.wineserverBinary else { return nil }
+              let server = wine.wineserverBinary else { return false }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         func wrapper(_ name: String, _ target: URL) throws -> URL {
             let url = folder.appendingPathComponent(name)
@@ -78,7 +83,14 @@ public enum WineEnvironment {
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
             return url
         }
-        return (try wrapper("wine", wineBinary), try wrapper("wineserver", server))
+        environment["WINE"] = try wrapper("wine", wineBinary).path
+        environment["WINESERVER"] = try wrapper("wineserver", server).path
+        let wine64 = wineBinary.deletingLastPathComponent().appendingPathComponent("wine64")
+        if wine64 != wineBinary, FileManager.default.isExecutableFile(atPath: wine64.path) {
+            _ = try wrapper("wine64", wine64)
+        }
+        environment["WINE_BINDIR"] = wineBinary.deletingLastPathComponent().path
+        return true
     }
 
     static func shellQuoted(_ text: String) -> String {

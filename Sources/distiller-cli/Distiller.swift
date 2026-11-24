@@ -361,6 +361,15 @@ struct InstallCommand: AsyncParsableCommand {
     func run() async throws {
         let engine = try makeEngine()
         let loaded = try RecipeLoader.load(from: URL(fileURLWithPath: recipe))
+        if SteamLibrary.gameAppID(in: loaded) != nil {
+            switch try engine.installSteamGame(loaded) {
+            case .alreadyInstalled(let game):
+                print("Steam already has \(game.title); its entry (\(game.id)) now has this recipe's options. Start it with: distiller launch \(game.id)")
+            case .requested(let appID, let launcher):
+                print("Asked Steam (\(launcher.title)) to install \(loaded.game.title) (app \(appID)). Confirm in Steam's window; once Steam has finished, it's in your library under Steam (distiller games) with this recipe's options.")
+            }
+            return
+        }
         var userFiles: [String: URL] = [:]
         for entry in files {
             let parts = entry.split(separator: "=", maxSplits: 1).map(String.init)

@@ -43,9 +43,14 @@ extension DistillerEngine {
                 guard let program = Self.bestIconProgram(in: folder) else { continue }
                 let relative = program.relativePath.replacingOccurrences(of: "/", with: "\\")
                 let windowsFolder = Self.windowsPath(of: folder, root: root)
+                var recipe = Self.steamGameRecipe(launcher: launcher.recipe, app: app, clientExe: clientExe)
+                // A recipe the player added for it before Steam had it (installSteamGame).
+                if let added = takePendingSteamGame(appID: app.appID, launcherID: launcher.id) {
+                    recipe = Self.applying(added, to: recipe, appID: app.appID)
+                }
                 let game = Game(
                     id: "\(launcher.id)-steam-\(app.appID)", title: app.name, bottleID: launcher.bottleID,
-                    recipe: Self.steamGameRecipe(launcher: launcher.recipe, app: app, clientExe: clientExe),
+                    recipe: recipe,
                     steam: Game.SteamLink(appID: app.appID, launcherID: launcher.id, program: windowsFolder.map { $0 + relative })
                 )
                 try? library.upsert(game)
@@ -53,9 +58,14 @@ extension DistillerEngine {
                 games.append(game)
                 sync.added.append(game)
             }
-            // Keep each game's bottle settings in step with Steam's (they're the bottle's).
+            // Keep each game's bottle settings in step with Steam's (they're the bottle's), and
+            // give an existing entry a recipe the player added for it.
             for game in existing where installed.contains(where: { $0.app.appID == game.steam?.appID }) {
-                let aligned = Self.aligned(game.recipe, with: launcher.recipe)
+                var base = game.recipe
+                if let appID = game.steam?.appID, let added = takePendingSteamGame(appID: appID, launcherID: launcher.id) {
+                    base = Self.applying(added, to: base, appID: appID)
+                }
+                let aligned = Self.aligned(base, with: launcher.recipe)
                 if aligned != game.recipe {
                     var updated = game
                     updated.recipe = aligned

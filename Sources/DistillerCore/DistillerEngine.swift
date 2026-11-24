@@ -158,6 +158,9 @@ public final class DistillerEngine: @unchecked Sendable {
         progress: @escaping @Sendable (InstallProgress) -> Void = { _ in }
     ) async throws -> Game {
         try RecipeLoader.validate(recipe)
+        if SteamLibrary.gameAppID(in: recipe) != nil {
+            throw DistillerError.invalidRecipe("\(recipe.game.title) is a Steam game: Steam installs it next to itself (installSteamGame), not in a bottle of its own.")
+        }
         try paths.requireAvailable(.wine)
         let resolved = resolve(recipe)
         let stack = try selectStack(for: resolved)

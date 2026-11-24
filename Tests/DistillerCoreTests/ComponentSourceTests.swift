@@ -195,12 +195,27 @@ final class ComponentSourceTests: XCTestCase {
         let loader = directory.appendingPathComponent("bin/wine")
         try Data("#!/bin/sh\n".utf8).write(to: loader)
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: loader.path)
-        let wrappers = try XCTUnwrap(WineEnvironment.scriptWrappers(for: wine, environment: env, in: root.appendingPathComponent("wrappers")))
-        let script = try String(contentsOf: wrappers.wine, encoding: .utf8)
+        var scriptEnv = env
+        XCTAssertTrue(try WineEnvironment.useScriptWrappers(for: wine, environment: &scriptEnv, in: root.appendingPathComponent("wrappers")))
+        let wrapper = try XCTUnwrap(scriptEnv["WINE"])
+        let script = try String(contentsOfFile: wrapper, encoding: .utf8)
         XCTAssertTrue(script.contains("export DYLD_FALLBACK_LIBRARY_PATH='\(directory.path)/lib/wine/x86_64-unix'"), script)
         XCTAssertTrue(script.contains("exec '\(loader.path)' \"$@\""), script)
-        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: wrappers.wineserver.path))
-        XCTAssertNil(try WineEnvironment.scriptWrappers(for: wine, environment: [:], in: root.appendingPathComponent("none")), "Not needed")
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: try XCTUnwrap(scriptEnv["WINESERVER"])))
+        // winetricks tells the kind of Wine from the real programs, not the scripts (or it
+        // guesses a wine64 next to the wrapper that isn't there: "cmd.exe returned empty string").
+        XCTAssertEqual(scriptEnv["WINE_BINDIR"], directory.appendingPathComponent("bin").path)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("wrappers/wine64").path), "This build has no wine64")
+        // A build with wine64 gets a wrapper for it too, where winetricks looks.
+        let wine64 = directory.appendingPathComponent("bin/wine64")
+        try Data("#!/bin/sh\n".utf8).write(to: wine64)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: wine64.path)
+        var classic = env
+        try WineEnvironment.useScriptWrappers(for: wine, environment: &classic, in: root.appendingPathComponent("classic"))
+        XCTAssertTrue(FileManager.default.isExecutableFile(atPath: root.appendingPathComponent("classic/wine64").path))
+        var plain: [String: String] = [:]
+        XCTAssertFalse(try WineEnvironment.useScriptWrappers(for: wine, environment: &plain, in: root.appendingPathComponent("none")), "Not needed")
+        XCTAssertTrue(plain.isEmpty)
     }
 
     func testInstallsASourceWithAnotherBuildsLibraries() async throws {

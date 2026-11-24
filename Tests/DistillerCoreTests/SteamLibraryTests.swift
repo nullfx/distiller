@@ -163,6 +163,83 @@ final class SteamLibraryTests: XCTestCase {
         XCTAssertEqual(engine.library.load().map(\.id), ["steam"])
     }
 
+    func testRecognisesASteamGamesRecipe() {
+        func recipe(_ exe: String, _ args: [String]?) -> Recipe {
+            Recipe(id: "x", game: GameInfo(title: "Portal 2", slug: "portal-2"),
+                   stack: StackSpec(runner: RunnerRequirement(family: "sikarugir"), graphics: .wined3d), launch: LaunchSpec(exe: exe, args: args))
+        }
+        XCTAssertEqual(SteamLibrary.gameAppID(in: recipe(SteamLibrary.clientPath, ["-applaunch", "620"])), "620")
+        XCTAssertEqual(SteamLibrary.gameAppID(in: recipe(SteamLibrary.clientPath, ["-silent", "-applaunch", "620", "-dx11"])), "620")
+        XCTAssertNil(SteamLibrary.gameAppID(in: recipe(SteamLibrary.clientPath, nil)), "Steam itself")
+        XCTAssertNil(SteamLibrary.gameAppID(in: recipe(SteamLibrary.clientPath, ["-applaunch"])))
+        XCTAssertNil(SteamLibrary.gameAppID(in: recipe(SteamLibrary.clientPath, ["-applaunch", "x620"])))
+        XCTAssertNil(SteamLibrary.gameAppID(in: recipe(#"C:\Games\Portal\portal2.exe"#, ["-applaunch", "620"])), "Not through Steam")
+    }
+
+    func testAddingASteamGamesRecipeGoesThroughSteam() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("distiller-steam-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let engine = try DistillerEngine(paths: DistillerPaths(root: root, storage: StorageSettings()), hardware: Macs.m3Pro)
+        var portal = Recipe(id: "steam-620", notes: "Use -novid.", game: GameInfo(title: "Portal 2", slug: "portal-2"),
+                            stack: StackSpec(runner: RunnerRequirement(family: "winehq"), graphics: .wined3d),
+                            launch: LaunchSpec(exe: SteamLibrary.clientPath, args: ["-applaunch", "620", "-novid"]))
+        portal.name = "No intro"
+
+        // Never a bottle of its own.
+        do {
+            _ = try await engine.install(recipe: portal)
+            XCTFail("Installed a Steam game into a bottle of its own")
+        } catch {
+            XCTAssertTrue(error.localizedDescription.contains("Steam game"), error.localizedDescription)
+        }
+        // Without Steam in the library: say so.
+        XCTAssertThrowsError(try engine.installSteamGame(portal) { _, _, _ in XCTFail("Asked a Steam that isn't there") }) { error in
+            XCTAssertTrue(error.localizedDescription.contains("Add Steam"), error.localizedDescription)
+        }
+
+        // Steam in the library, without the game: Steam is asked to install it.
+        let bottle = Bottle(id: "steam", name: "Steam", wine: "wine-staging@11.21", createdAt: Date())
+        let steam = engine.bottles.prefix(of: bottle).appendingPathComponent("drive_c/Program Files (x86)/Steam", isDirectory: true)
+        try FileManager.default.createDirectory(at: steam.appendingPathComponent("steamapps/common/Portal 2"), withIntermediateDirectories: true)
+        try engine.bottles.save(bottle)
+        try Data("MZ".utf8).write(to: steam.appendingPathComponent("steam.exe"))
+        let steamRecipe = Recipe(id: "steam", game: GameInfo(title: "Steam", slug: "steam"),
+                                 stack: StackSpec(runner: RunnerRequirement(family: "winehq"), graphics: .wined3d),
+                                 launch: LaunchSpec(exe: SteamLibrary.clientPath))
+        try engine.library.upsert(Game(id: "steam", title: "Steam", bottleID: bottle.id, recipe: steamRecipe))
+        var asked: [String] = []
+        let result = try engine.installSteamGame(portal) { launcher, client, appID in
+            XCTAssertEqual(launcher.id, "steam")
+            XCTAssertEqual(client, SteamLibrary.clientPath)
+            asked.append(appID)
+        }
+        XCTAssertEqual(asked, ["620"])
+        guard case .requested(let appID, let launcher) = result else { return XCTFail("\(result)") }
+        XCTAssertEqual(appID, "620")
+        XCTAssertEqual(launcher.id, "steam")
+        XCTAssertEqual(engine.library.load().map(\.id), ["steam"], "No entry until Steam has it")
+
+        // Steam finishes: the entry appears under Steam with the recipe's own options.
+        try FileManager.default.createDirectory(at: steam.appendingPathComponent("steamapps/common/Portal 2"), withIntermediateDirectories: true)
+        try Data(count: 4096).write(to: steam.appendingPathComponent("steamapps/common/Portal 2/portal2.exe"))
+        try manifest.replacingOccurrences(of: "\"440\"", with: "\"620\"").replacingOccurrences(of: "Team Fortress 2", with: "Portal 2")
+            .write(to: steam.appendingPathComponent("steamapps/appmanifest_620.acf"), atomically: true, encoding: .utf8)
+        XCTAssertEqual(engine.syncSteamGames().added.map(\.title), ["Portal 2"])
+        let entry = try engine.library.game(id: "steam-steam-620")
+        XCTAssertEqual(entry.recipe.launch?.args, ["-applaunch", "620", "-novid"])
+        XCTAssertEqual(entry.recipe.notes, "Use -novid.")
+        XCTAssertEqual(entry.recipe.name, "No intro")
+        XCTAssertEqual(entry.bottleID, "steam", "Steam's bottle")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: engine.paths.pendingSteamGames.appendingPathComponent("steam-620.yaml").path))
+
+        // Adding a recipe for a game Steam already has: applied at once, nothing asked of Steam.
+        var again = portal
+        again.launch?.args = ["-applaunch", "620", "-windowed"]
+        let second = try engine.installSteamGame(again) { _, _, _ in XCTFail("Asked Steam for a game it has") }
+        guard case .alreadyInstalled(let game) = second else { return XCTFail("\(second)") }
+        XCTAssertEqual(game.recipe.launch?.args, ["-applaunch", "620", "-windowed"])
+    }
+
     func testABottleThatCantBeReadIsLeftAlone() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("distiller-steam-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: root) }

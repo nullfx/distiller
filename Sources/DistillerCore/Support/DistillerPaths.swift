@@ -53,6 +53,8 @@ public struct DistillerPaths: Sendable {
     public var performance: URL { root.appendingPathComponent("Performance", isDirectory: true) }
     /// Sources the player described for components Distiller didn't know (`ComponentSource`).
     public var sources: URL { root.appendingPathComponent("Sources", isDirectory: true) }
+    /// Steam games' recipes added before Steam finished installing them (`installSteamGame`).
+    public var pendingSteamGames: URL { root.appendingPathComponent("SteamPending", isDirectory: true) }
 
     /// Locations that can't be used now, such as a drive that isn't connected.
     public var unavailable: [UnavailableStorage] {

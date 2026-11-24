@@ -247,6 +247,17 @@ final class AppModel {
 
     func install(_ recipe: Recipe) async throws {
         guard let engine else { return }
+        // A Steam game's recipe: Steam installs it next to itself.
+        if SteamLibrary.gameAppID(in: recipe) != nil {
+            switch try engine.installSteamGame(recipe) {
+            case .alreadyInstalled(let game):
+                showLibraryNotice("Steam already has \(game.title). Its entry under Steam now has this recipe's options.")
+            case .requested(_, let launcher):
+                showLibraryNotice("Asked \(launcher.title) to install \(recipe.game.title). Confirm in Steam's window; it appears under \(launcher.title) once Steam has finished.")
+            }
+            reload()
+            return
+        }
         guard await resolveMissingComponents(for: recipe) else { return }
         guard let supplied = await askForUserItems(recipe) else { return }
         // Files downloaded from publishers' pages are cloned into the bottle; remove the
