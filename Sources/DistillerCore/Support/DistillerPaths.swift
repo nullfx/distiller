@@ -51,6 +51,8 @@ public struct DistillerPaths: Sendable {
     public var communityMedia: URL { root.appendingPathComponent("CommunityMedia", isDirectory: true) }
     /// Recorded performance (`PerformanceRecord`), in a folder per game.
     public var performance: URL { root.appendingPathComponent("Performance", isDirectory: true) }
+    /// Sources the player described for components Distiller didn't know (`ComponentSource`).
+    public var sources: URL { root.appendingPathComponent("Sources", isDirectory: true) }
 
     /// Locations that can't be used now, such as a drive that isn't connected.
     public var unavailable: [UnavailableStorage] {

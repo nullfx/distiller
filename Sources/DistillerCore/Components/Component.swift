@@ -41,6 +41,9 @@ public struct ComponentManifest: Codable, Equatable, Sendable {
     public var sha256: String?
     /// Set on composed builds: the components they were made from.
     public var composedFrom: [String]?
+    /// The installed build ("id@version") whose libraries were added to this one when it was
+    /// installed from a source (`ComponentSource.librariesFrom`).
+    public var librariesFrom: String?
     /// `wine_lib` layers: DLLs that must also be in each bottle's `system32` (64-bit, from
     /// `lib/wine/x86_64-windows`) and `syswow64` (32-bit, from `lib/wine/i386-windows`),
     /// because Wine won't find them as builtins otherwise. DXMT's `winemetal.dll` is one.
@@ -51,6 +54,7 @@ public struct ComponentManifest: Codable, Equatable, Sendable {
         case displayName = "display_name"
         case dllOverrides = "dll_overrides"
         case composedFrom = "composed_from"
+        case librariesFrom = "libraries_from"
         case alsoInPrefix = "also_in_prefix"
     }
 

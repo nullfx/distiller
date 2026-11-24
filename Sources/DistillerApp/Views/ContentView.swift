@@ -200,5 +200,8 @@ private struct AppSheets: ViewModifier {
             .sheet(item: $model.linkInstall) { request in
                 LinkInstallSheet(request: request)
             }
+            .sheet(item: $model.missingSource) { session in
+                AddSourceView(session: session)
+            }
     }
 }

@@ -225,6 +225,36 @@ final class RecipeSubmitterTests: XCTestCase {
         XCTAssertEqual(SubmissionMedia(screenshots: [cover, cover, cover, second]).screenshots.count, 3)
     }
 
+    func testSubmitsASourceThroughAFork() async throws {
+        let source = ComponentSource(
+            tag: "sikarugir", kind: .wine, name: "Sikarugir Wine", publisher: "Sikarugir",
+            homepage: "https://github.com/Sikarugir-App/Engines", license: "LGPL-2.1-or-later",
+            get: .init(githubRelease: .init(repository: "Sikarugir-App/Engines", asset: #"^WS12WineSikarugir([0-9][0-9._]*)\.tar\.xz$"#)),
+            provides: .init(family: "sikarugir", arch: .x86_64), librariesFrom: "wine-staging"
+        )
+        let notes = SourceCheckNotes(file: "WS12WineSikarugir10.0_8.tar.xz", sha256: String(repeating: "a", count: 64),
+                                     librariesFrom: "wine-staging@11.21", librariesAdded: 365, containsD3DMetal: false,
+                                     exportsMacDriverFunctions: true, recipe: "Steam")
+        _ = try await submitter().submitSource(source, notes: notes)
+        XCTAssertEqual(FakeGitHub.state.treeFiles, ["components/wine/sikarugir.yaml"])
+        XCTAssertNotNil(FakeGitHub.state.refs["octocat/distiller-recipes"]?["source/wine/sikarugir"])
+        XCTAssertEqual(FakeGitHub.state.pullRequestBody["head"] as? String, "octocat:source/wine/sikarugir")
+        let body = try XCTUnwrap(FakeGitHub.state.pullRequestBody["body"] as? String)
+        XCTAssertTrue(body.contains("Libraries from: `wine-staging`"))
+        XCTAssertTrue(body.contains("D3DMetal: not included"))
+        XCTAssertEqual(writesToMain, [])
+
+        // A published source isn't replaced from here.
+        FakeGitHub.state = FakeGitHub.State()
+        FakeGitHub.state.upstreamFiles = ["components/wine/sikarugir.yaml"]
+        do {
+            _ = try await submitter().submitSource(source, notes: nil)
+            XCTFail("Replaced a published source")
+        } catch {
+            XCTAssertTrue(FakeGitHub.state.writes.isEmpty)
+        }
+    }
+
     func testMaintainerBranchesInTheRepositoryItself() async throws {
         FakeGitHub.state.login = "nullfx"
         FakeGitHub.state.canPush = true
