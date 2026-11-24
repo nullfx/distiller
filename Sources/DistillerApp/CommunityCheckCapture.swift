@@ -116,9 +116,9 @@ final class CommunityCheckCaptureSession {
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = true
         panel.standardWindowButton(.closeButton)?.isHidden = true
-        let hosting = NSHostingView(rootView: CapturePanelView(session: self))
-        hosting.sizingOptions = [.preferredContentSize]
+        let hosting = FittingHostingView(rootView: CapturePanelView(session: self))
         panel.contentView = hosting
+        hosting.fitWindow()
         if let screen = NSScreen.main?.visibleFrame {
             panel.setFrameTopLeftPoint(NSPoint(x: screen.maxX - panel.frame.width - 24, y: screen.maxY - 24))
         }

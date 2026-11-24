@@ -219,8 +219,21 @@ public final class DistillerEngine: @unchecked Sendable {
         try await install(recipe: recipe, supplied: UserSupplied(files: userFiles), progress: progress)
     }
 
-    /// Starts a game from the library. `onExit` runs on a background thread.
-    public func launch(_ game: Game, onExit: (@Sendable (Int32) -> Void)? = nil) throws -> Process {
+    /// Starts a game from the library. `measured` turns on frame timing for this launch only
+    /// (`MeasuredLaunch`); `onOutput` gets the game's output as it arrives (feed it to a
+    /// `PerformanceRecorder`'s stream). Both callbacks run on a background thread.
+    public func launch(
+        _ game: Game,
+        measured: Bool = false,
+        onOutput: (@Sendable (Data) -> Void)? = nil,
+        onExit: (@Sendable (Int32) -> Void)? = nil
+    ) throws -> Process {
+        var game = game
+        if measured {
+            var overrides = game.overrides ?? LocalOverrides()
+            overrides.env = (overrides.env ?? [:]).merging(MeasuredLaunch.environment) { _, measured in measured }
+            game.overrides = overrides
+        }
         try paths.requireAvailable(.bottles)
         try paths.requireAvailable(.wine)
         let bottle = try bottles.bottle(id: game.bottleID)
@@ -260,6 +273,7 @@ public final class DistillerEngine: @unchecked Sendable {
             environment: env,
             workingDirectory: workingDirectory,
             logName: game.id,
+            onOutput: onOutput,
             onExit: onExit
         )
     }

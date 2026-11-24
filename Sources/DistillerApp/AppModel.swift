@@ -34,6 +34,11 @@ final class AppModel {
     /// itself after a few seconds. Set with `showLibraryNotice`.
     var libraryNotice: String?
     var libraryNoticeTask: Task<Void, Never>?
+    /// Frame recorders for games started ready to record, and open Record Performance panels.
+    /// See AppModel+Performance.swift.
+    var recorders: [String: PerformanceRecorder] = [:]
+    var performanceSessions: [String: PerformanceRecordingSession] = [:]
+    var recordPerformanceAlways = false
     /// Storage locations on drives that aren't connected. See AppModel+Storage.swift.
     var unavailableStorage: [UnavailableStorage] = []
     /// Whether each game can be played now, and its icon. See AppModel+Library.swift.
@@ -168,6 +173,7 @@ final class AppModel {
         componentUpdateMode = settings.effectiveComponentUpdates
         lastComponentCheck = settings.lastComponentCheck
         restorePointDays = settings.effectiveRestorePointDays
+        recordPerformanceAlways = settings.isRecordingPerformanceAlways
         environment = setup?.check()
         checkForComponentUpdatesIfDue()
     }
@@ -296,7 +302,9 @@ final class AppModel {
         return supplied
     }
 
-    func launch(_ game: Game) {
+    /// Starts a game. With `recorder` (Record Performance), or when the player always wants to
+    /// be ready to record, it starts with frame timing on and its output feeding the recorder.
+    func launch(_ game: Game, recorder: PerformanceRecorder? = nil) {
         guard let engine, running[game.id] == nil else { return }
         if game.steam != nil {
             guard !isSteamActive(game) else { return }
@@ -313,13 +321,20 @@ final class AppModel {
                 }
             }
             let started = Date()
+            let recorder = recorder ?? (recordPerformanceAlways ? PerformanceRecorder() : nil)
+            let stream = recorder?.stream()
             do {
-                let process = try engine.launch(game) { [weak self] _ in
+                let process = try engine.launch(
+                    game, measured: recorder != nil,
+                    onOutput: stream.map { stream in { stream.append($0) } }
+                ) { [weak self] _ in
                     Task { @MainActor in self?.finished(game, started: started) }
                 }
                 running[game.id] = process
+                recorders[game.id] = recorder
             } catch {
                 errorMessage = error.localizedDescription
+                performanceSessions[game.id]?.gameExited()
             }
         }
     }
@@ -334,6 +349,8 @@ final class AppModel {
 
     private func finished(_ game: Game, started: Date) {
         running[game.id] = nil
+        recorders[game.id] = nil
+        performanceSessions[game.id]?.gameExited()
         guard let engine else { return }
         // Steam itself: no report or questions (its games get those).
         if engine.isSteamLauncher(game) {

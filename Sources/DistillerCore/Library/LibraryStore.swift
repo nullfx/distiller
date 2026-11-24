@@ -227,6 +227,19 @@ public enum DiagnosticLaunch {
     ]
 }
 
+/// Settings for a launch whose frame rate is measured. Apple's Metal performance HUD logs
+/// each frame's present interval and GPU time to the game's standard error about once a
+/// second (`metal-HUD: <first frame>,<a>,<b>,<interval ms>,<gpu ms>,…`); a transparent
+/// overlay keeps it out of sight (hiding the HUD stops the logging too). Metal only:
+/// D3DMetal, DXMT and DXVK through MoltenVK; WineD3D draws with OpenGL, which the HUD
+/// doesn't see. Applied as local overrides for one launch; never saved to a recipe.
+public enum MeasuredLaunch {
+    public static let environment: [String: String] = [
+        "MTL_HUD_ENABLED": "1",
+        "MTL_HUD_LOG_ENABLED": "1",
+        "MTL_HUD_OPACITY": "0",
+    ]
+}
 
 /// A passing community check (`DistillerEngine.runCommunityCheck`).
 public struct CommunityCheckResult: Codable, Equatable, Sendable {

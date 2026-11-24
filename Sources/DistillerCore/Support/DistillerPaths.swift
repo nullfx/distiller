@@ -49,6 +49,8 @@ public struct DistillerPaths: Sendable {
     public var icons: URL { root.appendingPathComponent("Icons", isDirectory: true) }
     /// The icon and screenshot from each game's last community check, in a folder per game.
     public var communityMedia: URL { root.appendingPathComponent("CommunityMedia", isDirectory: true) }
+    /// Recorded performance (`PerformanceRecord`), in a folder per game.
+    public var performance: URL { root.appendingPathComponent("Performance", isDirectory: true) }
 
     /// Locations that can't be used now, such as a drive that isn't connected.
     public var unavailable: [UnavailableStorage] {

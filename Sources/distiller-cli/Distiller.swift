@@ -26,6 +26,7 @@ struct Distiller: AsyncParsableCommand {
             McpCommand.self,
             AssistantCommand.self,
             LogsCommand.self,
+            PerformanceCommand.self,
             AppCommand.self,
         ]
     )
@@ -423,6 +424,9 @@ struct LaunchCommand: AsyncParsableCommand {
     @Flag(help: "For this launch only: log DLL loads, exceptions and Wine errors, and show Apple's Metal HUD while the game draws with Metal. Nothing is saved to the recipe.")
     var diagnose = false
 
+    @Flag(help: "For this launch only: record the frame rate (Apple's Metal performance HUD, kept invisible, logs every frame to the game's launch log). Works when the game draws with Metal (D3DMetal, DXMT, DXVK). Nothing is saved to the recipe.")
+    var measure = false
+
     @Option(name: .customLong("dll"), help: "For this launch only, override a DLL, such as nvapi64=disabled or d3dcompiler_47=native. Repeat for more.")
     var dlls: [String] = []
 
@@ -432,6 +436,19 @@ struct LaunchCommand: AsyncParsableCommand {
 
     @Option(help: "For this launch only, use this graphics layer: d3dmetal, dxmt, dxvk or wined3d.")
     var graphics: GraphicsBackend?
+
+    static func describe(_ summary: PerformanceSummary) -> String {
+        var lines = [
+            "Recorded \(summary.frames) frames over \(Int(summary.seconds.rounded())) s:",
+            "  average \(summary.fpsAverage) fps, 1% low \(summary.fps1PercentLow), 0.1% low \(summary.fps01PercentLow)",
+            "  frame time median \(summary.frameMsMedian) ms, 95th percentile \(summary.frameMsP95) ms"
+                + (summary.gpuMsMedian.map { "; GPU time median \($0) ms" } ?? ""),
+        ]
+        if !summary.timelineFPS.isEmpty {
+            lines.append("  per minute: " + summary.timelineFPS.map { String($0) }.joined(separator: ", "))
+        }
+        return lines.joined(separator: "\n")
+    }
 
     func run() async throws {
         let engine = try makeEngine()
@@ -468,6 +485,11 @@ struct LaunchCommand: AsyncParsableCommand {
             launched.overrides = overrides
             print("Diagnostic launch: Wine logs DLL loads, exceptions and errors; the Metal HUD appears if the game draws with Metal.")
         }
+        let recorder = measure ? PerformanceRecorder() : nil
+        if let recorder {
+            recorder.start()
+            print("Measured launch: every frame's timing is recorded until the game exits (when it draws with Metal).")
+        }
         if let point = try await engine.prepareWineMove(for: launched, progress: { print($0) }) {
             print("Saved a restore point (\(RestorePoint.describe(point.fromWine))). If the game doesn't work: distiller games restore \(entry.id) --rollback")
         }
@@ -475,7 +497,17 @@ struct LaunchCommand: AsyncParsableCommand {
         print("Starting \(entry.title) with \(resolved.graphics.displayName).")
         for note in resolved.appliedOverlayNotes { print("  Tuned for this Mac: \(note)") }
         let started = Date()
-        let status = try await waitForExit { onExit in try engine.launch(launched, onExit: onExit) }
+        let stream = recorder?.stream()
+        let status = try await waitForExit { onExit in
+            try engine.launch(launched, measured: measure, onOutput: stream.map { stream in { stream.append($0) } }, onExit: onExit)
+        }
+        if let recorder {
+            if let summary = recorder.stop() {
+                print(Self.describe(summary))
+            } else {
+                print("No frame timings arrived: the game didn't draw with Metal (WineD3D draws with OpenGL), or it never showed a frame.")
+            }
+        }
         var updated = entry
         updated.lastPlayedAt = Date()
         updated.secondsPlayed += Date().timeIntervalSince(started)
