@@ -196,6 +196,30 @@ final class ComponentSourceTests: XCTestCase {
         XCTAssertNil(files.last?.sha256)
     }
 
+    func testOrdersFilesByGroupAndVersion() {
+        func file(_ name: String, _ uploaded: String) -> ReleaseFile {
+            ReleaseFile(release: "v1.0", name: name, size: nil, sha256: "x", url: URL(string: "https://example.com/\(name)")!,
+                        uploaded: ISO8601DateFormatter().date(from: uploaded))
+        }
+        // As GitHub lists them: an old line of builds, then the current ones, versions unordered.
+        let files = [
+            file("WS11WineCX21.2.0.tar.xz", "2024-10-18T00:00:00Z"),
+            file("WS11WineCX19.0.2.tar.xz", "2024-10-03T00:00:00Z"),
+            file("WS12WineSikarugir10.0_7.tar.xz", "2026-09-01T00:00:00Z"),
+            file("WS12WineSikarugir11.0_1.tar.xz", "2026-10-01T00:00:00Z"),
+            file("WS12WineSikarugir10.0_8.tar.xz", "2026-10-01T00:00:00Z"),
+            file("WS12WineSikarugir10.0.tar.xz", "2025-02-01T00:00:00Z"),
+        ]
+        XCTAssertEqual(ReleaseFile.orderedForChoosing(files).map(\.name), [
+            "WS12WineSikarugir11.0_1.tar.xz", "WS12WineSikarugir10.0_8.tar.xz", "WS12WineSikarugir10.0_7.tar.xz", "WS12WineSikarugir10.0.tar.xz",
+            "WS11WineCX21.2.0.tar.xz", "WS11WineCX19.0.2.tar.xz",
+        ], "The most recently updated group first, each newest version first")
+        // With the source's pattern, what it matches comes first.
+        let cx = ComponentSource.pattern(forFileName: "WS11WineCX19.0.2.tar.xz")
+        XCTAssertEqual(ReleaseFile.orderedForChoosing(files, pattern: cx).prefix(2).map(\.name),
+                       ["WS11WineCX21.2.0.tar.xz", "WS11WineCX19.0.2.tar.xz"])
+    }
+
     func testRefusesIncompleteOrUncheckableBuilds() async throws {
         try addWine(id: "wine-staging", version: "11.21", family: "winehq")   // without the library the engine needs
         let archive = try makeEngineArchive(needs: ["@rpath/libgstreamer-1.0.0.dylib"])

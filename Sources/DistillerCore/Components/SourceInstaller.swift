@@ -179,3 +179,38 @@ extension MachODependencies {
         return walker.compactMap { ($0 as? URL)?.lastPathComponent }
     }
 }
+
+extension ReleaseFile {
+    /// Release files in the order a player chooses from: files that differ only in their
+    /// version (the same `ComponentSource.pattern(forFileName:)`) together, newest version
+    /// first; groups by their most recent upload. With `pattern` (the source's), the files it
+    /// matches come first. Versions are only compared within a group: different builds number
+    /// themselves differently.
+    public static func orderedForChoosing(_ files: [ReleaseFile], pattern: String? = nil) -> [ReleaseFile] {
+        let regex = pattern.flatMap { try? NSRegularExpression(pattern: $0) }
+        func version(_ file: ReleaseFile, _ regex: NSRegularExpression) -> VersionNumber? {
+            EnvironmentSetup.version(in: file.name, matching: regex).map(VersionNumber.init)
+        }
+        var groups: [String: [ReleaseFile]] = [:]
+        var order: [String] = []
+        for file in files {
+            let key = ComponentSource.pattern(forFileName: file.name)
+            if groups[key] == nil { order.append(key) }
+            groups[key, default: []].append(file)
+        }
+        let newest = { (key: String) in groups[key]!.compactMap(\.uploaded).max() ?? .distantPast }
+        let sortedKeys = order.enumerated().sorted { a, b in
+            let (dateA, dateB) = (newest(a.element), newest(b.element))
+            return dateA != dateB ? dateA > dateB : a.offset < b.offset
+        }.map(\.element)
+        var ordered: [ReleaseFile] = []
+        for key in sortedKeys {
+            guard let groupRegex = try? NSRegularExpression(pattern: key) else { ordered += groups[key]!; continue }
+            ordered += groups[key]!.sorted { (version($0, groupRegex) ?? VersionNumber("")) > (version($1, groupRegex) ?? VersionNumber("")) }
+        }
+        guard let regex else { return ordered }
+        let matching = ordered.filter { version($0, regex) != nil }
+            .sorted { (version($0, regex) ?? VersionNumber("")) > (version($1, regex) ?? VersionNumber("")) }
+        return matching + ordered.filter { version($0, regex) == nil }
+    }
+}

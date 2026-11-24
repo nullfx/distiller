@@ -186,7 +186,9 @@ private struct FileChooser: View {
 
     private var shown: [ReleaseFile] {
         let words = filter.lowercased().split(separator: " ")
-        return session.files.filter { file in words.allSatisfy { file.name.lowercased().contains($0) } }
+        let pattern = session.assetPattern.isEmpty ? nil : session.assetPattern
+        return ReleaseFile.orderedForChoosing(session.files, pattern: pattern)
+            .filter { file in words.allSatisfy { file.name.lowercased().contains($0) } }
     }
 
     var body: some View {
