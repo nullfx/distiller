@@ -178,6 +178,24 @@ final class ComponentSourceTests: XCTestCase {
         XCTAssertTrue(engine.missingComponents(for: steamRecipe()).isEmpty)
     }
 
+    func testListsTheMostRecentlyUploadedFilesFirst() async throws {
+        // Some projects keep every build in one release, oldest first.
+        FakeSourceServer.responses["/repos/Sikarugir-App/Engines/releases"] = Data(#"""
+        [{"tag_name":"v1.0","draft":false,"prerelease":false,"assets":[
+          {"name":"WS11WineCX19.0.2.tar.xz","browser_download_url":"https://example.com/a","updated_at":"2024-10-03T10:00:00Z"},
+          {"name":"WS12WineSikarugir10.0_8.tar.xz","browser_download_url":"https://example.com/b","digest":"sha256:ab","updated_at":"2026-10-01T09:00:00Z"},
+          {"name":"WS12WineSikarugir11.0_1.tar.xz","browser_download_url":"https://example.com/c","digest":"sha256:cd","updated_at":"2026-10-01T09:00:00Z"},
+          {"name":"insecure.tar.xz","browser_download_url":"http://example.com/d","updated_at":"2026-11-01T09:00:00Z"}
+        ]},
+         {"tag_name":"draft","draft":true,"prerelease":false,"assets":[{"name":"x.tar.xz","browser_download_url":"https://example.com/x"}]}]
+        """#.utf8)
+        let files = try await EnvironmentSetup(engine: engine, session: FakeSourceServer.session()).releaseFiles(repository: "Sikarugir-App/Engines")
+        XCTAssertEqual(files.map(\.name), ["WS12WineSikarugir10.0_8.tar.xz", "WS12WineSikarugir11.0_1.tar.xz", "WS11WineCX19.0.2.tar.xz"],
+                       "Newest uploads first (ties keep GitHub's order); no http files or drafts")
+        XCTAssertEqual(files.first?.sha256, "ab")
+        XCTAssertNil(files.last?.sha256)
+    }
+
     func testRefusesIncompleteOrUncheckableBuilds() async throws {
         try addWine(id: "wine-staging", version: "11.21", family: "winehq")   // without the library the engine needs
         let archive = try makeEngineArchive(needs: ["@rpath/libgstreamer-1.0.0.dylib"])

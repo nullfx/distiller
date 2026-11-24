@@ -9,6 +9,7 @@ import DistillerCore
 /// community repository so other players' Distiller knows it.
 struct AddSourceView: View {
     @Bindable var session: MissingSourceSession
+    @State private var fileFilter = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -73,22 +74,8 @@ struct AddSourceView: View {
                 }
             }
             if !session.files.isEmpty {
-                List(session.files, selection: Binding(get: { session.selectedFileID }, set: { id in
-                    if let file = session.files.first(where: { $0.id == id }) { session.choose(file) }
-                })) { file in
-                    HStack {
-                        Image(systemName: session.source.version(of: file.name) == nil ? "circle" : "checkmark.circle.fill")
-                            .foregroundStyle(session.source.version(of: file.name) == nil ? Color.secondary : Color.green)
-                        Text(file.name).lineLimit(1)
-                        Spacer()
-                        if file.sha256 == nil {
-                            Text("no checksum").font(.caption).foregroundStyle(.orange)
-                        }
-                        Text(file.size.map { "\($0 / 1_048_576) MB" } ?? "").font(.caption).foregroundStyle(.secondary).monospacedDigit()
-                    }
-                    .tag(file.id)
-                }
-                .frame(height: 150)
+                TextField("Filter", text: $fileFilter, prompt: Text("Show files containing…"))
+                FileChooser(session: session, filter: fileFilter)
             }
             TextField("File pattern", text: $session.assetPattern, prompt: Text("Choose a file to fill this in"))
                 .font(.callout.monospaced())
@@ -187,5 +174,63 @@ struct AddSourceView: View {
             }
         }
         .padding(16)
+    }
+}
+
+/// The release files, most recently uploaded first, in a scrolling box of their own (a list
+/// nested in a form doesn't scroll on macOS). A check marks files the pattern matches; the
+/// chosen one is highlighted.
+private struct FileChooser: View {
+    @Bindable var session: MissingSourceSession
+    let filter: String
+
+    private var shown: [ReleaseFile] {
+        let words = filter.lowercased().split(separator: " ")
+        return session.files.filter { file in words.allSatisfy { file.name.lowercased().contains($0) } }
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(shown) { file in
+                    row(file)
+                }
+                if shown.isEmpty {
+                    Text("No file names contain “\(filter)”.").font(.callout).foregroundStyle(.secondary).padding(8)
+                }
+            }
+        }
+        .frame(height: 230)
+        .background(RoundedRectangle(cornerRadius: 6).fill(.background))
+        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.separator))
+    }
+
+    private func row(_ file: ReleaseFile) -> some View {
+        let matches = session.source.version(of: file.name) != nil
+        let chosen = session.selectedFileID == file.id
+        return Button {
+            session.choose(file)
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: matches ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(matches ? Color.green : Color.secondary)
+                Text(file.name).lineLimit(1)
+                Spacer()
+                if file.sha256 == nil {
+                    Text("no checksum").font(.caption).foregroundStyle(.orange)
+                }
+                Text(file.uploaded.map { $0.formatted(date: .abbreviated, time: .omitted) } ?? "")
+                    .font(.caption).foregroundStyle(.secondary)
+                Text(file.size.map { "\($0 / 1_048_576) MB" } ?? "")
+                    .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                    .frame(width: 52, alignment: .trailing)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .contentShape(Rectangle())
+            .background(chosen ? Color.accentColor.opacity(0.18) : Color.clear)
+        }
+        .buttonStyle(.plain)
+        .help(file.sha256 == nil ? "GitHub publishes no checksum for this file, so Distiller can't install it" : file.name)
     }
 }

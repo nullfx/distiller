@@ -8,6 +8,8 @@ public struct ReleaseFile: Equatable, Sendable, Identifiable {
     /// GitHub's SHA-256 for the file, when it publishes one (files uploaded since mid-2025).
     public var sha256: String?
     public var url: URL
+    /// When the file was last uploaded.
+    public var uploaded: Date?
 
     public var id: String { url.absoluteString }
 }
@@ -25,21 +27,29 @@ public struct SourceInstallResult: Equatable, Sendable {
 }
 
 extension EnvironmentSetup {
-    /// The files in a repository's recent releases (newest release first), skipping drafts and
-    /// pre-releases and anything not served over https.
+    /// The files in a repository's recent releases, most recently uploaded first (some projects
+    /// keep every build in one release), skipping drafts and pre-releases and anything not
+    /// served over https.
     public func releaseFiles(repository: String) async throws -> [ReleaseFile] {
         guard repository.range(of: "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", options: .regularExpression) != nil,
               let url = URL(string: "https://api.github.com/repos/\(repository)/releases?per_page=20") else {
             throw DistillerError.setupFailed("\(repository) isn't a GitHub repository name (owner/name).")
         }
         let releases = try await getJSON([GitHubRelease].self, from: url)
-        return releases.filter { !$0.draft && !$0.prerelease }.flatMap { release in
+        let dates = ISO8601DateFormatter()
+        let files = releases.filter { !$0.draft && !$0.prerelease }.flatMap { release in
             release.assets.compactMap { asset -> ReleaseFile? in
                 guard let download = URL(string: asset.browserDownloadURL), download.scheme == "https" else { return nil }
                 let digest = asset.digest.flatMap { $0.hasPrefix("sha256:") ? String($0.dropFirst(7)) : nil }
-                return ReleaseFile(release: release.tagName, name: asset.name, size: asset.size, sha256: digest, url: download)
+                return ReleaseFile(release: release.tagName, name: asset.name, size: asset.size, sha256: digest, url: download,
+                                   uploaded: asset.updatedAt.flatMap(dates.date(from:)))
             }
         }
+        // Stable: files uploaded at the same time keep GitHub's order.
+        return files.enumerated().sorted { a, b in
+            let (dateA, dateB) = (a.element.uploaded ?? .distantPast, b.element.uploaded ?? .distantPast)
+            return dateA != dateB ? dateA > dateB : a.offset < b.offset
+        }.map(\.element)
     }
 
     /// The newest file matching the source's pattern (by version).
