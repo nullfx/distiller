@@ -14,10 +14,13 @@ let distillerID = "com.nullfx.distiller"
 struct Shortcut: Decodable {
     var gameID: String
     var title: String
+    /// The Distiller that made the shortcut, tried first.
+    var distillerApp: String?
 
     enum CodingKeys: String, CodingKey {
         case title
         case gameID = "game_id"
+        case distillerApp = "distiller_app"
     }
 }
 
@@ -47,7 +50,11 @@ guard let file = Bundle.main.url(forResource: "shortcut", withExtension: "json")
     fail("This shortcut is damaged. Make it again from Distiller: right-click the game ▸ Create Shortcut App…", distiller: nil)
 }
 
-guard let distiller = NSWorkspace.shared.urlForApplication(withBundleIdentifier: distillerID) else {
+// The Distiller that made it, if it's still there; else whichever copy macOS knows.
+let maker = shortcut.distillerApp.map { URL(fileURLWithPath: $0) }.flatMap { url -> URL? in
+    Bundle(url: url)?.bundleIdentifier == distillerID ? url : nil
+}
+guard let distiller = maker ?? NSWorkspace.shared.urlForApplication(withBundleIdentifier: distillerID) else {
     fail("\(shortcut.title) needs Distiller, which isn't installed on this Mac.", distiller: nil)
 }
 let helper = distiller.appendingPathComponent("Contents/Helpers/distiller")

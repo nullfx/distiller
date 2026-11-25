@@ -12,10 +12,20 @@ public enum ShortcutApp {
     public struct Manifest: Codable, Equatable, Sendable {
         public var gameID: String
         public var title: String
+        /// The Distiller that made it, tried first (another copy may be installed, such as an
+        /// older release); found by bundle identifier if it's moved or gone.
+        public var distillerApp: String?
 
         enum CodingKeys: String, CodingKey {
             case title
             case gameID = "game_id"
+            case distillerApp = "distiller_app"
+        }
+
+        public init(gameID: String, title: String, distillerApp: String? = nil) {
+            self.gameID = gameID
+            self.title = title
+            self.distillerApp = distillerApp
         }
     }
 
@@ -39,7 +49,7 @@ public enum ShortcutApp {
     /// reads (the game's icon), or nil for the system's app icon.
     @discardableResult
     public static func create(gameID: String, title: String, icon: Data?, program: URL, at destination: URL,
-                              sign: Bool = true) async throws -> URL {
+                              distillerApp: URL? = nil, sign: Bool = true) async throws -> URL {
         let fileManager = FileManager.default
         guard destination.pathExtension == "app" else {
             throw DistillerError.invalidRecipe("A shortcut's name must end in .app.")
@@ -82,7 +92,7 @@ public enum ShortcutApp {
             .write(to: contents.appendingPathComponent("Info.plist"))
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        try encoder.encode(Manifest(gameID: gameID, title: title))
+        try encoder.encode(Manifest(gameID: gameID, title: title, distillerApp: distillerApp?.path))
             .write(to: contents.appendingPathComponent("Resources/\(manifestName)"))
 
         if sign {
@@ -101,9 +111,10 @@ public enum ShortcutApp {
 extension DistillerEngine {
     /// Makes `game`'s shortcut app at `destination`, with its icon.
     @discardableResult
-    public func createShortcut(for game: Game, program: URL, at destination: URL) async throws -> URL {
+    public func createShortcut(for game: Game, program: URL, at destination: URL, distillerApp: URL? = nil) async throws -> URL {
         let icon = iconURL(for: game).flatMap { try? Data(contentsOf: $0) }
-        return try await ShortcutApp.create(gameID: game.id, title: game.title, icon: icon, program: program, at: destination)
+        return try await ShortcutApp.create(gameID: game.id, title: game.title, icon: icon, program: program, at: destination,
+                                            distillerApp: distillerApp)
     }
 
     /// Whether a game is running now, however it was started (from Distiller, a shortcut, a

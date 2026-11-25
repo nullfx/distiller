@@ -106,7 +106,8 @@ extension AppModel {
             ? inBundle
             : Bundle.main.executableURL!.deletingLastPathComponent().appendingPathComponent(ShortcutApp.programName)
         perform("Making \(game.title)'s shortcut…") {
-            let made = try await engine.createShortcut(for: game, program: program, at: destination)
+            let made = try await engine.createShortcut(for: game, program: program, at: destination,
+                                                       distillerApp: Bundle.main.bundleIdentifier != nil ? Bundle.main.bundleURL : nil)
             NSWorkspace.shared.activateFileViewerSelecting([made])
         }
     }

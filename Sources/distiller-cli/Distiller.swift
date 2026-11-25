@@ -740,7 +740,10 @@ struct ShortcutCommand: AsyncParsableCommand {
         let program = here.appendingPathComponent(ShortcutApp.programName)
         let name = entry.title.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
         let destination = URL(fileURLWithPath: (to as NSString).expandingTildeInPath, isDirectory: true).appendingPathComponent("\(name).app")
-        let made = try await engine.createShortcut(for: entry, program: program, at: destination)
+        // Inside Distiller.app (Contents/Helpers): remember which copy made it.
+        let app = here.deletingLastPathComponent().deletingLastPathComponent()
+        let made = try await engine.createShortcut(for: entry, program: program, at: destination,
+                                                   distillerApp: app.pathExtension == "app" ? app : nil)
         print("Made \(made.path). Open it to start \(entry.title).")
     }
 }

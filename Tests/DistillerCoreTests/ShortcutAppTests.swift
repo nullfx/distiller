@@ -48,7 +48,8 @@ final class ShortcutAppTests: XCTestCase {
         let program = root.appendingPathComponent(ShortcutApp.programName)
         try FileManager.default.copyItem(at: URL(fileURLWithPath: "/usr/bin/true"), to: program)
         let app = root.appendingPathComponent("Guild Wars 2.app")
-        try await ShortcutApp.create(gameID: "guild-wars-2-f484a9", title: "Guild Wars 2", icon: try iconPNG(), program: program, at: app)
+        try await ShortcutApp.create(gameID: "guild-wars-2-f484a9", title: "Guild Wars 2", icon: try iconPNG(), program: program, at: app,
+                                     distillerApp: URL(fileURLWithPath: "/Applications/Distiller.app"))
 
         let info = try XCTUnwrap(NSDictionary(contentsOf: app.appendingPathComponent("Contents/Info.plist")) as? [String: Any])
         XCTAssertEqual(info["CFBundleIdentifier"] as? String, "com.nullfx.distiller.shortcut.guild-wars-2-f484a9")
@@ -59,7 +60,8 @@ final class ShortcutAppTests: XCTestCase {
         XCTAssertEqual(info["CFBundleIconFile"] as? String, "AppIcon")
         XCTAssertTrue(FileManager.default.isExecutableFile(atPath: app.appendingPathComponent("Contents/MacOS/DistillerShortcut").path))
         XCTAssertNotNil(ICNS.read(try Data(contentsOf: app.appendingPathComponent("Contents/Resources/AppIcon.icns"))))
-        XCTAssertEqual(ShortcutApp.manifest(of: app), ShortcutApp.Manifest(gameID: "guild-wars-2-f484a9", title: "Guild Wars 2"))
+        XCTAssertEqual(ShortcutApp.manifest(of: app), ShortcutApp.Manifest(gameID: "guild-wars-2-f484a9", title: "Guild Wars 2",
+                                                                           distillerApp: "/Applications/Distiller.app"))
         let verify = try await ProcessRunner.run(URL(fileURLWithPath: "/usr/bin/codesign"), arguments: ["--verify", "--strict", app.path])
         XCTAssertEqual(verify.status, 0, "Signed for this Mac")
         XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent(".Guild Wars 2.app.partial").path))
