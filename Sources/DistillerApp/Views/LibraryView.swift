@@ -60,7 +60,7 @@ struct LibraryView: View {
     }
 }
 
-/// What Steam just added to or removed from the library.
+/// What a launcher just added to or removed from the library.
 private struct LibraryNoticeCard: View {
     let text: String
     let dismiss: () -> Void
@@ -159,7 +159,7 @@ private struct GameState {
     let unavailable: String?
 
     @MainActor init(_ game: Game, model: AppModel) {
-        isRunning = model.running[game.id] != nil || model.isSteamActive(game)
+        isRunning = model.running[game.id] != nil || model.isLauncherActive(game)
         needsSetup = game.recipe.launch == nil
         unavailable = isRunning ? nil : model.availability(of: game).reason
     }
@@ -180,10 +180,10 @@ private struct GamePrimaryButton: View {
             Button("Finish Setup…") { model.gameInWorkshop = game }
                 .help("Choose the program to launch")
         } else {
-            Button(model.isSteamLauncher(game) ? "Open" : "Play") { model.launch(game) }
+            Button(model.isLauncher(game) ? "Open" : "Play") { model.launch(game) }
                 .buttonStyle(.borderedProminent)
                 .disabled(state.unavailable != nil)
-                .help(state.unavailable ?? (game.steam != nil ? "Start \(game.title) through Steam" : "Start \(game.title)"))
+                .help(state.unavailable ?? (game.launchedBy.map { "Start \(game.title) through \($0.kind.displayName)" } ?? "Start \(game.title)"))
         }
     }
 }
@@ -227,15 +227,15 @@ private struct GameInteractions: ViewModifier {
                 Button("Show Log") { model.showLog(for: game) }
                 Button("Show Bottle in Finder") { model.revealBottle(id: game.bottleID) }
                 Button("Report How It Ran…") { model.gameToReport = game }
-                if !model.isSteamLauncher(game) {
-                    Button(game.steam == nil ? "Record Performance…" : "Record Performance… (Not Yet for Steam Games)") {
+                if !model.isLauncher(game) {
+                    Button(game.launchedBy.map { "Record Performance… (Not Yet for \($0.kind.displayName) Games)" } ?? "Record Performance…") {
                         model.recordPerformance(game)
                     }
-                    .disabled(game.steam != nil)
+                    .disabled(game.launchedBy != nil)
                     .help("Measure the frame rate while you play: start when the game is set up and past loading screens")
                 }
                 Divider()
-                Button(game.steam != nil ? "Uninstall in Steam…" : "Remove from Library…", role: .destructive) { model.removeGame(game) }
+                Button(game.launchedBy.map { "Uninstall in \($0.kind.displayName)…" } ?? "Remove from Library…", role: .destructive) { model.removeGame(game) }
             }
     }
 }
@@ -280,11 +280,11 @@ struct GameRow: View {
 
     private func details(_ resolved: ResolvedRecipe?) -> String {
         var parts: [String] = []
-        if model.isSteamLauncher(game) {
-            let count = model.games.filter { $0.steam?.launcherID == game.id }.count
+        if model.isLauncher(game) {
+            let count = model.games.filter { $0.launchedBy?.launcherID == game.id }.count
             parts.append(count == 0 ? "Launcher" : "Launcher · \(count) game\(count == 1 ? "" : "s")")
-        } else if game.steam != nil {
-            parts.append("Through Steam")
+        } else if let link = game.launchedBy {
+            parts.append("Through \(link.kind.displayName)")
         }
         if let resolved { parts.append(resolved.graphics.displayName) }
         if let name = game.recipe.name { parts.append(name) }

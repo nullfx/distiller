@@ -73,34 +73,44 @@ struct RecipeWorkshopView: View {
     // MARK: Tabs
 
     @ViewBuilder private func settingsTab(_ game: Game) -> some View {
-        if game.steam != nil {
-            steamGameSettings(game)
+        if let link = game.launchedBy {
+            launcherGameSettings(game, link: link)
         } else {
             standardSettings(game)
         }
     }
 
-    /// A game Steam installed: only its launch options are its own. Everything else belongs to
-    /// Steam's bottle, shared by Steam and all its games.
-    private func steamGameSettings(_ game: Game) -> some View {
-        Form {
+    /// A game a launcher installed: only its launch options (Steam) are its own. Everything else
+    /// belongs to the launcher's bottle, shared by the launcher and all its games.
+    private func launcherGameSettings(_ game: Game, link: LauncherLink) -> some View {
+        let launcherName = link.kind.displayName
+        return Form {
             Section {
-                TextField("Launch arguments", text: $settings.argumentsText, prompt: Text("-dx11"))
+                switch link.kind {
+                case .steam:
+                    TextField("Launch arguments", text: $settings.argumentsText, prompt: Text("-dx11"))
+                case .battlenet:
+                    Text("Battle.net starts \(game.title) and doesn't take launch options from Distiller. Set them in Battle.net: the gear next to Play ▸ Game Settings.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             } header: {
                 Text("Launch options")
             } footer: {
-                Text("Steam passes these on to \(game.title) when it starts, like the launch options in the game's properties in Steam.")
-                    .fixedSize(horizontal: false, vertical: true)
+                if link.kind == .steam {
+                    Text("Steam passes these on to \(game.title) when it starts, like the launch options in the game's properties in Steam.")
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             Section {
-                Text("The Wine build, graphics layer, Windows version, winetricks components and other settings belong to Steam's bottle, so Steam and all its games share them. Change them in Steam's recipe.")
+                Text("The Wine build, graphics layer, Windows version, winetricks components and other settings belong to \(launcherName)'s bottle, so \(launcherName) and all its games share them. Change them in \(launcherName)'s recipe.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                if let launcher = model.games.first(where: { $0.id == game.steam?.launcherID }) {
+                if let launcher = model.games.first(where: { $0.id == link.launcherID }) {
                     Button("Open \(launcher.title)'s Recipe") { model.gameInWorkshop = launcher }
                 }
             } header: {
-                Text("Steam's settings")
+                Text("\(launcherName)'s settings")
             }
         }
         .formStyle(.grouped)
@@ -193,7 +203,7 @@ struct RecipeWorkshopView: View {
     }
 
     @ViewBuilder private func bottleTab(_ game: Game) -> some View {
-        if game.steam != nil, let launcher = model.games.first(where: { $0.id == game.steam?.launcherID }) {
+        if let link = game.launchedBy, let launcher = model.games.first(where: { $0.id == link.launcherID }) {
             Form {
                 Section {
                     Text("\(game.title) is in \(launcher.title)'s bottle, which \(launcher.title) and all its games share. Its versions, restore points, Wine tools and rebuilding are on \(launcher.title)'s entry.")
@@ -330,10 +340,12 @@ struct RecipeWorkshopView: View {
         guard recipe != loadedRecipe else { return }
         loadedRecipe = recipe
         settings = RecipeSettings(recipe: recipe)
-        if let appID = game.steam?.appID {
-            // Steam's own -applaunch <id> isn't the player's to edit; Distiller always adds it.
+        if let link = game.launchedBy {
+            // The launcher's own arguments (-applaunch <id>, --exec) aren't the player's to edit;
+            // Distiller always adds them.
             var args = recipe.launch?.args ?? []
-            if args.count >= 2, args[0] == "-applaunch", args[1] == appID { args.removeFirst(2) }
+            if link.kind == .steam, args.count >= 2, args[0] == "-applaunch", args[1] == link.gameID { args.removeFirst(2) }
+            if link.kind == .battlenet { args = [] }
             settings.argumentsText = RecipeSettings.joinArguments(args)
         }
         title = recipe.game.title

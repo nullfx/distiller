@@ -411,14 +411,15 @@ struct GamesCommand: ParsableCommand {
 
         func run() throws {
             let engine = try makeEngine()
-            let sync = engine.syncSteamGames()
-            for game in sync.added { print("Added \(game.title), which Steam installed.") }
-            for game in sync.removed { print("Removed \(game.title), which Steam uninstalled.") }
+            let sync = engine.syncLauncherGames()
+            for game in sync.added { print("Added \(game.title), which \(game.launchedBy?.kind.displayName ?? "its launcher") installed.") }
+            for game in sync.removed { print("Removed \(game.title), which \(game.launchedBy?.kind.displayName ?? "its launcher") uninstalled.") }
             let games = engine.library.load()
             if games.isEmpty { print("Your library is empty. Add a game with: distiller install <recipe.yaml>") }
             for game in games {
                 let note = engine.availability(of: game).reason.map { "\t(can't play: \($0))" } ?? ""
-                let kind = engine.isSteamLauncher(game) ? "\t(Steam)" : game.steam.map { "\t(through Steam, app \($0.appID))" } ?? ""
+                let kind = engine.launcherKind(of: game).map { "\t(\($0.displayName))" }
+                    ?? game.launchedBy.map { "\t(through \($0.kind.displayName), \($0.kind == .steam ? "app " : "")\($0.gameID))" } ?? ""
                 print("\(game.id)\t\(game.recipe.game.slug)/\(game.recipe.id)\t\(game.title)\(kind)\(note)")
             }
         }

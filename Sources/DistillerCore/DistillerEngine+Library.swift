@@ -71,7 +71,7 @@ extension DistillerEngine {
         // Needs only the program file, not a Wine build that can run it.
         guard paths.unavailable.isEmpty,
               let bottle = try? bottles.bottle(id: game.bottleID),
-              let exe = game.steam?.program ?? resolve(game.recipe, overrides: game.overrides).launch?.exe,
+              let exe = game.launchedBy?.program ?? resolve(game.recipe, overrides: game.overrides).launch?.exe,
               let program = try? BottlePath.resolve(exe, in: bottles.root(of: bottle)).followingSymlinks,
               let ico = PEIcon.ico(fromExecutable: program),
               let png = PEIcon.png(fromImageData: ico) else { return nil }
