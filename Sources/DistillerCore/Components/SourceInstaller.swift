@@ -6,6 +6,9 @@ import Foundation
 /// (`ComponentManifest.libraryPaths`).
 public enum SourceLibraries {
     public static let folder = "lib/wine/x86_64-unix"
+    /// Where Vulkan driver manifests (MoltenVK's) go in such a build; Distiller points the
+    /// Vulkan loader there (`VK_DRIVER_FILES`), as builds patched to do it themselves don't need.
+    public static let vulkanDrivers = "share/vulkan/icd.d"
 }
 
 /// A downloadable file in a GitHub release.
@@ -182,7 +185,75 @@ extension EnvironmentSetup {
                 added += 1
             }
         }
+        try addVulkanDrivers(from: donor, to: target, libraries: destination)
         return added
+    }
+
+    /// The donor's Vulkan driver manifests (MoltenVK's `MoltenVK_icd.json`), copied into the
+    /// target's `share/vulkan/icd.d` with `library_path` pointing at the driver library where
+    /// `addLibraries` put it. Without one the Vulkan loader finds no driver (Vulkan, and DXVK
+    /// with it, fails: "failed create vulkan instance: -9").
+    static func addVulkanDrivers(from donor: URL, to target: URL, libraries: URL) throws {
+        let fileManager = FileManager.default
+        let source = donor.appendingPathComponent(SourceLibraries.vulkanDrivers, isDirectory: true)
+        let destination = target.appendingPathComponent(SourceLibraries.vulkanDrivers, isDirectory: true)
+        let manifests = ((try? fileManager.contentsOfDirectory(at: source, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension == "json" }
+        for manifest in manifests {
+            guard var json = (try? JSONSerialization.jsonObject(with: Data(contentsOf: manifest))) as? [String: Any],
+                  var icd = json["ICD"] as? [String: Any], let path = icd["library_path"] as? String else { continue }
+            let library = (path as NSString).lastPathComponent
+            guard fileManager.fileExists(atPath: libraries.appendingPathComponent(library).path) else { continue }
+            icd["library_path"] = relativePath(from: destination, to: libraries.appendingPathComponent(library))
+            // MoltenVK registers as a portability driver, which the loader only offers to programs
+            // that ask for portability drivers. Gcenx's Wine asks; Wine builds like Sikarugir's
+            // don't (their app supplies Vulkan its own way), so the loader would find no driver.
+            // Offered as a regular driver, every program gets it; DXVK and Wine know it's MoltenVK.
+            if icd["is_portability_driver"] as? Bool == true { icd["is_portability_driver"] = false }
+            json["ICD"] = icd
+            try fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
+            let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
+            try data.write(to: destination.appendingPathComponent(manifest.lastPathComponent), options: .atomic)
+        }
+    }
+
+    /// `to` relative to the folder `from` (both inside the same build).
+    static func relativePath(from folder: URL, to file: URL) -> String {
+        let base = folder.standardizedFileURL.pathComponents
+        let target = file.standardizedFileURL.pathComponents
+        var common = 0
+        while common < min(base.count, target.count), base[common] == target[common] { common += 1 }
+        return (Array(repeating: "..", count: base.count - common) + target[common...]).joined(separator: "/")
+    }
+
+    /// Adds what an installed build is missing from the build it takes libraries from
+    /// (`libraries_from`): libraries and Vulkan driver manifests, in it and in the builds composed
+    /// from it (with a graphics layer). For builds installed before a fix to what's copied.
+    /// Returns the builds changed.
+    @discardableResult
+    public func repairLibraries(tag: String) throws -> [String] {
+        let installed = engine.components.installed()
+        var changed: [String] = []
+        for build in installed where build.manifest.kind == .wine && build.manifest.id == tag && build.manifest.composedFrom == nil {
+            guard let from = build.manifest.librariesFrom,
+                  let donor = installed.first(where: { $0.id == from }) else { continue }
+            let derived = engine.components.composed().filter { $0.manifest.composedFrom?.first == build.id }
+            for target in [build] + derived {
+                let drivers = target.directory.appendingPathComponent(SourceLibraries.vulkanDrivers)
+                func snapshot() -> [String: Data] {
+                    var files: [String: Data] = [:]
+                    for url in (try? FileManager.default.contentsOfDirectory(at: drivers, includingPropertiesForKeys: nil)) ?? [] {
+                        files[url.lastPathComponent] = try? Data(contentsOf: url)
+                    }
+                    return files
+                }
+                let before = (MachODependencies.fileNames(in: target.directory).count, snapshot())
+                _ = try Self.addLibraries(from: donor.directory, to: target.directory)
+                let after = (MachODependencies.fileNames(in: target.directory).count, snapshot())
+                if after.0 != before.0 || after.1 != before.1 { changed.append(target.id) }
+            }
+        }
+        return changed
     }
 }
 

@@ -55,6 +55,14 @@ public enum WineEnvironment {
         let libraries = wine.manifest.effectiveLibraryPaths.map { wine.directory.appendingPathComponent($0).path }
         if !libraries.isEmpty {
             env[Self.libraryPathKey] = libraries.joined(separator: ":")
+            // Such builds don't point the Vulkan loader at their driver manifests themselves.
+            let drivers = wine.directory.appendingPathComponent(SourceLibraries.vulkanDrivers, isDirectory: true)
+            let manifests = ((try? FileManager.default.contentsOfDirectory(at: drivers, includingPropertiesForKeys: nil)) ?? [])
+                .filter { $0.pathExtension == "json" }.map(\.path).sorted()
+            if !manifests.isEmpty {
+                env["VK_DRIVER_FILES"] = manifests.joined(separator: ":")
+                env["VK_ICD_FILENAMES"] = manifests.joined(separator: ":")
+            }
         }
 
         env["WINEPREFIX"] = prefix.path
