@@ -205,6 +205,11 @@ extension EnvironmentSetup {
             let library = (path as NSString).lastPathComponent
             guard fileManager.fileExists(atPath: libraries.appendingPathComponent(library).path) else { continue }
             icd["library_path"] = relativePath(from: destination, to: libraries.appendingPathComponent(library))
+            // MoltenVK registers as a portability driver, which the loader only offers to programs
+            // that ask for portability drivers. Gcenx's Wine asks; Wine builds like Sikarugir's
+            // don't (their app supplies Vulkan its own way), so the loader would find no driver.
+            // Offered as a regular driver, every program gets it; DXVK and Wine know it's MoltenVK.
+            if icd["is_portability_driver"] as? Bool == true { icd["is_portability_driver"] = false }
             json["ICD"] = icd
             try fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
             let data = try JSONSerialization.data(withJSONObject: json, options: [.prettyPrinted, .sortedKeys])
@@ -234,10 +239,18 @@ extension EnvironmentSetup {
                   let donor = installed.first(where: { $0.id == from }) else { continue }
             let derived = engine.components.composed().filter { $0.manifest.composedFrom?.first == build.id }
             for target in [build] + derived {
-                let before = MachODependencies.fileNames(in: target.directory).count
+                let drivers = target.directory.appendingPathComponent(SourceLibraries.vulkanDrivers)
+                func snapshot() -> [String: Data] {
+                    var files: [String: Data] = [:]
+                    for url in (try? FileManager.default.contentsOfDirectory(at: drivers, includingPropertiesForKeys: nil)) ?? [] {
+                        files[url.lastPathComponent] = try? Data(contentsOf: url)
+                    }
+                    return files
+                }
+                let before = (MachODependencies.fileNames(in: target.directory).count, snapshot())
                 _ = try Self.addLibraries(from: donor.directory, to: target.directory)
-                let after = MachODependencies.fileNames(in: target.directory).count
-                if after != before { changed.append(target.id) }
+                let after = (MachODependencies.fileNames(in: target.directory).count, snapshot())
+                if after.0 != before.0 || after.1 != before.1 { changed.append(target.id) }
             }
         }
         return changed

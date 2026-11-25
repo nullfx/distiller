@@ -250,7 +250,8 @@ final class ComponentSourceTests: XCTestCase {
         let manifest = result.component.directory.appendingPathComponent("share/vulkan/icd.d/MoltenVK_icd.json")
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: manifest)) as? [String: Any])
         XCTAssertEqual((json["ICD"] as? [String: Any])?["library_path"] as? String, "../../../lib/wine/x86_64-unix/libMoltenVK.dylib")
-        XCTAssertEqual((json["ICD"] as? [String: Any])?["is_portability_driver"] as? Bool, true)
+        XCTAssertEqual((json["ICD"] as? [String: Any])?["is_portability_driver"] as? Bool, false,
+                       "Offered as a regular driver: Wine builds like Sikarugir's don't ask for portability drivers")
         let env = WineEnvironment.build(prefix: root.appendingPathComponent("prefix"), wine: result.component, graphics: nil, resolved: nil)
         let resolved = { (path: String?) in path.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path } }
         XCTAssertEqual(resolved(env["VK_DRIVER_FILES"]), manifest.resolvingSymlinksInPath().path)
