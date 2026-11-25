@@ -118,22 +118,22 @@ final class SteamLibraryTests: XCTestCase {
         try engine.library.upsert(launcher)
         XCTAssertTrue(engine.isSteamLauncher(launcher))
 
-        let first = engine.syncSteamGames()
+        let first = engine.syncLauncherGames()
         XCTAssertEqual(first.added.map(\.title), ["Team Fortress 2"])
         let tf2 = try XCTUnwrap(first.added.first)
         XCTAssertEqual(tf2.bottleID, bottle.id, "It shares Steam's bottle")
-        XCTAssertEqual(tf2.steam, Game.SteamLink(appID: "440", launcherID: "steam",
-                                                 program: #"C:\Program Files (x86)\Steam\steamapps\common\Team Fortress 2\tf_win64.exe"#))
+        XCTAssertEqual(tf2.launchedBy, LauncherLink(kind: .steam, gameID: "440", launcherID: "steam",
+                                                     program: #"C:\Program Files (x86)\Steam\steamapps\common\Team Fortress 2\tf_win64.exe"#))
         XCTAssertEqual(tf2.recipe.launch, LaunchSpec(exe: SteamLibrary.clientPath, args: ["-applaunch", "440"]))
         XCTAssertEqual(tf2.recipe.game.slug, "team-fortress-2")
         XCTAssertFalse(engine.isSteamLauncher(tf2))
-        XCTAssertTrue(engine.syncSteamGames().isEmpty, "Nothing changes on the next sync")
+        XCTAssertTrue(engine.syncLauncherGames().isEmpty, "Nothing changes on the next sync")
 
         // Steam's recipe changes (a graphics layer for the whole bottle): its games follow.
         var changedLauncher = launcher
         changedLauncher.recipe.stack.graphics = .dxvk
         try engine.library.upsert(changedLauncher)
-        engine.syncSteamGames()
+        engine.syncLauncherGames()
         XCTAssertEqual(try engine.library.game(id: tf2.id).recipe.stack.graphics, .dxvk)
         XCTAssertEqual(try engine.library.game(id: tf2.id).recipe.launch?.args, ["-applaunch", "440"], "Its launch stays its own")
 
@@ -159,7 +159,7 @@ final class SteamLibraryTests: XCTestCase {
 
         // Uninstalled in Steam: the entry goes.
         try FileManager.default.removeItem(at: steam.appendingPathComponent("steamapps/appmanifest_440.acf"))
-        XCTAssertEqual(engine.syncSteamGames().removed.map(\.id), [tf2.id])
+        XCTAssertEqual(engine.syncLauncherGames().removed.map(\.id), [tf2.id])
         XCTAssertEqual(engine.library.load().map(\.id), ["steam"])
     }
 
@@ -224,7 +224,7 @@ final class SteamLibraryTests: XCTestCase {
         try Data(count: 4096).write(to: steam.appendingPathComponent("steamapps/common/Portal 2/portal2.exe"))
         try manifest.replacingOccurrences(of: "\"440\"", with: "\"620\"").replacingOccurrences(of: "Team Fortress 2", with: "Portal 2")
             .write(to: steam.appendingPathComponent("steamapps/appmanifest_620.acf"), atomically: true, encoding: .utf8)
-        XCTAssertEqual(engine.syncSteamGames().added.map(\.title), ["Portal 2"])
+        XCTAssertEqual(engine.syncLauncherGames().added.map(\.title), ["Portal 2"])
         let entry = try engine.library.game(id: "steam-steam-620")
         XCTAssertEqual(entry.recipe.launch?.args, ["-applaunch", "620", "-novid"])
         XCTAssertEqual(entry.recipe.notes, "Use -novid.")
@@ -249,9 +249,9 @@ final class SteamLibraryTests: XCTestCase {
                             launch: LaunchSpec(exe: SteamLibrary.clientPath))
         try engine.library.upsert(Game(id: "steam", title: "Steam", bottleID: "gone", recipe: recipe))
         var tf2 = Game(id: "steam-steam-440", title: "Team Fortress 2", bottleID: "gone", recipe: recipe)
-        tf2.steam = Game.SteamLink(appID: "440", launcherID: "steam", program: nil)
+        tf2.launchedBy = LauncherLink(kind: .steam, gameID: "440", launcherID: "steam", program: nil)
         try engine.library.upsert(tf2)
-        XCTAssertTrue(engine.syncSteamGames().isEmpty, "A missing bottle (a disconnected drive) removes nothing")
+        XCTAssertTrue(engine.syncLauncherGames().isEmpty, "A missing bottle (a disconnected drive) removes nothing")
         XCTAssertEqual(engine.library.load().count, 2)
     }
 

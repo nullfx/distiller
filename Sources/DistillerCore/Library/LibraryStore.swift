@@ -21,28 +21,30 @@ public struct Game: Codable, Identifiable, Equatable, Sendable, Hashable {
     public var communityCheck: CommunityCheckResult?
     /// The player keeps this recipe for themselves, so the library doesn't suggest sharing it.
     public var justForMe: Bool?
-    /// For a game Steam installed in a Steam bottle: which app, and the library entry of the
-    /// Steam it belongs to. Its recipe starts it through Steam (`-applaunch`).
-    public var steam: SteamLink?
+    /// For a game a launcher installed (Steam, Battle.net) in its bottle: which game, and the
+    /// library entry of the launcher it belongs to. Its recipe starts it through the launcher.
+    public var launchedBy: LauncherLink?
+    /// Steam links as Distiller 1.1 stored them; read once into `launchedBy`.
+    var legacySteam: LegacySteamLink?
 
-    public struct SteamLink: Codable, Equatable, Sendable, Hashable {
-        public var appID: String
-        /// The id of the library entry for Steam itself (whose bottle this game shares).
-        public var launcherID: String
-        /// The game's own program (Windows path), for its icon.
-        public var program: String?
+    struct LegacySteamLink: Codable, Equatable, Sendable, Hashable {
+        var appID: String
+        var launcherID: String
+        var program: String?
 
         enum CodingKeys: String, CodingKey {
             case program
             case appID = "app_id"
             case launcherID = "launcher_id"
         }
+    }
 
-        public init(appID: String, launcherID: String, program: String?) {
-            self.appID = appID
-            self.launcherID = launcherID
-            self.program = program
+    /// `launchedBy`, or a link stored the earlier, Steam-only way.
+    mutating func migrateLauncherLink() {
+        if launchedBy == nil, let legacy = legacySteam {
+            launchedBy = LauncherLink(kind: .steam, gameID: legacy.appID, launcherID: legacy.launcherID, program: legacy.program)
         }
+        legacySteam = nil
     }
 
     /// The publisher's installer has changed since the recipe was checked (it passed by its
@@ -72,7 +74,9 @@ public struct Game: Codable, Identifiable, Equatable, Sendable, Hashable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, title, recipe, overrides, authored, submission, rebuild, steam
+        case id, title, recipe, overrides, authored, submission, rebuild
+        case launchedBy = "launched_by"
+        case legacySteam = "steam"
         case installerChanged = "installer_changed"
         case communityCheck = "community_check"
         case justForMe = "just_for_me"
@@ -95,9 +99,9 @@ public struct Game: Codable, Identifiable, Equatable, Sendable, Hashable {
         submission: RecipeSubmission? = nil,
         communityCheck: CommunityCheckResult? = nil,
         justForMe: Bool? = nil,
-        steam: SteamLink? = nil
+        launchedBy: LauncherLink? = nil
     ) {
-        self.steam = steam
+        self.launchedBy = launchedBy
         self.id = id
         self.title = title
         self.bottleID = bottleID
@@ -204,6 +208,7 @@ public final class LibraryStore: @unchecked Sendable {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return ((try? decoder.decode([Game].self, from: data)) ?? [])
+            .map { game in var game = game; game.migrateLauncherLink(); return game }
             .sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
     }
 

@@ -12,8 +12,8 @@ extension AppModel {
             session.show()
             return
         }
-        if game.steam != nil || isSteamLauncher(game) {
-            errorMessage = "Recording performance doesn't work yet for games started through Steam."
+        if let kind = game.launchedBy?.kind ?? launcherKind(of: game) {
+            errorMessage = "Recording performance doesn't work yet for games started through \(kind.displayName)."
             return
         }
         let recorder: PerformanceRecorder

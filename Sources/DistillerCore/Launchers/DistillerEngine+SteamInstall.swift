@@ -41,9 +41,9 @@ extension DistillerEngine {
                 "\(recipe.game.title) is a Steam game: its recipe starts it through Steam, which installs it next to itself. Add Steam to your library first (its recipe, such as steam.yaml), then add \(recipe.game.title) again."
             )
         }
-        try savePendingSteamGame(recipe, appID: appID, launcherID: launcher.id)
-        syncSteamGames()
-        if let game = library.load().first(where: { $0.steam?.launcherID == launcher.id && $0.steam?.appID == appID }) {
+        try savePendingLauncherGame(recipe, gameID: appID, launcherID: launcher.id)
+        syncLauncherGames()
+        if let game = library.load().first(where: { $0.launchedBy?.launcherID == launcher.id && $0.launchedBy?.gameID == appID }) {
             return .alreadyInstalled(game)
         }
         if let request {
@@ -54,29 +54,29 @@ extension DistillerEngine {
         return .requested(appID: appID, launcher: launcher)
     }
 
-    func pendingSteamGameURL(appID: String, launcherID: String) -> URL {
-        paths.pendingSteamGames.appendingPathComponent("\(launcherID)-\(appID).yaml")
+    func pendingLauncherGameURL(gameID: String, launcherID: String) -> URL {
+        paths.pendingSteamGames.appendingPathComponent("\(launcherID)-\(gameID).yaml")
     }
 
-    func savePendingSteamGame(_ recipe: Recipe, appID: String, launcherID: String) throws {
+    func savePendingLauncherGame(_ recipe: Recipe, gameID: String, launcherID: String) throws {
         try FileManager.default.createDirectory(at: paths.pendingSteamGames, withIntermediateDirectories: true)
-        try RecipeLoader.encode(recipe).write(to: pendingSteamGameURL(appID: appID, launcherID: launcherID), atomically: true, encoding: .utf8)
+        try RecipeLoader.encode(recipe).write(to: pendingLauncherGameURL(gameID: gameID, launcherID: launcherID), atomically: true, encoding: .utf8)
     }
 
-    /// The recipe added for a game Steam hadn't installed yet, taken (removed) when its entry
-    /// is made.
-    func takePendingSteamGame(appID: String, launcherID: String) -> Recipe? {
-        let url = pendingSteamGameURL(appID: appID, launcherID: launcherID)
+    /// The recipe added for a game its launcher hadn't installed yet, taken (removed) when its
+    /// entry is made.
+    func takePendingLauncherGame(gameID: String, launcherID: String) -> Recipe? {
+        let url = pendingLauncherGameURL(gameID: gameID, launcherID: launcherID)
         guard let recipe = try? RecipeLoader.load(from: url) else { return nil }
         try? FileManager.default.removeItem(at: url)
         return recipe
     }
 
-    /// A Steam game's entry recipe with the added recipe's own options: its launch options
-    /// (after Steam's), notes and name. Bottle settings stay Steam's.
-    static func applying(_ added: Recipe, to recipe: Recipe, appID: String) -> Recipe {
+    /// A launcher game's entry recipe with the added recipe's own options: its launch options
+    /// (after the launcher's), notes and name. Bottle settings stay the launcher's.
+    static func applying(_ added: Recipe, to recipe: Recipe, kind: LauncherKind, gameID: String) -> Recipe {
         var result = recipe
-        result.launch?.args = steamLaunchArguments(appID: appID, recipeArgs: added.launch?.args)
+        result.launch?.args = launchArguments(kind: kind, gameID: gameID, recipeArgs: added.launch?.args)
         result.notes = added.notes ?? result.notes
         result.name = added.name ?? result.name
         result.authors = added.authors ?? result.authors

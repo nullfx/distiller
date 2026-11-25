@@ -1,0 +1,134 @@
+import Foundation
+import XCTest
+@testable import DistillerCore
+
+/// Launchers other than Steam (Battle.net), and what all launchers share. The Battle.net files
+/// here are shaped like a real bottle's (Diablo III installed, World of Warcraft downloading).
+final class LauncherTests: XCTestCase {
+    var root: URL!
+    var engine: DistillerEngine!
+
+    let summary = #"""
+    {"installed":[
+     {"box_art_uri":"https://example.com/d3.webp","icon_index":0,"icon_path":"C:/Program Files (x86)/Diablo III/Diablo III Launcher.exe","last_played_timestamp":0,"launch_uri":"battlenet://game/d3","name":"Diablo III","product_id":"d3"},
+     {"icon_path":"C:/Program Files (x86)/World of Warcraft/World of Warcraft Launcher.exe","launch_uri":"battlenet://game/wow","name":"World of Warcraft","product_id":"wow"},
+     {"icon_path":"C:/Program Files (x86)/Overwatch/Overwatch Launcher.exe","name":"Overwatch","product_id":"pro"},
+     {"icon_path":"C:/Windows/evil.exe","name":"Bad id","product_id":"../x"}
+    ]}
+    """#
+
+    override func setUpWithError() throws {
+        root = FileManager.default.temporaryDirectory.appendingPathComponent("distiller-launchers-\(UUID().uuidString)")
+        engine = try DistillerEngine(paths: DistillerPaths(root: root, storage: StorageSettings()), hardware: Macs.m3Pro)
+    }
+
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: root)
+    }
+
+    func testRecognisesLaunchers() {
+        XCTAssertEqual(LauncherKind.kind(ofClient: SteamLibrary.clientPath), .steam)
+        XCTAssertEqual(LauncherKind.kind(ofClient: BattleNetLibrary.clientPath), .battlenet)
+        XCTAssertEqual(LauncherKind.kind(ofClient: #"C:\Program Files (x86)\Battle.net\Battle.net.exe"#), .battlenet)
+        XCTAssertNil(LauncherKind.kind(ofClient: #"C:\Program Files (x86)\World of Warcraft\World of Warcraft Launcher.exe"#))
+        XCTAssertEqual(BattleNetLibrary.gameClient(launcherExe: BattleNetLibrary.clientPath), #"C:\Program Files (x86)\Battle.net\Battle.net.exe"#)
+    }
+
+    func testStartsBattleNetGamesByTheirCode() {
+        XCTAssertEqual(DistillerEngine.launchArguments(kind: .battlenet, gameID: "wow", recipeArgs: nil), ["--exec=launch WoW"])
+        XCTAssertEqual(DistillerEngine.launchArguments(kind: .battlenet, gameID: "d3", recipeArgs: ["-windowed"]), ["--exec=launch D3"],
+                       "Battle.net doesn't pass anything on")
+        XCTAssertEqual(DistillerEngine.launchArguments(kind: .battlenet, gameID: "newgame", recipeArgs: nil), ["--exec=launch newgame"])
+        XCTAssertEqual(DistillerEngine.launchArguments(kind: .steam, gameID: "440", recipeArgs: ["-applaunch", "440", "-dx11"]), ["-applaunch", "440", "-dx11"])
+    }
+
+    func testReadsWhatIsRunningInEachBottle() {
+        let ps = """
+        /x/bin/wineserver WINEPREFIX=/Volumes/Games Drive/Bottles/bnet/prefix WINEDEBUG=-all
+        C:\\Program Files (x86)\\World of Warcraft\\_retail_\\Wow.exe -launcherlogin WINEPREFIX=/Volumes/Games Drive/Bottles/bnet/prefix PATH=/usr/bin
+        C:\\Program Files (x86)\\World of Warcraft\\World of Warcraft Launcher.exe WINEPREFIX=/Volumes/Games Drive/Bottles/bnet/prefix
+        C:\\windows\\system32\\services.exe WINEPREFIX=/b/steam/prefix
+        /usr/bin/login -pf me
+        """
+        let processes = DistillerEngine.bottleProcesses(psOutput: ps)
+        XCTAssertEqual(processes.active, ["/Volumes/Games Drive/Bottles/bnet/prefix"], "Paths with spaces; only wineserver makes a bottle active")
+        let commands = processes.commands["/Volumes/Games Drive/Bottles/bnet/prefix"] ?? []
+        XCTAssertEqual(commands.count, 3)
+        XCTAssertEqual(BattleNetLibrary.runningPrograms(inFolder: #"C:\Program Files (x86)\World of Warcraft\"#, commands: commands), ["Wow.exe"],
+                       "Not its launcher stub")
+        XCTAssertEqual(BattleNetLibrary.runningPrograms(inFolder: #"c:\program files (x86)\diablo iii"#, commands: commands), [])
+        XCTAssertEqual(DistillerEngine.activePrefixes(psOutput: ps), processes.active)
+    }
+
+    func testOldSteamLinksCarryOver() throws {
+        // As Distiller 1.1 stored a Steam game.
+        let recipe = Recipe(id: "steam-440", game: GameInfo(title: "Team Fortress 2", slug: "team-fortress-2"),
+                            stack: StackSpec(runner: RunnerRequirement(family: "winehq"), graphics: .wined3d),
+                            launch: LaunchSpec(exe: SteamLibrary.clientPath, args: ["-applaunch", "440"]))
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        var json = try XCTUnwrap(JSONSerialization.jsonObject(with: encoder.encode(
+            [Game(id: "steam-steam-440", title: "Team Fortress 2", bottleID: "steam", recipe: recipe)])) as? [[String: Any]])
+        json[0]["steam"] = ["app_id": "440", "launcher_id": "steam", "program": #"C:\TF2\tf.exe"#]
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try JSONSerialization.data(withJSONObject: json).write(to: engine.paths.libraryFile)
+
+        let game = try XCTUnwrap(engine.library.load().first)
+        XCTAssertEqual(game.launchedBy, LauncherLink(kind: .steam, gameID: "440", launcherID: "steam", program: #"C:\TF2\tf.exe"#))
+        try engine.library.upsert(game)
+        let saved = try String(contentsOf: engine.paths.libraryFile, encoding: .utf8)
+        XCTAssertTrue(saved.contains("launched_by"))
+        XCTAssertFalse(saved.contains("\"steam\" :"), "Stored the new way")
+    }
+
+    func testGamesBattleNetInstallsComeAndGo() async throws {
+        let bottle = Bottle(id: "bnet", name: "Battle.net", wine: "sikarugir@10.0_8", createdAt: Date())
+        let driveC = engine.bottles.prefix(of: bottle).appendingPathComponent("drive_c")
+        let agent = driveC.appendingPathComponent("ProgramData/Battle.net/Agent")
+        try FileManager.default.createDirectory(at: agent, withIntermediateDirectories: true)
+        try engine.bottles.save(bottle)
+        for program in ["Program Files (x86)/Battle.net/Battle.net Launcher.exe",
+                        "Program Files (x86)/Diablo III/Diablo III Launcher.exe",
+                        "Program Files (x86)/World of Warcraft/World of Warcraft Launcher.exe"] {
+            let url = driveC.appendingPathComponent(program)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("MZ".utf8).write(to: url)
+        }
+        // Overwatch is listed but its program isn't there yet (just started downloading).
+        try summary.write(to: agent.appendingPathComponent("aggregate.json"), atomically: true, encoding: .utf8)
+        XCTAssertEqual(BattleNetLibrary.installedGames(root: engine.bottles.root(of: bottle)).map(\.gameID), ["d3", "wow"])
+
+        let recipe = Recipe(id: "battle-net", game: GameInfo(title: "Battle.net", slug: "battle-net"),
+                            stack: StackSpec(runner: RunnerRequirement(family: "sikarugir"), graphics: .wined3d),
+                            launch: LaunchSpec(exe: BattleNetLibrary.clientPath))
+        let launcher = Game(id: "bnet", title: "Battle.net", bottleID: bottle.id, recipe: recipe)
+        try engine.library.upsert(launcher)
+        XCTAssertEqual(engine.launcherKind(of: launcher), .battlenet)
+        XCTAssertFalse(engine.isSteamLauncher(launcher))
+
+        let sync = engine.syncLauncherGames()
+        XCTAssertEqual(sync.added.map(\.title), ["Diablo III", "World of Warcraft"])
+        let wow = try engine.library.game(id: "bnet-battlenet-wow")
+        XCTAssertEqual(wow.bottleID, "bnet", "Battle.net's bottle")
+        XCTAssertEqual(wow.launchedBy, LauncherLink(kind: .battlenet, gameID: "wow", launcherID: "bnet",
+                                                    program: #"C:\Program Files (x86)\World of Warcraft\World of Warcraft Launcher.exe"#))
+        XCTAssertEqual(wow.recipe.launch, LaunchSpec(exe: #"C:\Program Files (x86)\Battle.net\Battle.net.exe"#, args: ["--exec=launch WoW"]))
+        XCTAssertEqual(wow.recipe.stack.runner.family, "sikarugir")
+        XCTAssertNil(engine.launcherKind(of: wow), "A launcher's game isn't a launcher")
+        XCTAssertTrue(engine.syncLauncherGames().isEmpty)
+
+        // Running while a program from its folder runs in Battle.net's bottle.
+        let prefix = engine.bottles.prefix(of: bottle).path
+        var processes = BottleProcesses(active: [prefix], commands: [prefix: [#"C:\Program Files (x86)\World of Warcraft\_retail_\Wow.exe"#]])
+        XCTAssertTrue(engine.launcherGameState(wow, processes: processes).running)
+        XCTAssertFalse(engine.launcherGameState(try engine.library.game(id: "bnet-battlenet-d3"), processes: processes).running)
+        processes.active = []
+        XCTAssertFalse(engine.launcherGameState(wow, processes: processes).running, "Not while the bottle is idle")
+
+        // Uninstalled in Battle.net: the entry goes.
+        try summary.replacingOccurrences(of: "\"product_id\":\"wow\"", with: "\"product_id\":\"wow_gone\"")
+            .write(to: agent.appendingPathComponent("aggregate.json"), atomically: true, encoding: .utf8)
+        try FileManager.default.removeItem(at: driveC.appendingPathComponent("Program Files (x86)/World of Warcraft"))
+        XCTAssertEqual(engine.syncLauncherGames().removed.map(\.id), ["bnet-battlenet-wow"])
+    }
+}
