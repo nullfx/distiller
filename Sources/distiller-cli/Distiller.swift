@@ -670,7 +670,7 @@ struct SteamOptionsCommand: ParsableCommand {
     @Argument(help: "Steam's entry, from 'distiller games'.")
     var steam: String
 
-    @Option(help: "normal, small, big_picture or menu_bar.")
+    @Option(help: "normal, small or big_picture.")
     var start: LauncherOptions.StartView?
 
     @Option(help: "online, away, invisible or offline (signed out of Friends).")

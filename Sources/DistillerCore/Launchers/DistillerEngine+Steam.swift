@@ -381,8 +381,10 @@ extension DistillerEngine {
     }
 
     /// After Distiller started Steam (for itself or a game): once Steam's interface is up (its
-    /// web helper runs in the bottle), sends the player's links (Small Mode, Friends status).
-    /// Gives up after `timeout` (Steam updating itself, or not signed in yet).
+    /// web helper runs in the bottle), sends the player's links (Small Mode). Steam opens its
+    /// main window when it has finished signing in, which would replace Small Mode, so they're
+    /// sent again over the first minute. Gives up after `timeout` (Steam updating itself, or
+    /// not signed in yet).
     public func applyLauncherOptionsAfterStart(for game: Game, timeout: Duration = .seconds(240)) async {
         guard let launcher = launcherEntry(for: game), launcherKind(of: launcher) == .steam,
               let links = launcher.launcherOptions?.steamLinksAfterStart, !links.isEmpty,
@@ -394,15 +396,35 @@ extension DistillerEngine {
             let processes = await bottleProcesses()
             let commands = processes.commands[prefix.path] ?? processes.commands[prefix.standardizedFileURL.path] ?? []
             if commands.contains(where: { $0.lowercased().contains("steamwebhelper.exe") }) {
-                // Give Steam a moment to finish signing in before it takes links.
-                try? await Task.sleep(for: .seconds(5))
-                for link in links {
-                    _ = try? run(program: clientExe, arguments: [link], inBottle: launcher.bottleID)
-                    try? await Task.sleep(for: .seconds(2))
+                var waited = 0
+                for at in [5, 15, 30, 60] {
+                    try? await Task.sleep(for: .seconds(at - waited))
+                    waited = at
+                    for link in links {
+                        _ = try? run(program: clientExe, arguments: [link], inBottle: launcher.bottleID)
+                    }
                 }
                 return
             }
             try? await Task.sleep(for: .seconds(2))
+        }
+    }
+
+    /// Before Distiller starts Steam: the player's Friends status, written where Steam saves
+    /// its own (`localconfig.vdf`, each signed-in account's `FriendStoreLocalPrefs_<account>`,
+    /// `ePersonaState`), so Steam starts in it. Only while Steam isn't running (it writes the
+    /// file itself when it quits). Accounts that haven't signed in yet have nothing to change.
+    func applySteamFriendsStatus(for launcher: Game) {
+        guard let state = launcher.launcherOptions?.steamPersonaState,
+              let clientExe = resolve(launcher.recipe, overrides: launcher.overrides).launch?.exe,
+              let bottle = try? bottles.bottle(id: launcher.bottleID),
+              let steam = SteamLibrary.steamFolder(clientExe: clientExe, root: bottles.root(of: bottle)) else { return }
+        let userdata = steam.appendingPathComponent("userdata", isDirectory: true)
+        for account in (try? FileManager.default.contentsOfDirectory(at: userdata, includingPropertiesForKeys: nil)) ?? [] {
+            let file = account.appendingPathComponent("config/localconfig.vdf")
+            guard let text = try? String(contentsOf: file, encoding: .utf8),
+                  let updated = SteamLibrary.settingPersonaState(state, in: text), updated != text else { continue }
+            try? updated.write(to: file, atomically: true, encoding: .utf8)
         }
     }
 

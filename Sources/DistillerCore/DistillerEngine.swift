@@ -274,6 +274,7 @@ public final class DistillerEngine: @unchecked Sendable {
         // Starting Steam (for itself or a game): the player's view comes first.
         if startingLauncher, let launcher = launcherEntry(for: game), launcherKind(of: launcher) == .steam {
             arguments = (launcher.launcherOptions?.steamStartArguments ?? []) + arguments
+            applySteamFriendsStatus(for: launcher)
         }
         return try runner.launch(
             program: program.path,

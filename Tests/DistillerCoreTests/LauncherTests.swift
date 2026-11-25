@@ -107,11 +107,16 @@ final class LauncherTests: XCTestCase {
     func testSteamStartOptions() throws {
         XCTAssertEqual(LauncherOptions(startView: .normal).steamStartArguments, ["-nobigpicture"])
         XCTAssertEqual(LauncherOptions(startView: .bigPicture).steamStartArguments, ["-gamepadui"])
-        XCTAssertEqual(LauncherOptions(startView: .menuBar).steamStartArguments, ["-silent"])
+        XCTAssertEqual(LauncherOptions(startView: .menuBar).steamStartArguments, [], "Steam ignores -silent here: no longer used")
+        XCTAssertFalse(LauncherOptions.StartView.offered.contains(.menuBar))
         XCTAssertEqual(LauncherOptions(startView: .small).steamStartArguments, [], "Small Mode is a link, once Steam is up")
-        XCTAssertEqual(LauncherOptions(startView: .small, friends: .invisible).steamLinksAfterStart,
-                       ["steam://open/minigameslist", "steam://friends/status/invisible"])
-        XCTAssertEqual(LauncherOptions(friends: .offline).steamLinksAfterStart, ["steam://friends/status/offline"])
+        XCTAssertEqual(LauncherOptions(startView: .small, friends: .invisible).steamLinksAfterStart, ["steam://open/minigameslist"])
+        XCTAssertEqual(LauncherOptions(friends: .offline).steamLinksAfterStart, [], "The status is written, not sent")
+        XCTAssertEqual(LauncherOptions(friends: .offline).steamPersonaState, 0)
+        XCTAssertEqual(LauncherOptions(friends: .online).steamPersonaState, 1)
+        XCTAssertEqual(LauncherOptions(friends: .away).steamPersonaState, 3)
+        XCTAssertEqual(LauncherOptions(friends: .invisible).steamPersonaState, 7)
+        XCTAssertNil(LauncherOptions().steamPersonaState)
         XCTAssertTrue(LauncherOptions().isEmpty)
         XCTAssertEqual(LauncherOptions().steamLinksAfterStart, [])
 
@@ -133,6 +138,24 @@ final class LauncherTests: XCTestCase {
         XCTAssertNil(engine.launcherEntry(for: Game(id: "x", title: "X", bottleID: "x", recipe: Recipe(
             id: "x", game: GameInfo(title: "X", slug: "x"), stack: StackSpec(runner: RunnerRequirement(family: "winehq"), graphics: .dxvk),
             launch: LaunchSpec(exe: #"C:\x.exe"#)))), "An ordinary game has no launcher")
+    }
+
+    func testWritesSteamsSavedFriendsStatus() throws {
+        // Shaped like a real localconfig.vdf (a JSON value with escaped quotes).
+        let config = "\"UserLocalConfigStore\"\n{\n\t\"WebStorage\"\n\t{\n"
+            + "\t\t\"ChatStorePopupState_123\"\t\t\"{\\\"bFriendsListVisible\\\":false}\"\n"
+            + "\t\t\"FriendStoreLocalPrefs_123\"\t\t\"{\\\"ePersonaState\\\":7,\\\"strNonFriendsAllowedToMsg\\\":\\\"\\\"}\"\n"
+            + "\t}\n}\n"
+        let updated = try XCTUnwrap(SteamLibrary.settingPersonaState(0, in: config))
+        XCTAssertTrue(updated.contains(#""FriendStoreLocalPrefs_123""# + "\t\t" + #""{\"ePersonaState\":0,\"strNonFriendsAllowedToMsg\":\"\"}""#), updated)
+        XCTAssertTrue(updated.contains(#""ChatStorePopupState_123""# + "\t\t" + #""{\"bFriendsListVisible\":false}""#), "Other entries untouched")
+        XCTAssertEqual(updated.count, config.count, "Only the one digit changed")
+        XCTAssertEqual(try XCTUnwrap(SteamLibrary.settingPersonaState(7, in: updated)), config)
+        // It parses as VDF still, with the new state.
+        let vdf = try XCTUnwrap(VDFValue.parse(updated))
+        XCTAssertEqual(vdf["UserLocalConfigStore"]?["WebStorage"]?["FriendStoreLocalPrefs_123"]?.string,
+                       #"{"ePersonaState":0,"strNonFriendsAllowedToMsg":""}"#)
+        XCTAssertNil(SteamLibrary.settingPersonaState(0, in: "\"UserLocalConfigStore\"\n{\n}\n"), "Not signed in yet")
     }
 
     func testGamesBattleNetInstallsComeAndGo() async throws {

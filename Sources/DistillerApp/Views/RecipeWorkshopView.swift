@@ -513,9 +513,9 @@ private struct SteamStartSection: View {
 
     var body: some View {
         Section {
-            Picker("Open in", selection: Binding(get: { options.startView }, set: { view in update { $0.startView = view } })) {
+            Picker("Open in", selection: Binding(get: { options.startView == .menuBar ? nil : options.startView }, set: { view in update { $0.startView = view } })) {
                 Text("As Steam left it").tag(LauncherOptions.StartView?.none)
-                ForEach(LauncherOptions.StartView.allCases, id: \.self) { Text($0.displayName).tag(Optional($0)) }
+                ForEach(LauncherOptions.StartView.offered, id: \.self) { Text($0.displayName).tag(Optional($0)) }
             }
             Picker("Friends", selection: Binding(get: { options.friends }, set: { status in update { $0.friends = status } })) {
                 Text("Leave as is").tag(LauncherOptions.FriendsStatus?.none)
@@ -524,7 +524,7 @@ private struct SteamStartSection: View {
         } header: {
             Text("When Steam starts")
         } footer: {
-            Text("Applied whenever Distiller starts Steam, for itself or for one of its games. Small Mode and the Friends status are set once Steam's window is up (after it signs in), so they take a few seconds. Signed out of Friends keeps you signed in to Steam. These are yours, on this Mac: they're never part of the recipe or anything you share. To stay signed out of Friends for good, you can also turn off Steam ▸ Settings ▸ Friends & Chat ▸ Sign in to Friends when Steam Client starts.")
+            Text("Applied whenever Distiller starts Steam, for itself or for one of its games. The Friends status is set where Steam saves its own, so Steam starts in it; Signed out of Friends keeps you signed in to Steam. Small Mode is switched to once Steam's window is up, over its first minute. These are yours, on this Mac: they're never part of the recipe or anything you share.")
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

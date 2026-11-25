@@ -71,7 +71,12 @@ public struct LauncherOptions: Codable, Equatable, Hashable, Sendable {
     public enum StartView: String, Codable, CaseIterable, Sendable {
         case normal, small
         case bigPicture = "big_picture"
+        /// Steam's `-silent`, which Steam ignores under Wine on a Mac (no tray to start in): read
+        /// so earlier choices still load, offered no more, and treated as "as Steam left it".
         case menuBar = "menu_bar"
+
+        /// The views that work.
+        public static let offered: [StartView] = [.normal, .small, .bigPicture]
 
         public var displayName: String {
             switch self {
@@ -118,16 +123,26 @@ public struct LauncherOptions: Codable, Equatable, Hashable, Sendable {
         switch startView {
         case .normal?: return ["-nobigpicture"]
         case .bigPicture?: return ["-gamepadui"]
-        case .menuBar?: return ["-silent"]
-        case .small?, nil: return []
+        case .small?, .menuBar?, nil: return []
         }
     }
 
-    /// Links for a Steam that's up: Small Mode, then the Friends status.
+    /// Links for a Steam that's up: Small Mode (Steam opens its main window after signing in,
+    /// so it's sent more than once; see `applyLauncherOptionsAfterStart`). The Friends status
+    /// isn't a link: Steam's `steam://friends/status/offline` doesn't sign out of Friends, so
+    /// it's written into Steam's own saved status before it starts (`steamPersonaState`).
     public var steamLinksAfterStart: [String] {
-        var links: [String] = []
-        if startView == .small { links.append("steam://open/minigameslist") }
-        if let friends { links.append("steam://friends/status/\(friends.rawValue)") }
-        return links
+        startView == .small ? ["steam://open/minigameslist"] : []
+    }
+
+    /// Steam's number for the Friends status (`ePersonaState`, as it saves it).
+    public var steamPersonaState: Int? {
+        switch friends {
+        case .offline?: return 0
+        case .online?: return 1
+        case .away?: return 3
+        case .invisible?: return 7
+        case nil: return nil
+        }
     }
 }
