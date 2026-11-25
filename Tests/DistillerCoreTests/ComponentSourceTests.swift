@@ -225,6 +225,12 @@ final class ComponentSourceTests: XCTestCase {
         try Self.machO(loading: []).write(to: stagingLib.appendingPathComponent("libinotify.0.dylib"))
         try FileManager.default.createSymbolicLink(atPath: stagingLib.appendingPathComponent("libinotify.dylib").path, withDestinationPath: "libinotify.0.dylib")
         try Self.machO(loading: []).write(to: stagingLib.appendingPathComponent("GStreamer.framework/Versions/1.0/lib/libglib-2.0.0.dylib"))
+        // Wine Staging's Vulkan loader finds MoltenVK through this manifest (Staging's own Wine points the loader at it).
+        try Self.machO(loading: []).write(to: stagingLib.appendingPathComponent("libMoltenVK.dylib"))
+        let icd = staging.directory.appendingPathComponent("share/vulkan/icd.d")
+        try FileManager.default.createDirectory(at: icd, withIntermediateDirectories: true)
+        try #"{"file_format_version":"1.0.0","ICD":{"library_path":"../../../lib/libMoltenVK.dylib","api_version":"1.4.0","is_portability_driver":true}}"#
+            .write(to: icd.appendingPathComponent("MoltenVK_icd.json"), atomically: true, encoding: .utf8)
 
         let archive = try makeEngineArchive(needs: ["@rpath/libinotify.0.dylib", "@rpath/libglib-2.0.0.dylib"])
         try serve(archive, named: "WS12WineSikarugir10.0_8.tar.xz", olderVersion: true)
@@ -239,7 +245,24 @@ final class ComponentSourceTests: XCTestCase {
         XCTAssertEqual(result.component.manifest.family, "sikarugir")
         XCTAssertEqual(result.component.manifest.librariesFrom, "wine-staging@11.21")
         XCTAssertEqual(result.component.manifest.libraryPaths, ["lib/wine/x86_64-unix"])
-        XCTAssertEqual(result.librariesAdded, 3, "Both libraries and the link")
+        XCTAssertEqual(result.librariesAdded, 4, "The libraries, the link and MoltenVK")
+        // The Vulkan driver manifest comes too, pointing at MoltenVK where it was put, and Wine is pointed at it.
+        let manifest = result.component.directory.appendingPathComponent("share/vulkan/icd.d/MoltenVK_icd.json")
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: manifest)) as? [String: Any])
+        XCTAssertEqual((json["ICD"] as? [String: Any])?["library_path"] as? String, "../../../lib/wine/x86_64-unix/libMoltenVK.dylib")
+        XCTAssertEqual((json["ICD"] as? [String: Any])?["is_portability_driver"] as? Bool, true)
+        let env = WineEnvironment.build(prefix: root.appendingPathComponent("prefix"), wine: result.component, graphics: nil, resolved: nil)
+        let resolved = { (path: String?) in path.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path } }
+        XCTAssertEqual(resolved(env["VK_DRIVER_FILES"]), manifest.resolvingSymlinksInPath().path)
+        XCTAssertEqual(resolved(env["VK_ICD_FILENAMES"]), manifest.resolvingSymlinksInPath().path)
+        let plainStaging = WineEnvironment.build(prefix: root.appendingPathComponent("prefix"), wine: staging, graphics: nil, resolved: nil)
+        XCTAssertNil(plainStaging["VK_DRIVER_FILES"], "Builds that point the loader themselves are left alone")
+
+        // Builds installed before the manifest was copied are repaired, with the builds composed from them.
+        try FileManager.default.removeItem(at: manifest)
+        XCTAssertEqual(try setup.repairLibraries(tag: "sikarugir"), ["sikarugir@10.0_8"])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: manifest.path))
+        XCTAssertEqual(try setup.repairLibraries(tag: "sikarugir"), [], "Nothing more to add")
         XCTAssertFalse(result.containsD3DMetal)
         let unix = result.component.directory.appendingPathComponent("lib/wine/x86_64-unix")
         XCTAssertTrue(FileManager.default.fileExists(atPath: unix.appendingPathComponent("libglib-2.0.0.dylib").path))

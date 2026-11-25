@@ -6,7 +6,7 @@ struct SourcesCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "sources",
         abstract: "Where Wine builds come from: list sources, add one for a tag a recipe names, install from it.",
-        subcommands: [List.self, Files.self, Add.self, Install.self, Check.self]
+        subcommands: [List.self, Files.self, Add.self, Install.self, Check.self, Repair.self]
     )
 
     struct List: ParsableCommand {
@@ -112,6 +112,19 @@ struct SourcesCommand: AsyncParsableCommand {
                 }
             }
             if failed { throw ExitCode.failure }
+        }
+    }
+
+    struct Repair: ParsableCommand {
+        static let configuration = CommandConfiguration(abstract: "Add what an installed Wine build is missing from the build it takes libraries from (libraries, the Vulkan driver), in it and the builds made from it.")
+
+        @Argument(help: "The source's tag, such as sikarugir.")
+        var tag: String
+
+        func run() throws {
+            let engine = try makeEngine()
+            let changed = try EnvironmentSetup(engine: engine).repairLibraries(tag: tag)
+            print(changed.isEmpty ? "Nothing to add: \(tag) builds have everything." : "Updated " + changed.joined(separator: ", ") + ".")
         }
     }
 }
