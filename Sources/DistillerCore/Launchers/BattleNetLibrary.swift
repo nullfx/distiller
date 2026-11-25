@@ -10,6 +10,9 @@ public enum BattleNetLibrary {
     public static let clientPath = #"C:\Program Files (x86)\Battle.net\Battle.net Launcher.exe"#
 
     static let summaryPath = #"C:\ProgramData\Battle.net\Agent\aggregate.json"#
+    static let databasePath = #"C:\ProgramData\Battle.net\Agent\product.db"#
+    /// Battle.net's own products in its database, not games.
+    static let notGames: Set<String> = ["agent", "bna", "battle.net"]
 
     struct Summary: Decodable {
         struct Product: Decodable {
@@ -47,8 +50,29 @@ public enum BattleNetLibrary {
         launchCodes[productID.lowercased()] ?? productID
     }
 
-    /// The games Battle.net lists in a bottle whose program is there, by name.
+    /// The games Battle.net has installed in a bottle whose program is there, by name: the
+    /// install database (`product.db`) lists every one with its folder; the Agent's summary
+    /// (`aggregate.json`) adds names and icon programs, but only for Blizzard's own games
+    /// (Call of Duty isn't in it). A game the summary doesn't name is named after its folder,
+    /// and its icon comes from its likeliest program.
     public static func installedGames(root: URL) -> [LauncherGame] {
+        var games = summaryGames(root: root)
+        guard let databaseFile = try? BottlePath.resolve(databasePath, in: root),
+              let data = try? Data(contentsOf: databaseFile) else { return games }
+        for install in ProductDatabase.installs(in: data) {
+            let code = install.productCode
+            guard !notGames.contains(code.lowercased()), !notGames.contains(install.uid.lowercased()),
+                  code.range(of: "^[A-Za-z0-9_]{1,40}$", options: .regularExpression) != nil,
+                  !games.contains(where: { $0.gameID.caseInsensitiveCompare(code) == .orderedSame
+                      || $0.folder.standardizedFileURL == ((try? BottlePath.resolve(install.installPath.replacingOccurrences(of: "/", with: "\\"), in: root))?.standardizedFileURL) }),
+                  let folder = try? BottlePath.resolve(install.installPath.replacingOccurrences(of: "/", with: "\\"), in: root),
+                  (try? folder.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else { continue }
+            games.append(LauncherGame(gameID: code, name: folder.lastPathComponent, folder: folder, iconProgram: nil))
+        }
+        return games.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    static func summaryGames(root: URL) -> [LauncherGame] {
         guard let summaryFile = try? BottlePath.resolve(summaryPath, in: root),
               let data = try? Data(contentsOf: summaryFile),
               let summary = try? JSONDecoder().decode(Summary.self, from: data) else { return [] }

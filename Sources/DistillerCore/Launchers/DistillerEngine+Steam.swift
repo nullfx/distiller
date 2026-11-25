@@ -83,7 +83,8 @@ extension DistillerEngine {
                     id: "\(launcher.id)-\(kind.rawValue)-\(item.gameID)", title: item.name, bottleID: launcher.bottleID,
                     recipe: recipe,
                     launchedBy: LauncherLink(kind: kind, gameID: item.gameID, launcherID: launcher.id,
-                                             program: Self.windowsPath(of: program, root: root, isFolder: false))
+                                             program: Self.windowsPath(of: program, root: root, isFolder: false),
+                                             folder: kind == .battlenet ? Self.windowsPath(of: item.folder, root: root) : nil)
                 )
                 try? library.upsert(game)
                 refreshIcon(for: game)
@@ -210,6 +211,7 @@ extension DistillerEngine {
 
     /// The game's folder (`C:\…\`), from its program.
     func gameFolder(of link: LauncherLink) -> String? {
+        if let folder = link.folder { return folder }
         guard let program = link.program, let slash = program.lastIndex(of: "\\") else { return nil }
         return String(program[...slash])
     }

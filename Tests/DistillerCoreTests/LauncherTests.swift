@@ -159,6 +159,41 @@ final class LauncherTests: XCTestCase {
         XCTAssertNil(SteamLibrary.settingPersonaState(0, in: "\"UserLocalConfigStore\"\n{\n}\n"), "Not signed in yet")
     }
 
+    /// A protobuf length-delimited field.
+    static func field(_ number: Int, _ bytes: [UInt8]) -> [UInt8] {
+        var length = bytes.count
+        var varint: [UInt8] = []
+        repeat { var byte = UInt8(length & 0x7F); length >>= 7; if length > 0 { byte |= 0x80 }; varint.append(byte) } while length > 0
+        return [UInt8(number << 3 | 2)] + varint + bytes
+    }
+
+    /// Battle.net's product.db shape: installs (1) with uid (1), product code (2) and settings (3)
+    /// holding the install path (1), plus fields Distiller skips.
+    static func productDatabase(_ installs: [(uid: String, code: String, path: String)]) -> Data {
+        var bytes: [UInt8] = []
+        for install in installs {
+            let settings = field(1, Array(install.path.utf8)) + field(2, Array("us".utf8)) + [0x18, 0x01]
+            let message = field(1, Array(install.uid.utf8)) + field(2, Array(install.code.utf8)) + field(3, settings)
+                + [0x22, 0x02, 0x08, 0x01]                       // cached state, skipped
+            bytes += field(1, message)
+        }
+        bytes += [0x10, 0x96, 0x01]                              // a top-level varint, skipped
+        return Data(bytes)
+    }
+
+    func testReadsBattleNetsInstallDatabase() {
+        let data = Self.productDatabase([
+            ("agent", "agent", "C:/ProgramData/Battle.net/Agent"),
+            ("nina", "nina", "C:/Program Files (x86)/Call of Duty Modern Warfare II"),
+        ])
+        XCTAssertEqual(ProductDatabase.installs(in: data).map(\.productCode), ["agent", "nina"])
+        XCTAssertEqual(ProductDatabase.installs(in: data).last?.installPath, "C:/Program Files (x86)/Call of Duty Modern Warfare II")
+        var truncated = data
+        truncated.removeLast(20)
+        XCTAssertLessThanOrEqual(ProductDatabase.installs(in: truncated).count, 1, "Malformed input gives what was read")
+        XCTAssertTrue(ProductDatabase.installs(in: Data([0xFF, 0xFF, 0xFF])).isEmpty)
+    }
+
     func testGamesBattleNetInstallsComeAndGo() async throws {
         let bottle = Bottle(id: "bnet", name: "Battle.net", wine: "sikarugir@10.0_8", createdAt: Date())
         let driveC = engine.bottles.prefix(of: bottle).appendingPathComponent("drive_c")
@@ -175,6 +210,18 @@ final class LauncherTests: XCTestCase {
         // Overwatch is listed but its program isn't there yet (just started downloading).
         try summary.write(to: agent.appendingPathComponent("aggregate.json"), atomically: true, encoding: .utf8)
         XCTAssertEqual(BattleNetLibrary.installedGames(root: engine.bottles.root(of: bottle)).map(\.gameID), ["d3", "wow"])
+        // Games the summary leaves out (Activision's) come from the install database, named after their folder.
+        let cod = driveC.appendingPathComponent("Program Files (x86)/Call of Duty Modern Warfare II/_retail_")
+        try FileManager.default.createDirectory(at: cod, withIntermediateDirectories: true)
+        try Data(count: 4096).write(to: cod.appendingPathComponent("cod.exe"))
+        try Self.productDatabase([
+            ("battle.net", "bna", "C:/Program Files (x86)/Battle.net"),
+            ("diablo3", "d3", "C:/Program Files (x86)/Diablo III"),
+            ("nina", "nina", "C:/Program Files (x86)/Call of Duty Modern Warfare II"),
+            ("gone", "gone", "C:/Program Files (x86)/Uninstalled"),
+        ]).write(to: agent.appendingPathComponent("product.db"))
+        XCTAssertEqual(BattleNetLibrary.installedGames(root: engine.bottles.root(of: bottle)).map(\.name),
+                       ["Call of Duty Modern Warfare II", "Diablo III", "World of Warcraft"], "Not Battle.net itself, nor a folder that's gone, nor Diablo III twice")
 
         let recipe = Recipe(id: "battle-net", game: GameInfo(title: "Battle.net", slug: "battle-net"),
                             stack: StackSpec(runner: RunnerRequirement(family: "sikarugir"), graphics: .wined3d),
@@ -185,11 +232,15 @@ final class LauncherTests: XCTestCase {
         XCTAssertFalse(engine.isSteamLauncher(launcher))
 
         let sync = engine.syncLauncherGames()
-        XCTAssertEqual(sync.added.map(\.title), ["Diablo III", "World of Warcraft"])
+        XCTAssertEqual(sync.added.map(\.title), ["Call of Duty Modern Warfare II", "Diablo III", "World of Warcraft"])
+        let codEntry = try engine.library.game(id: "bnet-battlenet-nina")
+        XCTAssertEqual(codEntry.launchedBy?.folder, #"C:\Program Files (x86)\Call of Duty Modern Warfare II\"#)
+        XCTAssertEqual(codEntry.launchedBy?.program, #"C:\Program Files (x86)\Call of Duty Modern Warfare II\_retail_\cod.exe"#)
         let wow = try engine.library.game(id: "bnet-battlenet-wow")
         XCTAssertEqual(wow.bottleID, "bnet", "Battle.net's bottle")
         XCTAssertEqual(wow.launchedBy, LauncherLink(kind: .battlenet, gameID: "wow", launcherID: "bnet",
-                                                    program: #"C:\Program Files (x86)\World of Warcraft\World of Warcraft Launcher.exe"#))
+                                                    program: #"C:\Program Files (x86)\World of Warcraft\World of Warcraft Launcher.exe"#,
+                                                    folder: #"C:\Program Files (x86)\World of Warcraft\"#))
         XCTAssertEqual(wow.recipe.launch, LaunchSpec(exe: #"C:\Program Files (x86)\Battle.net\Battle.net.exe"#, args: ["--exec=launch WoW"]))
         XCTAssertEqual(wow.recipe.stack.runner.family, "sikarugir")
         XCTAssertNil(engine.launcherKind(of: wow), "A launcher's game isn't a launcher")

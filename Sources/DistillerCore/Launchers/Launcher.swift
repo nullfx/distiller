@@ -39,18 +39,21 @@ public struct LauncherLink: Codable, Equatable, Sendable, Hashable {
     public var launcherID: String
     /// The game's own program (Windows path), for its icon.
     public var program: String?
+    /// The game's folder (Windows path, ending in `\`), when it isn't the program's.
+    public var folder: String?
 
     enum CodingKeys: String, CodingKey {
-        case kind, program
+        case kind, program, folder
         case gameID = "game_id"
         case launcherID = "launcher_id"
     }
 
-    public init(kind: LauncherKind, gameID: String, launcherID: String, program: String?) {
+    public init(kind: LauncherKind, gameID: String, launcherID: String, program: String?, folder: String? = nil) {
         self.kind = kind
         self.gameID = gameID
         self.launcherID = launcherID
         self.program = program
+        self.folder = folder
     }
 }
 
