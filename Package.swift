@@ -9,6 +9,7 @@ let package = Package(
         .library(name: "DistillerCommunity", targets: ["DistillerCommunity"]),
         .executable(name: "distiller", targets: ["distiller-cli"]),
         .executable(name: "DistillerApp", targets: ["DistillerApp"]),
+        .executable(name: "DistillerShortcut", targets: ["DistillerShortcut"]),
     ],
     dependencies: [
         .package(url: "https://github.com/jpsim/Yams.git", from: "5.1.0"),
@@ -35,6 +36,9 @@ let package = Package(
             name: "DistillerApp",
             dependencies: ["DistillerCore", "DistillerCommunity"]
         ),
+        // The program inside each game's shortcut app (Create Shortcut App…). No dependencies:
+        // it's copied into every shortcut, so it stays small.
+        .executableTarget(name: "DistillerShortcut"),
         .testTarget(
             name: "DistillerCoreTests",
             dependencies: ["DistillerCore", "DistillerCommunity"],

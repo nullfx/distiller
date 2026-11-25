@@ -58,6 +58,10 @@ Install Steam or Battle.net like any game (a recipe that runs its installer; the
 
 Adding a Steam game's recipe (one that starts Steam with `-applaunch <app ID>`, as exported from a game under Steam) never makes a bottle of its own: Distiller asks the Steam in your library to install the game (Steam shows its install dialog), and when Steam has finished the game appears under Steam with the recipe's launch options, notes and name; if Steam already has the game, they're applied at once. Add Steam first. A game's recipe holds its own launch options; Steam's bottle settings (Wine, graphics layer, Windows version, components) are Steam's and shared by all its games. Steam's window needs a Wine build derived from CrossOver's source; standard Wine builds draw it black.
 
+### Shortcut apps
+
+Right-click a game ▸ **Create Shortcut App…** makes a Mac app with the game's icon (in /Applications unless you choose another folder), such as `Guild Wars 2.app`. Opening it starts the game without opening Distiller, so you can keep games in the Dock or find them in Spotlight and Launchpad. The shortcut runs in the background while you play (the game shows its own icon in the Dock) and records your play time when the game quits; opening it again while the game runs does nothing. If the game can't start (it's no longer in your library, its drive isn't connected), it says why and offers to open Distiller. It finds Distiller wherever it is, so moving or updating Distiller doesn't break shortcuts. Distiller shows a game started this way as running. From a terminal: `distiller games shortcut <game> [--to <folder>]`.
+
 ### Keyboard
 
 Copy and paste work between your Mac and Windows programs: the clipboard is shared. **Settings ▸ Games ▸ Use ⌘ as Ctrl in Windows programs** (on unless you turn it off) makes ⌘C, ⌘V and other ⌘ shortcuts act as their Ctrl versions, as Windows programs expect; with it off, use Ctrl+C and Ctrl+V. **Use Option as Alt** (off unless you turn it on) is for games with Alt shortcuts. Distiller writes both into a game's bottle before it starts, so a change applies at its next start (for Steam's games, Steam's).

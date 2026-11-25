@@ -402,7 +402,7 @@ struct GamesCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "games",
         abstract: "List the games in your library.",
-        subcommands: [List.self, GameLinkFolder.self, GameIconCommand.self, GameVersionsCommand.self, GameRestoreCommand.self, GameRebuildCommand.self, SteamOptionsCommand.self],
+        subcommands: [List.self, GameLinkFolder.self, GameIconCommand.self, GameVersionsCommand.self, GameRestoreCommand.self, GameRebuildCommand.self, SteamOptionsCommand.self, ShortcutCommand.self],
         defaultSubcommand: List.self
     )
 
@@ -435,6 +435,9 @@ struct LaunchCommand: AsyncParsableCommand {
     @Flag(help: "For this launch only: log DLL loads, exceptions and Wine errors, and show Apple's Metal HUD while the game draws with Metal. Nothing is saved to the recipe.")
     var diagnose = false
 
+    @Flag(help: .hidden)
+    var fromShortcut = false
+
     @Flag(help: "For this launch only: record the frame rate (Apple's Metal performance HUD, kept invisible, logs every frame to the game's launch log). Works when the game draws with Metal (D3DMetal, DXMT, DXVK). Nothing is saved to the recipe.")
     var measure = false
 
@@ -464,6 +467,11 @@ struct LaunchCommand: AsyncParsableCommand {
     func run() async throws {
         let engine = try makeEngine()
         let entry = try findGame(game, in: engine)
+        // Opened from the game's shortcut app while it's already running: nothing to do.
+        if fromShortcut, engine.isGameRunning(entry, processes: await engine.bottleProcesses()) {
+            print("\(entry.title) is already running.")
+            return
+        }
         var launched = entry
         if let graphics {
             var overrides = launched.overrides ?? LocalOverrides()
@@ -523,7 +531,8 @@ struct LaunchCommand: AsyncParsableCommand {
                 print("No frame timings arrived: the game didn't draw with Metal (WineD3D draws with OpenGL), or it never showed a frame.")
             }
         }
-        var updated = entry
+        // Read again: the app may have changed the entry during a long session.
+        var updated = (try? engine.library.game(id: entry.id)) ?? entry
         updated.lastPlayedAt = Date()
         updated.secondsPlayed += Date().timeIntervalSince(started)
         try engine.library.upsert(updated)
@@ -707,5 +716,31 @@ struct BottlesRunning: AsyncParsableCommand {
                 print("  " + String(command.prefix(150)))
             }
         }
+    }
+}
+
+/// A game's shortcut app: opens the game like a Mac app of its own.
+struct ShortcutCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "shortcut",
+        abstract: "Make a Mac app that starts a game (with its icon), such as /Applications/Guild Wars 2.app."
+    )
+
+    @Argument(help: "The game ID, from 'distiller games'.")
+    var game: String
+
+    @Option(help: "The folder to put it in.")
+    var to: String = "/Applications"
+
+    func run() async throws {
+        let engine = try makeEngine()
+        let entry = try findGame(game, in: engine)
+        // The shortcut program ships next to this command (inside Distiller.app, or a build folder).
+        let here = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath().deletingLastPathComponent()
+        let program = here.appendingPathComponent(ShortcutApp.programName)
+        let name = entry.title.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
+        let destination = URL(fileURLWithPath: (to as NSString).expandingTildeInPath, isDirectory: true).appendingPathComponent("\(name).app")
+        let made = try await engine.createShortcut(for: entry, program: program, at: destination)
+        print("Made \(made.path). Open it to start \(entry.title).")
     }
 }
