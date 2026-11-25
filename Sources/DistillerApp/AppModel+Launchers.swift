@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import DistillerCore
 
@@ -24,7 +25,8 @@ extension AppModel {
             }
             showLibraryNotice(notes.joined(separator: " "))
         }
-        if launcherTimer == nil, !engine.launchers(in: games).isEmpty {
+        // Also notices games started outside the app (shortcut apps), so it runs whenever there are games.
+        if launcherTimer == nil, !games.isEmpty {
             launcherTimer = Task { [weak self] in
                 while !Task.isCancelled {
                     try? await Task.sleep(for: .seconds(4))
@@ -43,6 +45,11 @@ extension AppModel {
         }
         let processes = await engine.bottleProcesses()
         var now: Set<String> = []
+        var outside: Set<String> = []
+        for game in games where game.launchedBy == nil && !engine.isLauncher(game) && running[game.id] == nil {
+            if engine.isGameRunning(game, processes: processes) { outside.insert(game.id) }
+        }
+        if outside != externallyRunning { externallyRunning = outside }
         for game in games {
             // A game counts as running only while its bottle's Wine is up (a log left by a
             // launcher stopped mid-game would otherwise say "running").
@@ -79,6 +86,29 @@ extension AppModel {
             if gameInWorkshop?.id == launcher.id { gameInWorkshop = try? engine.library.game(id: launcher.id) }
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Makes a Mac app that starts the game (Create Shortcut App…), where the player chooses.
+    func createShortcut(for game: Game) {
+        guard let engine else { return }
+        let panel = NSSavePanel()
+        panel.message = "Opening this app starts \(game.title), without opening Distiller. You can keep it in the Dock or find it in Spotlight and Launchpad."
+        panel.prompt = "Create Shortcut"
+        panel.nameFieldStringValue = "\(game.title.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")).app"
+        panel.directoryURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, var destination = panel.url else { return }
+        if destination.pathExtension != "app" { destination.appendPathExtension("app") }
+        // Inside the app bundle; next to the app when run from a build folder.
+        let inBundle = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/\(ShortcutApp.programName)")
+        let program = FileManager.default.isExecutableFile(atPath: inBundle.path)
+            ? inBundle
+            : Bundle.main.executableURL!.deletingLastPathComponent().appendingPathComponent(ShortcutApp.programName)
+        perform("Making \(game.title)'s shortcut…") {
+            let made = try await engine.createShortcut(for: game, program: program, at: destination,
+                                                       distillerApp: Bundle.main.bundleIdentifier != nil ? Bundle.main.bundleURL : nil)
+            NSWorkspace.shared.activateFileViewerSelecting([made])
         }
     }
 

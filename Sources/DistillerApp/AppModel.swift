@@ -28,6 +28,8 @@ final class AppModel {
     var launcherLaunching: [String: Date] = [:]
     var launcherSessions: [String: Date] = [:]
     var launcherTimer: Task<Void, Never>?
+    /// Games running that Distiller didn't start (from a shortcut app, the command line).
+    var externallyRunning: Set<String> = []
     var lastLauncherSync = Date.distantPast
     /// Flipped when a launcher is expanded or collapsed, so views redraw.
     var launcherExpansionChanged = false

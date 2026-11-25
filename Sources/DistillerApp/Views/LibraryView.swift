@@ -159,7 +159,7 @@ private struct GameState {
     let unavailable: String?
 
     @MainActor init(_ game: Game, model: AppModel) {
-        isRunning = model.running[game.id] != nil || model.isLauncherActive(game)
+        isRunning = model.running[game.id] != nil || model.isLauncherActive(game) || model.externallyRunning.contains(game.id)
         needsSetup = game.recipe.launch == nil
         unavailable = isRunning ? nil : model.availability(of: game).reason
     }
@@ -206,6 +206,8 @@ private struct GameInteractions: ViewModifier {
                     Divider()
                 }
                 Button("Choose Icon…") { model.chooseIcon(for: game) }
+                Button("Create Shortcut App…") { model.createShortcut(for: game) }
+                    .help("A Mac app with \(game.title)'s icon that starts it without opening Distiller")
                 if model.engine?.hasCustomIcon(game) == true {
                     Button("Use the Program's Icon") { model.useProgramIcon(for: game) }
                 }

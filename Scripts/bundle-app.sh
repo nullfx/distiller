@@ -45,6 +45,7 @@ UPDATE_KEY=""
 BUILD="${DISTILLER_BUILD:-1}"
 swift build -c "$CONFIG" --product DistillerApp
 swift build -c "$CONFIG" --product distiller
+swift build -c "$CONFIG" --product DistillerShortcut
 BIN="$(swift build -c "$CONFIG" --show-bin-path)"
 
 APP="${DISTILLER_OUT:-dist}/Distiller.app"
@@ -52,6 +53,8 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Helpers"
 cp "$BIN/DistillerApp" "$APP/Contents/MacOS/Distiller"
 cp "$BIN/distiller" "$APP/Contents/Helpers/distiller"
+# The program inside each game's shortcut app (Create Shortcut App…), copied from here.
+cp "$BIN/DistillerShortcut" "$APP/Contents/Helpers/DistillerShortcut"
 for bundle in "$BIN"/*.bundle; do
   [ -e "$bundle" ] && cp -R "$bundle" "$APP/Contents/Resources/"
 done
@@ -98,6 +101,7 @@ sign() {
   local options=(--force --sign "$1")
   if [ "${DISTILLER_HARDENED:-0}" = "1" ]; then options+=(--options runtime --timestamp); fi
   codesign "${options[@]}" --identifier com.nullfx.distiller.cli "$APP/Contents/Helpers/distiller"
+  codesign "${options[@]}" --identifier com.nullfx.distiller.shortcut "$APP/Contents/Helpers/DistillerShortcut"
   codesign "${options[@]}" "$APP"
 }
 if [ -n "$IDENTITY" ]; then
