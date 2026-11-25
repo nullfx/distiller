@@ -63,3 +63,71 @@ public struct LauncherGame: Equatable, Sendable {
     /// The program to take its icon from, when known (else Distiller picks one in the folder).
     public var iconProgram: URL?
 }
+
+/// How the player wants a launcher started on this Mac (Steam for now): its view, and the
+/// Friends status to set once it's up. Applied whenever Distiller starts the launcher, whether
+/// for itself or for one of its games.
+public struct LauncherOptions: Codable, Equatable, Hashable, Sendable {
+    public enum StartView: String, Codable, CaseIterable, Sendable {
+        case normal, small
+        case bigPicture = "big_picture"
+        case menuBar = "menu_bar"
+
+        public var displayName: String {
+            switch self {
+            case .normal: return "Normal window"
+            case .small: return "Small Mode"
+            case .bigPicture: return "Big Picture"
+            case .menuBar: return "Menu bar only"
+            }
+        }
+    }
+
+    public enum FriendsStatus: String, Codable, CaseIterable, Sendable {
+        case online, away, invisible, offline
+
+        public var displayName: String {
+            switch self {
+            case .online: return "Online"
+            case .away: return "Away"
+            case .invisible: return "Invisible"
+            case .offline: return "Signed out of Friends"
+            }
+        }
+    }
+
+    /// Nil: as the launcher last left it.
+    public var startView: StartView?
+    /// Nil: leave it as it is.
+    public var friends: FriendsStatus?
+
+    enum CodingKeys: String, CodingKey {
+        case friends
+        case startView = "start_view"
+    }
+
+    public init(startView: StartView? = nil, friends: FriendsStatus? = nil) {
+        self.startView = startView
+        self.friends = friends
+    }
+
+    public var isEmpty: Bool { startView == nil && friends == nil }
+
+    /// Steam's start-up options for the view (Small Mode has none: it's a link, below).
+    public var steamStartArguments: [String] {
+        switch startView {
+        case .normal?: return ["-nobigpicture"]
+        case .bigPicture?: return ["-gamepadui"]
+        case .menuBar?: return ["-silent"]
+        case .small?, nil: return []
+        }
+    }
+
+    /// Links for a Steam that's up: Small Mode, then the Friends status.
+    public var steamLinksAfterStart: [String] {
+        var links: [String] = []
+        if startView == .small { links.append("steam://open/minigameslist") }
+        if let friends { links.append("steam://friends/status/\(friends.rawValue)") }
+        return links
+    }
+}

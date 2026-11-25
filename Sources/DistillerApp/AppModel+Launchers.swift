@@ -70,6 +70,18 @@ extension AppModel {
         if now != launcherRunning { launcherRunning = now }
     }
 
+    /// How the player wants a launcher started (Steam's view and Friends status).
+    func setLauncherOptions(_ options: LauncherOptions, for launcher: Game) {
+        guard let engine else { return }
+        do {
+            try engine.setLauncherOptions(options, for: launcher.id)
+            games = engine.library.load()
+            if gameInWorkshop?.id == launcher.id { gameInWorkshop = try? engine.library.game(id: launcher.id) }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func isLauncher(_ game: Game) -> Bool {
         engine?.isLauncher(game) ?? false
     }
@@ -88,9 +100,12 @@ extension AppModel {
         Task {
             do {
                 if (try? engine.pendingWineMove(for: game)) != nil { try await prepareWineMove(for: game) }
-                // Starts the launcher if it isn't running; otherwise hands the launch to it.
-                _ = try engine.launch(game)
+                // Starts the launcher if it isn't running (with the player's start options);
+                // otherwise hands the launch to it.
+                let startingLauncher = !engine.isBottleActive(game, active: await engine.activeBottlePrefixes())
+                _ = try engine.launch(game, startingLauncher: startingLauncher)
                 launcherLaunching[game.id] = Date()
+                if startingLauncher { Task { await engine.applyLauncherOptionsAfterStart(for: game) } }
             } catch {
                 errorMessage = error.localizedDescription
             }

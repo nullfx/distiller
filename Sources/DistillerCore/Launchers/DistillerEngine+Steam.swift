@@ -308,3 +308,44 @@ extension DistillerEngine {
         return active.contains(prefix.path) || active.contains(prefix.standardizedFileURL.path)
     }
 }
+
+extension DistillerEngine {
+    /// The launcher entry behind a game: itself for a launcher, its launcher for a launcher's game.
+    public func launcherEntry(for game: Game) -> Game? {
+        if let link = game.launchedBy { return try? library.game(id: link.launcherID) }
+        return isLauncher(game) ? game : nil
+    }
+
+    /// After Distiller started Steam (for itself or a game): once Steam's interface is up (its
+    /// web helper runs in the bottle), sends the player's links (Small Mode, Friends status).
+    /// Gives up after `timeout` (Steam updating itself, or not signed in yet).
+    public func applyLauncherOptionsAfterStart(for game: Game, timeout: Duration = .seconds(240)) async {
+        guard let launcher = launcherEntry(for: game), launcherKind(of: launcher) == .steam,
+              let links = launcher.launcherOptions?.steamLinksAfterStart, !links.isEmpty,
+              let clientExe = resolve(launcher.recipe, overrides: launcher.overrides).launch?.exe,
+              let bottle = try? bottles.bottle(id: launcher.bottleID) else { return }
+        let prefix = bottles.prefix(of: bottle)
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            let processes = await bottleProcesses()
+            let commands = processes.commands[prefix.path] ?? processes.commands[prefix.standardizedFileURL.path] ?? []
+            if commands.contains(where: { $0.lowercased().contains("steamwebhelper.exe") }) {
+                // Give Steam a moment to finish signing in before it takes links.
+                try? await Task.sleep(for: .seconds(5))
+                for link in links {
+                    _ = try? run(program: clientExe, arguments: [link], inBottle: launcher.bottleID)
+                    try? await Task.sleep(for: .seconds(2))
+                }
+                return
+            }
+            try? await Task.sleep(for: .seconds(2))
+        }
+    }
+
+    /// Saves how the player wants a launcher started (nil options: as the launcher left it).
+    public func setLauncherOptions(_ options: LauncherOptions?, for launcherID: String) throws {
+        var launcher = try library.game(id: launcherID)
+        launcher.launcherOptions = options?.isEmpty == true ? nil : options
+        try library.upsert(launcher)
+    }
+}

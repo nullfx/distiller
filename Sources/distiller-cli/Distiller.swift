@@ -402,7 +402,7 @@ struct GamesCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "games",
         abstract: "List the games in your library.",
-        subcommands: [List.self, GameLinkFolder.self, GameIconCommand.self, GameVersionsCommand.self, GameRestoreCommand.self, GameRebuildCommand.self],
+        subcommands: [List.self, GameLinkFolder.self, GameIconCommand.self, GameVersionsCommand.self, GameRestoreCommand.self, GameRebuildCommand.self, SteamOptionsCommand.self],
         defaultSubcommand: List.self
     )
 
@@ -509,9 +509,15 @@ struct LaunchCommand: AsyncParsableCommand {
         for note in resolved.appliedOverlayNotes { print("  Tuned for this Mac: \(note)") }
         let started = Date()
         let stream = recorder?.stream()
+        // Starting a launcher that isn't running (for itself or a game): the player's start options apply.
+        let active = await engine.activeBottlePrefixes()
+        let startingLauncher = engine.launcherEntry(for: launched) != nil && !engine.isBottleActive(launched, active: active)
+        let applying = startingLauncher ? Task { await engine.applyLauncherOptionsAfterStart(for: launched) } : nil
         let status = try await waitForExit { onExit in
-            try engine.launch(launched, measured: measure, onOutput: stream.map { stream in { stream.append($0) } }, onExit: onExit)
+            try engine.launch(launched, measured: measure, startingLauncher: startingLauncher,
+                              onOutput: stream.map { stream in { stream.append($0) } }, onExit: onExit)
         }
+        applying?.cancel()
         if let recorder {
             if let summary = recorder.stop() {
                 print(Self.describe(summary))
@@ -649,4 +655,38 @@ func printInstallPlan(_ tasks: [InstallTask]) {
 /// Prints each step as it starts, and anything it adds while running.
 @Sendable func printInstallProgress(_ progress: InstallProgress) {
     print("[\(progress.step)/\(progress.total)] \(progress.message)")
+}
+
+extension LauncherOptions.StartView: ExpressibleByArgument {}
+extension LauncherOptions.FriendsStatus: ExpressibleByArgument {}
+
+/// How Steam starts on this Mac: its view and Friends status (not part of any recipe).
+struct SteamOptionsCommand: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "steam-options",
+        abstract: "Show or set how Distiller starts Steam: its view and your Friends status."
+    )
+
+    @Argument(help: "Steam's entry, from 'distiller games'.")
+    var steam: String
+
+    @Option(help: "normal, small, big_picture or menu_bar.")
+    var start: LauncherOptions.StartView?
+
+    @Option(help: "online, away, invisible or offline (signed out of Friends).")
+    var friends: LauncherOptions.FriendsStatus?
+
+    @Flag(help: "Back to how Steam leaves things (no view or Friends status set).")
+    var reset = false
+
+    func run() throws {
+        let engine = try makeEngine()
+        let entry = try findGame(steam, in: engine)
+        guard engine.launcherKind(of: entry) == .steam else { throw ValidationError("\(entry.title) isn't Steam's entry.") }
+        var options = reset ? LauncherOptions() : (entry.launcherOptions ?? LauncherOptions())
+        if let start { options.startView = start }
+        if let friends { options.friends = friends }
+        if reset || start != nil || friends != nil { try engine.setLauncherOptions(options, for: entry.id) }
+        print("When Distiller starts \(entry.title): \(options.startView?.displayName ?? "as Steam left it"); Friends: \(options.friends?.displayName ?? "left as is").")
+    }
 }

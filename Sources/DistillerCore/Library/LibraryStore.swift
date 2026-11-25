@@ -24,6 +24,9 @@ public struct Game: Codable, Identifiable, Equatable, Sendable, Hashable {
     /// For a game a launcher installed (Steam, Battle.net) in its bottle: which game, and the
     /// library entry of the launcher it belongs to. Its recipe starts it through the launcher.
     public var launchedBy: LauncherLink?
+    /// For a launcher's own entry: how to start it on this Mac (Steam: its view and Friends
+    /// status). The player's, never part of a recipe.
+    public var launcherOptions: LauncherOptions?
     /// Steam links as Distiller 1.1 stored them; read once into `launchedBy`.
     var legacySteam: LegacySteamLink?
 
@@ -76,6 +79,7 @@ public struct Game: Codable, Identifiable, Equatable, Sendable, Hashable {
     enum CodingKeys: String, CodingKey {
         case id, title, recipe, overrides, authored, submission, rebuild
         case launchedBy = "launched_by"
+        case launcherOptions = "launcher_options"
         case legacySteam = "steam"
         case installerChanged = "installer_changed"
         case communityCheck = "community_check"

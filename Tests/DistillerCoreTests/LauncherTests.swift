@@ -81,6 +81,37 @@ final class LauncherTests: XCTestCase {
         XCTAssertFalse(saved.contains("\"steam\" :"), "Stored the new way")
     }
 
+    func testSteamStartOptions() throws {
+        XCTAssertEqual(LauncherOptions(startView: .normal).steamStartArguments, ["-nobigpicture"])
+        XCTAssertEqual(LauncherOptions(startView: .bigPicture).steamStartArguments, ["-gamepadui"])
+        XCTAssertEqual(LauncherOptions(startView: .menuBar).steamStartArguments, ["-silent"])
+        XCTAssertEqual(LauncherOptions(startView: .small).steamStartArguments, [], "Small Mode is a link, once Steam is up")
+        XCTAssertEqual(LauncherOptions(startView: .small, friends: .invisible).steamLinksAfterStart,
+                       ["steam://open/minigameslist", "steam://friends/status/invisible"])
+        XCTAssertEqual(LauncherOptions(friends: .offline).steamLinksAfterStart, ["steam://friends/status/offline"])
+        XCTAssertTrue(LauncherOptions().isEmpty)
+        XCTAssertEqual(LauncherOptions().steamLinksAfterStart, [])
+
+        // Saved on Steam's entry, found from its games; "as Steam left it" stores nothing.
+        let recipe = Recipe(id: "steam", game: GameInfo(title: "Steam", slug: "steam"),
+                            stack: StackSpec(runner: RunnerRequirement(family: "winehq"), graphics: .wined3d),
+                            launch: LaunchSpec(exe: SteamLibrary.clientPath))
+        try engine.library.upsert(Game(id: "steam", title: "Steam", bottleID: "steam", recipe: recipe))
+        let tf2 = Game(id: "steam-steam-440", title: "Team Fortress 2", bottleID: "steam", recipe: recipe,
+                       launchedBy: LauncherLink(kind: .steam, gameID: "440", launcherID: "steam", program: nil))
+        try engine.library.upsert(tf2)
+        try engine.setLauncherOptions(LauncherOptions(startView: .small, friends: .invisible), for: "steam")
+        XCTAssertEqual(engine.launcherEntry(for: tf2)?.launcherOptions, LauncherOptions(startView: .small, friends: .invisible))
+        XCTAssertEqual(engine.launcherEntry(for: try engine.library.game(id: "steam"))?.id, "steam")
+        let saved = try String(contentsOf: engine.paths.libraryFile, encoding: .utf8)
+        XCTAssertTrue(saved.contains("\"start_view\" : \"small\"") && saved.contains("\"friends\" : \"invisible\""), saved)
+        try engine.setLauncherOptions(LauncherOptions(), for: "steam")
+        XCTAssertNil(try engine.library.game(id: "steam").launcherOptions)
+        XCTAssertNil(engine.launcherEntry(for: Game(id: "x", title: "X", bottleID: "x", recipe: Recipe(
+            id: "x", game: GameInfo(title: "X", slug: "x"), stack: StackSpec(runner: RunnerRequirement(family: "winehq"), graphics: .dxvk),
+            launch: LaunchSpec(exe: #"C:\x.exe"#)))), "An ordinary game has no launcher")
+    }
+
     func testGamesBattleNetInstallsComeAndGo() async throws {
         let bottle = Bottle(id: "bnet", name: "Battle.net", wine: "sikarugir@10.0_8", createdAt: Date())
         let driveC = engine.bottles.prefix(of: bottle).appendingPathComponent("drive_c")
