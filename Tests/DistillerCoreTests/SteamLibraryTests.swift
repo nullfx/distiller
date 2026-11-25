@@ -157,6 +157,13 @@ final class SteamLibraryTests: XCTestCase {
         XCTAssertEqual(reloaded.recipe.launch?.args, ["-applaunch", "440", "-dx11"])
         XCTAssertEqual(reloaded.recipe.stack.graphics, .dxvk)
 
+        // A recipe whose Steam arguments got mixed up is put right at the next sync.
+        var mixed = try engine.library.game(id: tf2.id)
+        mixed.recipe.launch?.args = ["-applaunch", "440", "-applaunch", "-dx11", "440"]
+        try engine.library.upsert(mixed)
+        engine.syncLauncherGames()
+        XCTAssertEqual(try engine.library.game(id: tf2.id).recipe.launch?.args, ["-applaunch", "440", "-dx11"])
+
         // Uninstalled in Steam: the entry goes.
         try FileManager.default.removeItem(at: steam.appendingPathComponent("steamapps/appmanifest_440.acf"))
         XCTAssertEqual(engine.syncLauncherGames().removed.map(\.id), [tf2.id])
@@ -253,6 +260,17 @@ final class SteamLibraryTests: XCTestCase {
         try engine.library.upsert(tf2)
         XCTAssertTrue(engine.syncLauncherGames().isEmpty, "A missing bottle (a disconnected drive) removes nothing")
         XCTAssertEqual(engine.library.load().count, 2)
+    }
+
+    func testSteamsOwnArgumentsAreTakenOutWhereverTheyAre() {
+        // Portal 2's recipe after editing (Steam's part ended up in the middle and was added again).
+        let broken = ["-applaunch", "620", "-applaunch", "-vulkan", "620"]
+        XCTAssertEqual(DistillerEngine.steamOptions(appID: "620", in: broken), ["-vulkan"])
+        XCTAssertEqual(DistillerEngine.steamLaunchArguments(appID: "620", recipeArgs: broken), ["-applaunch", "620", "-vulkan"])
+        XCTAssertEqual(DistillerEngine.steamOptions(appID: "620", in: ["-vulkan", "-applaunch", "620", "-novid"]), ["-vulkan", "-novid"])
+        XCTAssertEqual(DistillerEngine.steamOptions(appID: "620", in: ["-AppLaunch", "620"]), [])
+        XCTAssertEqual(DistillerEngine.steamOptions(appID: "620", in: ["+exec", "autoexec.cfg"]), ["+exec", "autoexec.cfg"])
+        XCTAssertEqual(DistillerEngine.steamOptions(appID: "620", in: nil), [])
     }
 
     func testPlayersArgumentsFollowSteamsOwn() {

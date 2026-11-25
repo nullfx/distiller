@@ -186,16 +186,28 @@ extension AppModel {
         NSWorkspace.shared.activateFileViewerSelecting([engine.bottles.prefix(of: bottle).appendingPathComponent("drive_c")])
     }
 
-    /// Writes `recipe.yaml` next to the bottle and opens it in the player's YAML editor.
-    func openRecipeFile(for game: Game) {
-        guard let engine else { return }
+    /// Writes the game's recipe file next to its bottle (with `text`, the workshop's edits, when
+    /// given) and opens it in the player's YAML editor. Nil if it couldn't be written.
+    @discardableResult
+    func openRecipeFile(for game: Game, text: String? = nil) -> URL? {
+        guard let engine else { return nil }
         do {
-            let url = try engine.writeRecipeFile(for: (try? engine.library.game(id: game.id)) ?? game)
+            let current = (try? engine.library.game(id: game.id)) ?? game
+            let url: URL
+            if let text {
+                url = try engine.recipeFileURL(for: current)
+                try ("# Distiller recipe for \(current.recipe.game.title). Edit, save, then go back to Distiller.\n\n" + text)
+                    .write(to: url, atomically: true, encoding: .utf8)
+            } else {
+                url = try engine.writeRecipeFile(for: current)
+            }
             if !NSWorkspace.shared.open(url) {
                 NSWorkspace.shared.activateFileViewerSelecting([url])
             }
+            return url
         } catch {
             errorMessage = error.localizedDescription
+            return nil
         }
     }
 
