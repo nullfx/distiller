@@ -28,7 +28,12 @@ struct RecipeWorkshopView: View {
     @State private var launchPath = ""
     @State private var programs: [ProgramInBottle] = []
     @State private var yaml = ""
+    /// The YAML as last loaded from the game (edits differ from it).
+    @State private var loadedYAML = ""
     @State private var loadedRecipe: Recipe?
+    /// The recipe file opened in another editor, and when it was last read.
+    @State private var externalFile: (url: URL, read: Date)?
+    @State private var fileNotice: String?
     @State private var isSubmitting = false
     @State private var isCapturingInstaller = false
 
@@ -58,6 +63,10 @@ struct RecipeWorkshopView: View {
         .frame(width: 680, height: 640)
         .onAppear(perform: loadFromGame)
         .onChange(of: game?.recipe) { loadFromGame() }
+        // Back from editing the recipe file in another editor: take its changes into the YAML tab.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            readExternalFile()
+        }
         .task { await refreshPrograms() }
         .sheet(isPresented: $isCapturingInstaller) {
             InstallerCaptureView(startPage: captureStartPage) { url, page in
@@ -178,10 +187,15 @@ struct RecipeWorkshopView: View {
 
     private func fileTab(_ game: Game) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextEditor(text: $yaml)
-                .font(.body.monospaced())
+            PlainTextEditor(text: $yaml)
                 .frame(maxHeight: .infinity)
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(.separator))
+            if let fileNotice {
+                Label(fileNotice, systemImage: "info.circle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Group {
                 if let problem = yamlProblem {
                     Label(problem, systemImage: "exclamationmark.triangle").foregroundStyle(.red)
@@ -192,12 +206,15 @@ struct RecipeWorkshopView: View {
             .font(.callout)
             .lineLimit(3)
             HStack {
-                Button("Open in Editor") { model.openRecipeFile(for: game) }
-                    .help("Opens this game's recipe file from its bottle folder in your YAML editor")
-                Button("Reload from File") { model.reloadRecipeFile(for: game) }
+                Button("Open in Editor") { openInEditor(game) }
+                    .help("Opens this recipe in your YAML editor. When you come back to Distiller, your changes appear here; Save YAML applies them.")
                 Button("Export…") { model.exportRecipe(for: game) }
                 Spacer()
-                Button("Revert") { yaml = (try? RecipeLoader.encode(game.recipe)) ?? "" }
+                Button("Revert") {
+                    yaml = (try? RecipeLoader.encode(game.recipe)) ?? ""
+                    loadedYAML = yaml
+                    fileNotice = nil
+                }
                 Button("Save YAML") { saveYAML(game) }
                     .disabled(yamlProblem != nil)
             }
@@ -346,9 +363,7 @@ struct RecipeWorkshopView: View {
         if let link = game.launchedBy {
             // The launcher's own arguments (-applaunch <id>, --exec) aren't the player's to edit;
             // Distiller always adds them.
-            var args = recipe.launch?.args ?? []
-            if link.kind == .steam, args.count >= 2, args[0] == "-applaunch", args[1] == link.gameID { args.removeFirst(2) }
-            if link.kind == .battlenet { args = [] }
+            let args = link.kind == .steam ? DistillerEngine.steamOptions(appID: link.gameID, in: recipe.launch?.args) : []
             settings.argumentsText = RecipeSettings.joinArguments(args)
         }
         title = recipe.game.title
@@ -359,7 +374,33 @@ struct RecipeWorkshopView: View {
         installerUpdates = recipe.game.installer?.updates == true
         installerArgs = RecipeSettings.joinArguments(recipe.game.installer?.args ?? [])
         launchPath = recipe.launch?.exe ?? ""
-        yaml = (try? RecipeLoader.encode(recipe)) ?? ""
+        // Edits in progress in the YAML tab are kept; say the recipe changed instead.
+        let encoded = (try? RecipeLoader.encode(recipe)) ?? ""
+        if yaml != loadedYAML, !yaml.isEmpty {
+            fileNotice = "The saved recipe changed while you were editing. Your edits are kept; Revert shows the saved recipe."
+        } else {
+            yaml = encoded
+        }
+        loadedYAML = encoded
+    }
+
+    /// Writes the recipe file (the current text in this tab, if it's valid) and opens it in the
+    /// player's editor; its changes come back when Distiller is active again.
+    private func openInEditor(_ game: Game) {
+        guard let url = model.openRecipeFile(for: game, text: yamlProblem == nil ? yaml : nil) else { return }
+        externalFile = (url, Date())
+        fileNotice = "Editing \(url.lastPathComponent) in your editor. Save it there, then come back: the changes appear here, and Save YAML applies them."
+    }
+
+    private func readExternalFile() {
+        guard let file = externalFile,
+              let modified = try? file.url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
+              modified > file.read,
+              let text = try? String(contentsOf: file.url, encoding: .utf8) else { return }
+        externalFile = (file.url, Date())
+        yaml = text
+        tab = .file
+        fileNotice = "Loaded your changes from \(file.url.lastPathComponent). Save YAML to apply them."
     }
 
     private func refreshPrograms() async {
@@ -377,6 +418,9 @@ struct RecipeWorkshopView: View {
 
     private func saveYAML(_ game: Game) {
         guard let recipe = try? RecipeLoader.decode(yaml: yaml) else { return }
+        // What's saved is reloaded from the game (normalised); this text no longer counts as an edit.
+        loadedYAML = yaml
+        fileNotice = nil
         Task { _ = await model.save(recipe, for: game) }
     }
 }

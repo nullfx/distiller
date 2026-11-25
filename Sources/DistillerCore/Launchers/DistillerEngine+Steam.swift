@@ -98,6 +98,11 @@ extension DistillerEngine {
                 if let gameID = game.launchedBy?.gameID, let added = takePendingLauncherGame(gameID: gameID, launcherID: launcher.id) {
                     base = Self.applying(added, to: base, kind: kind, gameID: gameID)
                 }
+                // Its launcher's own arguments in their place (an earlier edit may have mixed them up).
+                if let gameID = game.launchedBy?.gameID, base.launch != nil {
+                    let args = Self.launchArguments(kind: kind, gameID: gameID, recipeArgs: base.launch?.args)
+                    base.launch?.args = args
+                }
                 let aligned = Self.aligned(base, with: launcher.recipe)
                 if aligned != game.recipe {
                     var updated = game
@@ -139,10 +144,28 @@ extension DistillerEngine {
         }
     }
 
+    /// Steam's `-applaunch <id>` first, then the player's own options: every `-applaunch` (with
+    /// the id after it) and stray copy of the id in the recipe's arguments is Steam's part, wherever
+    /// it ended up (edited out of order, it was added again and again), so it's taken out first.
     static func steamLaunchArguments(appID: String, recipeArgs: [String]?) -> [String] {
-        var extra = recipeArgs ?? []
-        if extra.count >= 2, extra[0] == "-applaunch", extra[1] == appID { extra.removeFirst(2) }
-        return ["-applaunch", appID] + extra
+        ["-applaunch", appID] + steamOptions(appID: appID, in: recipeArgs)
+    }
+
+    /// The player's own options in a Steam game's arguments (Steam's `-applaunch <id>` taken out).
+    public static func steamOptions(appID: String, in args: [String]?) -> [String] {
+        let args = args ?? []
+        var options: [String] = []
+        var index = 0
+        while index < args.count {
+            let arg = args[index]
+            if arg.caseInsensitiveCompare("-applaunch") == .orderedSame {
+                index += index + 1 < args.count && args[index + 1] == appID ? 2 : 1
+                continue
+            }
+            if arg != appID { options.append(arg) }
+            index += 1
+        }
+        return options
     }
 
     /// The recipe of a game a launcher installed: the launcher's own settings (they apply to
