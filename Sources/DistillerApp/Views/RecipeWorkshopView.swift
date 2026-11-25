@@ -513,7 +513,7 @@ private struct SteamStartSection: View {
 
     var body: some View {
         Section {
-            Picker("Open in", selection: Binding(get: { options.startView == .menuBar ? nil : options.startView }, set: { view in update { $0.startView = view } })) {
+            Picker("Open in", selection: Binding(get: { options.startView.flatMap { LauncherOptions.StartView.offered.contains($0) ? $0 : nil } }, set: { view in update { $0.startView = view } })) {
                 Text("As Steam left it").tag(LauncherOptions.StartView?.none)
                 ForEach(LauncherOptions.StartView.offered, id: \.self) { Text($0.displayName).tag(Optional($0)) }
             }
@@ -524,7 +524,7 @@ private struct SteamStartSection: View {
         } header: {
             Text("When Steam starts")
         } footer: {
-            Text("Applied whenever Distiller starts Steam, for itself or for one of its games. The Friends status is set where Steam saves its own, so Steam starts in it; Signed out of Friends keeps you signed in to Steam. Small Mode is switched to once Steam's window is up, over its first minute. These are yours, on this Mac: they're never part of the recipe or anything you share.")
+            Text("Applied whenever Distiller starts Steam, for itself or for one of its games. The Friends status is set where Steam saves its own, so Steam starts in it; Signed out of Friends keeps you signed in to Steam. Steam can't be kept in Small Mode: once it has signed in it opens its full window, whatever view it was left in. These are yours, on this Mac: they're never part of the recipe or anything you share.")
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

@@ -108,18 +108,18 @@ final class LauncherTests: XCTestCase {
     func testSteamStartOptions() throws {
         XCTAssertEqual(LauncherOptions(startView: .normal).steamStartArguments, ["-nobigpicture"])
         XCTAssertEqual(LauncherOptions(startView: .bigPicture).steamStartArguments, ["-gamepadui"])
-        XCTAssertEqual(LauncherOptions(startView: .menuBar).steamStartArguments, [], "Steam ignores -silent here: no longer used")
-        XCTAssertFalse(LauncherOptions.StartView.offered.contains(.menuBar))
-        XCTAssertEqual(LauncherOptions(startView: .small).steamStartArguments, [], "Small Mode is a link, once Steam is up")
-        XCTAssertEqual(LauncherOptions(startView: .small, friends: .invisible).steamLinksAfterStart, ["steam://open/minigameslist"])
-        XCTAssertEqual(LauncherOptions(friends: .offline).steamLinksAfterStart, [], "The status is written, not sent")
+        XCTAssertEqual(LauncherOptions(startView: .menuBar).steamStartArguments, [], "Steam ignores -silent here")
+        XCTAssertEqual(LauncherOptions(startView: .small).steamStartArguments, [], "Steam can't be kept in Small Mode")
+        XCTAssertEqual(LauncherOptions.StartView.offered, [.normal, .bigPicture])
+        // Choices saved before still load.
+        XCTAssertEqual(try JSONDecoder().decode(LauncherOptions.self, from: Data(#"{"start_view":"small","friends":"offline"}"#.utf8)),
+                       LauncherOptions(startView: .small, friends: .offline))
         XCTAssertEqual(LauncherOptions(friends: .offline).steamPersonaState, 0)
         XCTAssertEqual(LauncherOptions(friends: .online).steamPersonaState, 1)
         XCTAssertEqual(LauncherOptions(friends: .away).steamPersonaState, 3)
         XCTAssertEqual(LauncherOptions(friends: .invisible).steamPersonaState, 7)
         XCTAssertNil(LauncherOptions().steamPersonaState)
         XCTAssertTrue(LauncherOptions().isEmpty)
-        XCTAssertEqual(LauncherOptions().steamLinksAfterStart, [])
 
         // Saved on Steam's entry, found from its games; "as Steam left it" stores nothing.
         let recipe = Recipe(id: "steam", game: GameInfo(title: "Steam", slug: "steam"),

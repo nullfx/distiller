@@ -105,7 +105,6 @@ extension AppModel {
                 let startingLauncher = !engine.isBottleActive(game, active: await engine.activeBottlePrefixes())
                 _ = try engine.launch(game, startingLauncher: startingLauncher)
                 launcherLaunching[game.id] = Date()
-                if startingLauncher { Task { await engine.applyLauncherOptionsAfterStart(for: game) } }
             } catch {
                 errorMessage = error.localizedDescription
             }

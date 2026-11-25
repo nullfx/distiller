@@ -512,12 +512,10 @@ struct LaunchCommand: AsyncParsableCommand {
         // Starting a launcher that isn't running (for itself or a game): the player's start options apply.
         let active = await engine.activeBottlePrefixes()
         let startingLauncher = engine.launcherEntry(for: launched) != nil && !engine.isBottleActive(launched, active: active)
-        let applying = startingLauncher ? Task { await engine.applyLauncherOptionsAfterStart(for: launched) } : nil
         let status = try await waitForExit { onExit in
             try engine.launch(launched, measured: measure, startingLauncher: startingLauncher,
                               onOutput: stream.map { stream in { stream.append($0) } }, onExit: onExit)
         }
-        applying?.cancel()
         if let recorder {
             if let summary = recorder.stop() {
                 print(Self.describe(summary))
@@ -670,7 +668,7 @@ struct SteamOptionsCommand: ParsableCommand {
     @Argument(help: "Steam's entry, from 'distiller games'.")
     var steam: String
 
-    @Option(help: "normal, small or big_picture.")
+    @Option(help: "normal or big_picture.")
     var start: LauncherOptions.StartView?
 
     @Option(help: "online, away, invisible or offline (signed out of Friends).")

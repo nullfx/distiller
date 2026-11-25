@@ -355,7 +355,6 @@ final class AppModel {
                 }
                 running[game.id] = process
                 recorders[game.id] = recorder
-                if startingLauncher { Task { await engine.applyLauncherOptionsAfterStart(for: game) } }
             } catch {
                 errorMessage = error.localizedDescription
                 performanceSessions[game.id]?.gameExited()

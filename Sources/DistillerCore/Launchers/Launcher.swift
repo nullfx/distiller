@@ -69,20 +69,23 @@ public struct LauncherGame: Equatable, Sendable {
 /// for itself or for one of its games.
 public struct LauncherOptions: Codable, Equatable, Hashable, Sendable {
     public enum StartView: String, Codable, CaseIterable, Sendable {
-        case normal, small
+        case normal
         case bigPicture = "big_picture"
-        /// Steam's `-silent`, which Steam ignores under Wine on a Mac (no tray to start in): read
-        /// so earlier choices still load, offered no more, and treated as "as Steam left it".
+        /// Read so earlier choices still load, offered no more, and treated as "as Steam left
+        /// it": Steam under Wine on a Mac ignores `-silent` (no tray to start in) and doesn't
+        /// switch to Small Mode for `steam://open/minigameslist`; it opens its full window once
+        /// signed in, whatever view it remembers.
+        case small
         case menuBar = "menu_bar"
 
         /// The views that work.
-        public static let offered: [StartView] = [.normal, .small, .bigPicture]
+        public static let offered: [StartView] = [.normal, .bigPicture]
 
         public var displayName: String {
             switch self {
             case .normal: return "Normal window"
-            case .small: return "Small Mode"
             case .bigPicture: return "Big Picture"
+            case .small: return "Small Mode"
             case .menuBar: return "Menu bar only"
             }
         }
@@ -118,7 +121,7 @@ public struct LauncherOptions: Codable, Equatable, Hashable, Sendable {
 
     public var isEmpty: Bool { startView == nil && friends == nil }
 
-    /// Steam's start-up options for the view (Small Mode has none: it's a link, below).
+    /// Steam's start-up options for the view.
     public var steamStartArguments: [String] {
         switch startView {
         case .normal?: return ["-nobigpicture"]
@@ -127,14 +130,8 @@ public struct LauncherOptions: Codable, Equatable, Hashable, Sendable {
         }
     }
 
-    /// Links for a Steam that's up: Small Mode (Steam opens its full window once it has signed
-    /// in, so it's sent when that appears; see `applyLauncherOptionsAfterStart`). The Friends status
-    /// isn't a link: Steam's `steam://friends/status/offline` doesn't sign out of Friends, so
-    /// it's written into Steam's own saved status before it starts (`steamPersonaState`).
-    public var steamLinksAfterStart: [String] {
-        startView == .small ? ["steam://open/minigameslist"] : []
-    }
-
+    /// The Friends status isn't a link: Steam's `steam://friends/status/offline` doesn't sign
+    /// out of Friends, so it's written into Steam's own saved status before it starts.
     /// Steam's number for the Friends status (`ePersonaState`, as it saves it).
     public var steamPersonaState: Int? {
         switch friends {

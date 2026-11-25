@@ -389,48 +389,6 @@ extension DistillerEngine {
         return isLauncher(game) ? game : nil
     }
 
-    /// After Distiller started Steam (for itself or a game), for Small Mode: Steam starts in the
-    /// view it remembers but opens its full window once it has signed in (its start page), so
-    /// Distiller watches Steam's windows for two minutes and, when a full-size one appears,
-    /// sends `steam://open/minigameslist`, up to three times if Steam opens it again. Window
-    /// sizes and owners come from the window server (no Screen Recording permission needed).
-    public func applyLauncherOptionsAfterStart(for game: Game, watch: Duration = .seconds(120)) async {
-        guard let launcher = launcherEntry(for: game), launcherKind(of: launcher) == .steam,
-              let links = launcher.launcherOptions?.steamLinksAfterStart, !links.isEmpty,
-              let clientExe = resolve(launcher.recipe, overrides: launcher.overrides).launch?.exe,
-              let bottle = try? bottles.bottle(id: launcher.bottleID) else { return }
-        let prefix = bottles.prefix(of: bottle)
-        // Steam may update itself first; allow for that before its windows appear.
-        let deadline = ContinuousClock.now + .seconds(300)
-        var watchingUntil: ContinuousClock.Instant?
-        var sent = 0
-        var lastSent: ContinuousClock.Instant?
-        while ContinuousClock.now < (watchingUntil ?? deadline), sent < 3 {
-            try? await Task.sleep(for: .seconds(2))
-            let processes = await bottleProcesses()
-            let pids = Set(processes.pids[prefix.path] ?? processes.pids[prefix.standardizedFileURL.path] ?? [])
-            let commands = processes.commands[prefix.path] ?? processes.commands[prefix.standardizedFileURL.path] ?? []
-            guard commands.contains(where: { $0.lowercased().contains("steamwebhelper.exe") }) else { continue }
-            if watchingUntil == nil { watchingUntil = ContinuousClock.now + watch }
-            // Give Steam a moment after each switch before looking again.
-            if let lastSent, ContinuousClock.now - lastSent < .seconds(6) { continue }
-            guard let widest = Self.widestWindow(ownedBy: pids), widest >= Self.fullWindowWidth else { continue }
-            for link in links {
-                _ = try? run(program: clientExe, arguments: [link], inBottle: launcher.bottleID)
-            }
-            sent += 1
-            lastSent = ContinuousClock.now
-        }
-    }
-
-    /// Wider than Steam's Small Mode window, in points.
-    static let fullWindowWidth: CGFloat = 700
-
-    /// The width of the widest on-screen window the given processes own.
-    static func widestWindow(ownedBy pids: Set<Int>) -> CGFloat? {
-        windowSizes(ownedBy: pids).map(\.width).max()
-    }
-
     /// The on-screen windows the given processes own, by size.
     public static func windowSizes(ownedBy pids: Set<Int>) -> [CGSize] {
         guard !pids.isEmpty,
