@@ -203,4 +203,25 @@ public enum SteamLibrary {
         }
         return (running, pid)
     }
+
+    /// `localconfig.vdf` with `ePersonaState` set in every `FriendStoreLocalPrefs_<account>`
+    /// (a JSON value, quotes escaped), or nil when there's none. Other text is untouched.
+    public static func settingPersonaState(_ state: Int, in text: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: #"("FriendStoreLocalPrefs_[0-9]+"\s+")((?:[^"\\]|\\.)*)(")"#) else { return nil }
+        let matches = regex.matches(in: text, range: NSRange(text.startIndex..., in: text))
+        guard !matches.isEmpty else { return nil }
+        var result = text
+        for match in matches.reversed() {
+            guard let valueRange = Range(match.range(at: 2), in: result) else { continue }
+            let escaped = String(result[valueRange])
+            let json = escaped.replacingOccurrences(of: #"\""#, with: "\"").replacingOccurrences(of: #"\\"#, with: #"\"#)
+            guard var object = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any] else { continue }
+            object["ePersonaState"] = state
+            guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]),
+                  let encoded = String(data: data, encoding: .utf8) else { continue }
+            let reescaped = encoded.replacingOccurrences(of: #"\"#, with: #"\\"#).replacingOccurrences(of: "\"", with: #"\""#)
+            result.replaceSubrange(valueRange, with: reescaped)
+        }
+        return result
+    }
 }

@@ -343,9 +343,12 @@ final class AppModel {
             let started = Date()
             let recorder = recorder ?? (recordPerformanceAlways ? PerformanceRecorder() : nil)
             let stream = recorder?.stream()
+            // Starting a launcher that isn't running: the player's start options apply.
+            let active = await engine.activeBottlePrefixes()
+            let startingLauncher = engine.isLauncher(game) && !engine.isBottleActive(game, active: active)
             do {
                 let process = try engine.launch(
-                    game, measured: recorder != nil,
+                    game, measured: recorder != nil, startingLauncher: startingLauncher,
                     onOutput: stream.map { stream in { stream.append($0) } }
                 ) { [weak self] _ in
                     Task { @MainActor in self?.finished(game, started: started) }

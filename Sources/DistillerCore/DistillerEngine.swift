@@ -228,6 +228,7 @@ public final class DistillerEngine: @unchecked Sendable {
     public func launch(
         _ game: Game,
         measured: Bool = false,
+        startingLauncher: Bool = false,
         onOutput: (@Sendable (Data) -> Void)? = nil,
         onExit: (@Sendable (Int32) -> Void)? = nil
     ) throws -> Process {
@@ -269,7 +270,12 @@ public final class DistillerEngine: @unchecked Sendable {
         }
         // A launcher's game always starts through its launcher (for Steam, the player's
         // arguments follow; Steam passes them on to the game).
-        let arguments = game.launchedBy.map { Self.launchArguments(kind: $0.kind, gameID: $0.gameID, recipeArgs: launch.args) } ?? (launch.args ?? [])
+        var arguments = game.launchedBy.map { Self.launchArguments(kind: $0.kind, gameID: $0.gameID, recipeArgs: launch.args) } ?? (launch.args ?? [])
+        // Starting Steam (for itself or a game): the player's view comes first.
+        if startingLauncher, let launcher = launcherEntry(for: game), launcherKind(of: launcher) == .steam {
+            arguments = (launcher.launcherOptions?.steamStartArguments ?? []) + arguments
+            applySteamFriendsStatus(for: launcher)
+        }
         return try runner.launch(
             program: program.path,
             arguments: arguments,

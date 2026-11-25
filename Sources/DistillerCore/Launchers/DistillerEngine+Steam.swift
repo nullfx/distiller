@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Games launchers install get library entries of their own. A library entry whose program is a
@@ -17,6 +18,8 @@ public struct LauncherSync: Equatable, Sendable {
 public struct BottleProcesses: Equatable, Sendable {
     public var active: Set<String> = []
     public var commands: [String: [String]] = [:]
+    /// The process IDs in each bottle, when known.
+    public var pids: [String: [Int]] = [:]
 }
 
 extension DistillerEngine {
@@ -80,7 +83,8 @@ extension DistillerEngine {
                     id: "\(launcher.id)-\(kind.rawValue)-\(item.gameID)", title: item.name, bottleID: launcher.bottleID,
                     recipe: recipe,
                     launchedBy: LauncherLink(kind: kind, gameID: item.gameID, launcherID: launcher.id,
-                                             program: Self.windowsPath(of: program, root: root, isFolder: false))
+                                             program: Self.windowsPath(of: program, root: root, isFolder: false),
+                                             folder: kind == .battlenet ? Self.windowsPath(of: item.folder, root: root) : nil)
                 )
                 try? library.upsert(game)
                 refreshIcon(for: game)
@@ -207,6 +211,7 @@ extension DistillerEngine {
 
     /// The game's folder (`C:\…\`), from its program.
     func gameFolder(of link: LauncherLink) -> String? {
+        if let folder = link.folder { return folder }
         guard let program = link.program, let slash = program.lastIndex(of: "\\") else { return nil }
         return String(program[...slash])
     }
@@ -263,10 +268,75 @@ extension DistillerEngine {
 
     // MARK: What's running
 
-    /// What's running in each bottle now.
+    /// What's running in each bottle now. Wine's own processes carry `WINEPREFIX`; the Windows
+    /// programs they start don't show it (Wine replaces their visible environment and detaches
+    /// them from their parent), so those are placed by their working folder, which Wine keeps
+    /// inside the bottle's `drive_c` (`lsof`, a few milliseconds).
     public func bottleProcesses() async -> BottleProcesses {
-        guard let result = try? await ProcessRunner.run(URL(fileURLWithPath: "/bin/ps"), arguments: ["-axE", "-ww", "-o", "command="]) else { return BottleProcesses() }
-        return Self.bottleProcesses(psOutput: result.output)
+        guard let result = try? await ProcessRunner.run(URL(fileURLWithPath: "/bin/ps"), arguments: ["-axE", "-ww", "-o", "pid=,command="]) else { return BottleProcesses() }
+        var processes = Self.bottleProcesses(psOutput: result.output)
+        let unplaced = Self.unplacedWindowsPrograms(psOutput: result.output)
+        guard !unplaced.isEmpty,
+              let folders = try? await ProcessRunner.run(URL(fileURLWithPath: "/usr/sbin/lsof"),
+                                                         arguments: ["-a", "-d", "cwd", "-Fpn", "-p", unplaced.keys.map(String.init).joined(separator: ",")]) else { return processes }
+        for (pid, folder) in Self.workingFolders(lsofOutput: folders.output) {
+            guard let command = unplaced[pid], let prefix = Self.prefix(ofFolder: folder) else { continue }
+            processes.commands[prefix, default: []].append(command)
+            processes.pids[prefix, default: []].append(pid)
+        }
+        return processes
+    }
+
+    /// The prefix a folder inside a bottle's `drive_c` belongs to.
+    static func prefix(ofFolder folder: String) -> String? {
+        guard let range = folder.range(of: "/drive_c") else { return nil }
+        let after = folder[range.upperBound...]
+        guard after.isEmpty || after.hasPrefix("/") else { return nil }
+        return String(folder[..<range.lowerBound])
+    }
+
+    /// From `lsof -Fpn` output: each process's working folder.
+    static func workingFolders(lsofOutput: String) -> [Int: String] {
+        var folders: [Int: String] = [:]
+        var pid: Int?
+        for line in lsofOutput.split(separator: "\n") {
+            if line.hasPrefix("p") { pid = Int(line.dropFirst()) }
+            else if line.hasPrefix("n"), let pid { folders[pid] = String(line.dropFirst()) }
+        }
+        return folders
+    }
+
+    /// From `ps -E` output (`pid command environment`): Windows programs without a WINEPREFIX
+    /// to place them by, as `C:\…` commands.
+    static func unplacedWindowsPrograms(psOutput: String) -> [Int: String] {
+        var programs: [Int: String] = [:]
+        for line in psOutput.split(separator: "\n").map(String.init) {
+            let trimmed = line.drop(while: { $0 == " " })
+            guard let space = trimmed.firstIndex(of: " "), let pid = Int(trimmed[..<space]) else { continue }
+            let rest = String(trimmed[trimmed.index(after: space)...])
+            guard !rest.contains(" WINEPREFIX="), let command = windowsCommand(rest) else { continue }
+            programs[pid] = command
+        }
+        return programs
+    }
+
+    /// A Windows program's command as `C:\…`: Wine shows some as `C:\…` and others as the Mac
+    /// path inside `drive_c`. Nil for anything else.
+    static func windowsCommand(_ text: String) -> String? {
+        if text.hasPrefix("C:\\") || text.hasPrefix("c:\\") { return commandOnly(text) }
+        guard let range = text.range(of: "/drive_c/") else { return nil }
+        let command = commandOnly(String(text[range.upperBound...]))
+        // The program's path (with spaces) up to ".exe", then its arguments.
+        guard let exe = command.range(of: ".exe", options: .caseInsensitive) else { return nil }
+        let path = command[..<exe.upperBound].replacingOccurrences(of: "/", with: "\\")
+        return "C:\\" + path + command[exe.upperBound...]
+    }
+
+    /// A ps line without the environment that follows the command.
+    static func commandOnly(_ text: String) -> String {
+        let environment = try? NSRegularExpression(pattern: " [A-Za-z_][A-Za-z0-9_]*=")
+        let end = environment?.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)).flatMap { Range($0.range, in: text) }?.lowerBound ?? text.endIndex
+        return String(text[..<end])
     }
 
     /// The prefixes of bottles whose Wine is running now (a wineserver is up for them).
@@ -274,23 +344,28 @@ extension DistillerEngine {
         await bottleProcesses().active
     }
 
-    /// From `ps -E` output: each process's command (before its environment) by its WINEPREFIX,
-    /// and the prefixes with a wineserver. Paths may contain spaces; the environment starts at
-    /// the first ` NAME=` after them.
+    /// From `ps -E` output (`[pid] command environment`): the commands of processes carrying a
+    /// WINEPREFIX, by it, and the prefixes with a wineserver. Paths may contain spaces; the
+    /// environment starts at the first ` NAME=` after them.
     static func bottleProcesses(psOutput: String) -> BottleProcesses {
         var processes = BottleProcesses()
         let environment = try? NSRegularExpression(pattern: " [A-Za-z_][A-Za-z0-9_]*=")
-        for line in psOutput.split(separator: "\n").map(String.init) {
+        for raw in psOutput.split(separator: "\n").map(String.init) {
+            // A leading pid (from `-o pid=,command=`) isn't part of the command.
+            var line = String(raw.drop(while: { $0 == " " }))
+            var pid: Int?
+            if let space = line.firstIndex(of: " "), let number = Int(line[..<space]) {
+                pid = number
+                line = String(line[line.index(after: space)...])
+            }
             guard let prefixRange = line.range(of: " WINEPREFIX=") else { continue }
-            let afterPrefix = line[prefixRange.upperBound...]
-            let rest = String(afterPrefix)
+            let rest = String(line[prefixRange.upperBound...])
             let end = environment?.firstMatch(in: rest, range: NSRange(rest.startIndex..., in: rest)).flatMap { Range($0.range, in: rest) }?.lowerBound ?? rest.endIndex
             let prefix = String(rest[..<end])
-            let start = line.startIndex
-            let commandEnd = environment?.firstMatch(in: line, range: NSRange(start..., in: line)).flatMap { Range($0.range, in: line) }?.lowerBound ?? line.endIndex
-            let command = String(line[start..<commandEnd])
+            let command = windowsCommand(line) ?? commandOnly(line)
             processes.commands[prefix, default: []].append(command)
-            let program = command.split(separator: " ").first.map(String.init) ?? command
+            if let pid { processes.pids[prefix, default: []].append(pid) }
+            let program = commandOnly(line).split(separator: " ").first.map(String.init) ?? line
             if program.hasSuffix("/wineserver") { processes.active.insert(prefix) }
         }
         return processes
@@ -306,5 +381,51 @@ extension DistillerEngine {
         guard let bottle = try? bottles.bottle(id: game.bottleID) else { return false }
         let prefix = bottles.prefix(of: bottle)
         return active.contains(prefix.path) || active.contains(prefix.standardizedFileURL.path)
+    }
+}
+
+extension DistillerEngine {
+    /// The launcher entry behind a game: itself for a launcher, its launcher for a launcher's game.
+    public func launcherEntry(for game: Game) -> Game? {
+        if let link = game.launchedBy { return try? library.game(id: link.launcherID) }
+        return isLauncher(game) ? game : nil
+    }
+
+    /// The on-screen windows the given processes own, by size.
+    public static func windowSizes(ownedBy pids: Set<Int>) -> [CGSize] {
+        guard !pids.isEmpty,
+              let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return [] }
+        return windows.compactMap { window -> CGSize? in
+            guard let owner = window[kCGWindowOwnerPID as String] as? Int, pids.contains(owner),
+                  (window[kCGWindowLayer as String] as? Int) == 0,
+                  let bounds = window[kCGWindowBounds as String] as? NSDictionary,
+                  let rect = CGRect(dictionaryRepresentation: bounds) else { return nil }
+            return rect.size
+        }
+    }
+
+    /// Before Distiller starts Steam: the player's Friends status, written where Steam saves
+    /// its own (`localconfig.vdf`, each signed-in account's `FriendStoreLocalPrefs_<account>`,
+    /// `ePersonaState`), so Steam starts in it. Only while Steam isn't running (it writes the
+    /// file itself when it quits). Accounts that haven't signed in yet have nothing to change.
+    func applySteamFriendsStatus(for launcher: Game) {
+        guard let state = launcher.launcherOptions?.steamPersonaState,
+              let clientExe = resolve(launcher.recipe, overrides: launcher.overrides).launch?.exe,
+              let bottle = try? bottles.bottle(id: launcher.bottleID),
+              let steam = SteamLibrary.steamFolder(clientExe: clientExe, root: bottles.root(of: bottle)) else { return }
+        let userdata = steam.appendingPathComponent("userdata", isDirectory: true)
+        for account in (try? FileManager.default.contentsOfDirectory(at: userdata, includingPropertiesForKeys: nil)) ?? [] {
+            let file = account.appendingPathComponent("config/localconfig.vdf")
+            guard let text = try? String(contentsOf: file, encoding: .utf8),
+                  let updated = SteamLibrary.settingPersonaState(state, in: text), updated != text else { continue }
+            try? updated.write(to: file, atomically: true, encoding: .utf8)
+        }
+    }
+
+    /// Saves how the player wants a launcher started (nil options: as the launcher left it).
+    public func setLauncherOptions(_ options: LauncherOptions?, for launcherID: String) throws {
+        var launcher = try library.game(id: launcherID)
+        launcher.launcherOptions = options?.isEmpty == true ? nil : options
+        try library.upsert(launcher)
     }
 }

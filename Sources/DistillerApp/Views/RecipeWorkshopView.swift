@@ -118,6 +118,9 @@ struct RecipeWorkshopView: View {
 
     private func standardSettings(_ game: Game) -> some View {
         Form {
+            if model.launcherKind(of: game) == .steam {
+                SteamStartSection(launcherID: game.id)
+            }
             Section {
                 Picker("Program", selection: $launchPath) {
                     Text("Not chosen").tag("")
@@ -487,6 +490,42 @@ struct RebuildSection: View {
             Button("Rebuild") { model.rebuild(game) }
         } message: {
             Text("The recipe is installed again into a new bottle, with the same steps as a fresh install. Files and folders you chose before are reused from the old bottle where possible; anything else is asked for again. Anything the game keeps inside its bottle (saved games under C:\\users, its settings, a launcher's sign-in) isn't carried over: copy it from the old bottle's C: drive if you need it. The old bottle is kept until you decide.")
+        }
+    }
+}
+
+/// Steam's entry: how Distiller starts Steam on this Mac (its view, the Friends status). Saved
+/// as soon as it changes; the player's, never part of the recipe.
+private struct SteamStartSection: View {
+    @Environment(AppModel.self) private var model
+    let launcherID: String
+
+    private var options: LauncherOptions {
+        model.games.first { $0.id == launcherID }?.launcherOptions ?? LauncherOptions()
+    }
+
+    private func update(_ change: (inout LauncherOptions) -> Void) {
+        guard let launcher = model.games.first(where: { $0.id == launcherID }) else { return }
+        var options = self.options
+        change(&options)
+        model.setLauncherOptions(options, for: launcher)
+    }
+
+    var body: some View {
+        Section {
+            Picker("Open in", selection: Binding(get: { options.startView.flatMap { LauncherOptions.StartView.offered.contains($0) ? $0 : nil } }, set: { view in update { $0.startView = view } })) {
+                Text("As Steam left it").tag(LauncherOptions.StartView?.none)
+                ForEach(LauncherOptions.StartView.offered, id: \.self) { Text($0.displayName).tag(Optional($0)) }
+            }
+            Picker("Friends", selection: Binding(get: { options.friends }, set: { status in update { $0.friends = status } })) {
+                Text("Leave as is").tag(LauncherOptions.FriendsStatus?.none)
+                ForEach(LauncherOptions.FriendsStatus.allCases, id: \.self) { Text($0.displayName).tag(Optional($0)) }
+            }
+        } header: {
+            Text("When Steam starts")
+        } footer: {
+            Text("Applied whenever Distiller starts Steam, for itself or for one of its games. The Friends status is set where Steam saves its own, so Steam starts in it; Signed out of Friends keeps you signed in to Steam. Steam can't be kept in Small Mode: once it has signed in it opens its full window, whatever view it was left in. These are yours, on this Mac: they're never part of the recipe or anything you share.")
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
