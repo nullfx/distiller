@@ -702,7 +702,9 @@ struct BottlesRunning: AsyncParsableCommand {
         if processes.commands.isEmpty { print("Nothing is running in any bottle.") }
         for (prefix, commands) in processes.commands.sorted(by: { $0.key < $1.key }) {
             let name = bottles.first { engine.bottles.prefix(of: $0).path == prefix }?.name ?? prefix
-            print("\(name)\(processes.active.contains(prefix) ? "" : " (Wine not running)"):")
+            let windows = DistillerEngine.windowSizes(ownedBy: Set(processes.pids[prefix] ?? []))
+                .map { "\(Int($0.width))×\(Int($0.height))" }
+            print("\(name)\(processes.active.contains(prefix) ? "" : " (Wine not running)")\(windows.isEmpty ? "" : ", windows: " + windows.joined(separator: ", ")):")
             for command in commands.sorted() {
                 print("  " + String(command.prefix(150)))
             }

@@ -127,8 +127,8 @@ public struct LauncherOptions: Codable, Equatable, Hashable, Sendable {
         }
     }
 
-    /// Links for a Steam that's up: Small Mode (Steam opens its main window after signing in,
-    /// so it's sent more than once; see `applyLauncherOptionsAfterStart`). The Friends status
+    /// Links for a Steam that's up: Small Mode (Steam opens its full window once it has signed
+    /// in, so it's sent when that appears; see `applyLauncherOptionsAfterStart`). The Friends status
     /// isn't a link: Steam's `steam://friends/status/offline` doesn't sign out of Friends, so
     /// it's written into Steam's own saved status before it starts (`steamPersonaState`).
     public var steamLinksAfterStart: [String] {

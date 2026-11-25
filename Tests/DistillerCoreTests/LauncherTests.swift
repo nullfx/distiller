@@ -75,6 +75,7 @@ final class LauncherTests: XCTestCase {
             103: #"C:\Program Files (x86)\Steam\bin\cef\cef.win64\steamwebhelper.exe -nocrashdialog -lang=en_US"#,
         ])
         XCTAssertEqual(DistillerEngine.bottleProcesses(psOutput: ps).active, ["/b/steam/prefix"], "Leading pids are fine")
+        XCTAssertEqual(DistillerEngine.bottleProcesses(psOutput: ps).pids, ["/b/steam/prefix": [101]], "Kept, for the bottle's windows")
         let lsof = "p102\nfcwd\nn/b/steam/prefix/drive_c/Program Files (x86)/Steam\np103\nfcwd\nn/b/steam/prefix/drive_c\n"
         XCTAssertEqual(DistillerEngine.workingFolders(lsofOutput: lsof), [102: "/b/steam/prefix/drive_c/Program Files (x86)/Steam", 103: "/b/steam/prefix/drive_c"])
         XCTAssertEqual(DistillerEngine.prefix(ofFolder: "/Volumes/Games Drive/b/prefix/drive_c/windows"), "/Volumes/Games Drive/b/prefix")

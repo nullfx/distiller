@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Games launchers install get library entries of their own. A library entry whose program is a
@@ -17,6 +18,8 @@ public struct LauncherSync: Equatable, Sendable {
 public struct BottleProcesses: Equatable, Sendable {
     public var active: Set<String> = []
     public var commands: [String: [String]] = [:]
+    /// The process IDs in each bottle, when known.
+    public var pids: [String: [Int]] = [:]
 }
 
 extension DistillerEngine {
@@ -277,6 +280,7 @@ extension DistillerEngine {
         for (pid, folder) in Self.workingFolders(lsofOutput: folders.output) {
             guard let command = unplaced[pid], let prefix = Self.prefix(ofFolder: folder) else { continue }
             processes.commands[prefix, default: []].append(command)
+            processes.pids[prefix, default: []].append(pid)
         }
         return processes
     }
@@ -347,13 +351,18 @@ extension DistillerEngine {
         for raw in psOutput.split(separator: "\n").map(String.init) {
             // A leading pid (from `-o pid=,command=`) isn't part of the command.
             var line = String(raw.drop(while: { $0 == " " }))
-            if let space = line.firstIndex(of: " "), Int(line[..<space]) != nil { line = String(line[line.index(after: space)...]) }
+            var pid: Int?
+            if let space = line.firstIndex(of: " "), let number = Int(line[..<space]) {
+                pid = number
+                line = String(line[line.index(after: space)...])
+            }
             guard let prefixRange = line.range(of: " WINEPREFIX=") else { continue }
             let rest = String(line[prefixRange.upperBound...])
             let end = environment?.firstMatch(in: rest, range: NSRange(rest.startIndex..., in: rest)).flatMap { Range($0.range, in: rest) }?.lowerBound ?? rest.endIndex
             let prefix = String(rest[..<end])
             let command = windowsCommand(line) ?? commandOnly(line)
             processes.commands[prefix, default: []].append(command)
+            if let pid { processes.pids[prefix, default: []].append(pid) }
             let program = commandOnly(line).split(separator: " ").first.map(String.init) ?? line
             if program.hasSuffix("/wineserver") { processes.active.insert(prefix) }
         }
@@ -380,33 +389,58 @@ extension DistillerEngine {
         return isLauncher(game) ? game : nil
     }
 
-    /// After Distiller started Steam (for itself or a game): once Steam's interface is up (its
-    /// web helper runs in the bottle), sends the player's links (Small Mode). Steam opens its
-    /// main window when it has finished signing in, which would replace Small Mode, so they're
-    /// sent again over the first minute. Gives up after `timeout` (Steam updating itself, or
-    /// not signed in yet).
-    public func applyLauncherOptionsAfterStart(for game: Game, timeout: Duration = .seconds(240)) async {
+    /// After Distiller started Steam (for itself or a game), for Small Mode: Steam starts in the
+    /// view it remembers but opens its full window once it has signed in (its start page), so
+    /// Distiller watches Steam's windows for two minutes and, when a full-size one appears,
+    /// sends `steam://open/minigameslist`, up to three times if Steam opens it again. Window
+    /// sizes and owners come from the window server (no Screen Recording permission needed).
+    public func applyLauncherOptionsAfterStart(for game: Game, watch: Duration = .seconds(120)) async {
         guard let launcher = launcherEntry(for: game), launcherKind(of: launcher) == .steam,
               let links = launcher.launcherOptions?.steamLinksAfterStart, !links.isEmpty,
               let clientExe = resolve(launcher.recipe, overrides: launcher.overrides).launch?.exe,
               let bottle = try? bottles.bottle(id: launcher.bottleID) else { return }
         let prefix = bottles.prefix(of: bottle)
-        let deadline = ContinuousClock.now + timeout
-        while ContinuousClock.now < deadline {
-            let processes = await bottleProcesses()
-            let commands = processes.commands[prefix.path] ?? processes.commands[prefix.standardizedFileURL.path] ?? []
-            if commands.contains(where: { $0.lowercased().contains("steamwebhelper.exe") }) {
-                var waited = 0
-                for at in [5, 15, 30, 60] {
-                    try? await Task.sleep(for: .seconds(at - waited))
-                    waited = at
-                    for link in links {
-                        _ = try? run(program: clientExe, arguments: [link], inBottle: launcher.bottleID)
-                    }
-                }
-                return
-            }
+        // Steam may update itself first; allow for that before its windows appear.
+        let deadline = ContinuousClock.now + .seconds(300)
+        var watchingUntil: ContinuousClock.Instant?
+        var sent = 0
+        var lastSent: ContinuousClock.Instant?
+        while ContinuousClock.now < (watchingUntil ?? deadline), sent < 3 {
             try? await Task.sleep(for: .seconds(2))
+            let processes = await bottleProcesses()
+            let pids = Set(processes.pids[prefix.path] ?? processes.pids[prefix.standardizedFileURL.path] ?? [])
+            let commands = processes.commands[prefix.path] ?? processes.commands[prefix.standardizedFileURL.path] ?? []
+            guard commands.contains(where: { $0.lowercased().contains("steamwebhelper.exe") }) else { continue }
+            if watchingUntil == nil { watchingUntil = ContinuousClock.now + watch }
+            // Give Steam a moment after each switch before looking again.
+            if let lastSent, ContinuousClock.now - lastSent < .seconds(6) { continue }
+            guard let widest = Self.widestWindow(ownedBy: pids), widest >= Self.fullWindowWidth else { continue }
+            for link in links {
+                _ = try? run(program: clientExe, arguments: [link], inBottle: launcher.bottleID)
+            }
+            sent += 1
+            lastSent = ContinuousClock.now
+        }
+    }
+
+    /// Wider than Steam's Small Mode window, in points.
+    static let fullWindowWidth: CGFloat = 700
+
+    /// The width of the widest on-screen window the given processes own.
+    static func widestWindow(ownedBy pids: Set<Int>) -> CGFloat? {
+        windowSizes(ownedBy: pids).map(\.width).max()
+    }
+
+    /// The on-screen windows the given processes own, by size.
+    public static func windowSizes(ownedBy pids: Set<Int>) -> [CGSize] {
+        guard !pids.isEmpty,
+              let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] else { return [] }
+        return windows.compactMap { window -> CGSize? in
+            guard let owner = window[kCGWindowOwnerPID as String] as? Int, pids.contains(owner),
+                  (window[kCGWindowLayer as String] as? Int) == 0,
+                  let bounds = window[kCGWindowBounds as String] as? NSDictionary,
+                  let rect = CGRect(dictionaryRepresentation: bounds) else { return nil }
+            return rect.size
         }
     }
 
