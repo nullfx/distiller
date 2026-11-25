@@ -61,6 +61,28 @@ final class LauncherTests: XCTestCase {
         XCTAssertEqual(DistillerEngine.activePrefixes(psOutput: ps), processes.active)
     }
 
+    func testPlacesWindowsProgramsByTheirWorkingFolder() {
+        // As this Wine shows them: only Wine's own processes carry WINEPREFIX; Windows programs
+        // appear as C:\ paths or as the Mac path inside drive_c, with no environment.
+        let ps = """
+          101 /w/lib/wine/../../bin/wineserver WINEPREFIX=/b/steam/prefix WINEDEBUG=-all
+          102 /b/steam/prefix/drive_c/Program Files (x86)/Steam/steam.exe -silent
+          103 C:\\Program Files (x86)\\Steam\\bin\\cef\\cef.win64\\steamwebhelper.exe -nocrashdialog -lang=en_US
+          104 /usr/libexec/something HOME=/Users/x
+        """
+        XCTAssertEqual(DistillerEngine.unplacedWindowsPrograms(psOutput: ps), [
+            102: #"C:\Program Files (x86)\Steam\steam.exe -silent"#,
+            103: #"C:\Program Files (x86)\Steam\bin\cef\cef.win64\steamwebhelper.exe -nocrashdialog -lang=en_US"#,
+        ])
+        XCTAssertEqual(DistillerEngine.bottleProcesses(psOutput: ps).active, ["/b/steam/prefix"], "Leading pids are fine")
+        let lsof = "p102\nfcwd\nn/b/steam/prefix/drive_c/Program Files (x86)/Steam\np103\nfcwd\nn/b/steam/prefix/drive_c\n"
+        XCTAssertEqual(DistillerEngine.workingFolders(lsofOutput: lsof), [102: "/b/steam/prefix/drive_c/Program Files (x86)/Steam", 103: "/b/steam/prefix/drive_c"])
+        XCTAssertEqual(DistillerEngine.prefix(ofFolder: "/Volumes/Games Drive/b/prefix/drive_c/windows"), "/Volumes/Games Drive/b/prefix")
+        XCTAssertEqual(DistillerEngine.prefix(ofFolder: "/b/prefix/drive_c"), "/b/prefix")
+        XCTAssertNil(DistillerEngine.prefix(ofFolder: "/Users/x/drive_cx/y"))
+        XCTAssertNil(DistillerEngine.prefix(ofFolder: "/Volumes/Games/Guild Wars 2"), "A game used in place from another drive")
+    }
+
     func testOldSteamLinksCarryOver() throws {
         // As Distiller 1.1 stored a Steam game.
         let recipe = Recipe(id: "steam-440", game: GameInfo(title: "Team Fortress 2", slug: "team-fortress-2"),

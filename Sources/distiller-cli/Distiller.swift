@@ -221,7 +221,7 @@ struct BottlesCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "bottles",
         abstract: "List and create bottles.",
-        subcommands: [List.self, Create.self, BottleDrives.self],
+        subcommands: [List.self, Create.self, BottleDrives.self, BottlesRunning.self],
         defaultSubcommand: List.self
     )
 
@@ -688,5 +688,24 @@ struct SteamOptionsCommand: ParsableCommand {
         if let friends { options.friends = friends }
         if reset || start != nil || friends != nil { try engine.setLauncherOptions(options, for: entry.id) }
         print("When Distiller starts \(entry.title): \(options.startView?.displayName ?? "as Steam left it"); Friends: \(options.friends?.displayName ?? "left as is").")
+    }
+}
+
+/// What's running in each bottle: Wine's processes and the Windows programs they started.
+struct BottlesRunning: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(commandName: "running", abstract: "List the Windows programs running in each bottle.")
+
+    func run() async throws {
+        let engine = try makeEngine()
+        let processes = await engine.bottleProcesses()
+        let bottles = engine.bottles.list()
+        if processes.commands.isEmpty { print("Nothing is running in any bottle.") }
+        for (prefix, commands) in processes.commands.sorted(by: { $0.key < $1.key }) {
+            let name = bottles.first { engine.bottles.prefix(of: $0).path == prefix }?.name ?? prefix
+            print("\(name)\(processes.active.contains(prefix) ? "" : " (Wine not running)"):")
+            for command in commands.sorted() {
+                print("  " + String(command.prefix(150)))
+            }
+        }
     }
 }

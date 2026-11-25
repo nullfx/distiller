@@ -263,10 +263,74 @@ extension DistillerEngine {
 
     // MARK: What's running
 
-    /// What's running in each bottle now.
+    /// What's running in each bottle now. Wine's own processes carry `WINEPREFIX`; the Windows
+    /// programs they start don't show it (Wine replaces their visible environment and detaches
+    /// them from their parent), so those are placed by their working folder, which Wine keeps
+    /// inside the bottle's `drive_c` (`lsof`, a few milliseconds).
     public func bottleProcesses() async -> BottleProcesses {
-        guard let result = try? await ProcessRunner.run(URL(fileURLWithPath: "/bin/ps"), arguments: ["-axE", "-ww", "-o", "command="]) else { return BottleProcesses() }
-        return Self.bottleProcesses(psOutput: result.output)
+        guard let result = try? await ProcessRunner.run(URL(fileURLWithPath: "/bin/ps"), arguments: ["-axE", "-ww", "-o", "pid=,command="]) else { return BottleProcesses() }
+        var processes = Self.bottleProcesses(psOutput: result.output)
+        let unplaced = Self.unplacedWindowsPrograms(psOutput: result.output)
+        guard !unplaced.isEmpty,
+              let folders = try? await ProcessRunner.run(URL(fileURLWithPath: "/usr/sbin/lsof"),
+                                                         arguments: ["-a", "-d", "cwd", "-Fpn", "-p", unplaced.keys.map(String.init).joined(separator: ",")]) else { return processes }
+        for (pid, folder) in Self.workingFolders(lsofOutput: folders.output) {
+            guard let command = unplaced[pid], let prefix = Self.prefix(ofFolder: folder) else { continue }
+            processes.commands[prefix, default: []].append(command)
+        }
+        return processes
+    }
+
+    /// The prefix a folder inside a bottle's `drive_c` belongs to.
+    static func prefix(ofFolder folder: String) -> String? {
+        guard let range = folder.range(of: "/drive_c") else { return nil }
+        let after = folder[range.upperBound...]
+        guard after.isEmpty || after.hasPrefix("/") else { return nil }
+        return String(folder[..<range.lowerBound])
+    }
+
+    /// From `lsof -Fpn` output: each process's working folder.
+    static func workingFolders(lsofOutput: String) -> [Int: String] {
+        var folders: [Int: String] = [:]
+        var pid: Int?
+        for line in lsofOutput.split(separator: "\n") {
+            if line.hasPrefix("p") { pid = Int(line.dropFirst()) }
+            else if line.hasPrefix("n"), let pid { folders[pid] = String(line.dropFirst()) }
+        }
+        return folders
+    }
+
+    /// From `ps -E` output (`pid command environment`): Windows programs without a WINEPREFIX
+    /// to place them by, as `C:\…` commands.
+    static func unplacedWindowsPrograms(psOutput: String) -> [Int: String] {
+        var programs: [Int: String] = [:]
+        for line in psOutput.split(separator: "\n").map(String.init) {
+            let trimmed = line.drop(while: { $0 == " " })
+            guard let space = trimmed.firstIndex(of: " "), let pid = Int(trimmed[..<space]) else { continue }
+            let rest = String(trimmed[trimmed.index(after: space)...])
+            guard !rest.contains(" WINEPREFIX="), let command = windowsCommand(rest) else { continue }
+            programs[pid] = command
+        }
+        return programs
+    }
+
+    /// A Windows program's command as `C:\…`: Wine shows some as `C:\…` and others as the Mac
+    /// path inside `drive_c`. Nil for anything else.
+    static func windowsCommand(_ text: String) -> String? {
+        if text.hasPrefix("C:\\") || text.hasPrefix("c:\\") { return commandOnly(text) }
+        guard let range = text.range(of: "/drive_c/") else { return nil }
+        let command = commandOnly(String(text[range.upperBound...]))
+        // The program's path (with spaces) up to ".exe", then its arguments.
+        guard let exe = command.range(of: ".exe", options: .caseInsensitive) else { return nil }
+        let path = command[..<exe.upperBound].replacingOccurrences(of: "/", with: "\\")
+        return "C:\\" + path + command[exe.upperBound...]
+    }
+
+    /// A ps line without the environment that follows the command.
+    static func commandOnly(_ text: String) -> String {
+        let environment = try? NSRegularExpression(pattern: " [A-Za-z_][A-Za-z0-9_]*=")
+        let end = environment?.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)).flatMap { Range($0.range, in: text) }?.lowerBound ?? text.endIndex
+        return String(text[..<end])
     }
 
     /// The prefixes of bottles whose Wine is running now (a wineserver is up for them).
@@ -274,23 +338,23 @@ extension DistillerEngine {
         await bottleProcesses().active
     }
 
-    /// From `ps -E` output: each process's command (before its environment) by its WINEPREFIX,
-    /// and the prefixes with a wineserver. Paths may contain spaces; the environment starts at
-    /// the first ` NAME=` after them.
+    /// From `ps -E` output (`[pid] command environment`): the commands of processes carrying a
+    /// WINEPREFIX, by it, and the prefixes with a wineserver. Paths may contain spaces; the
+    /// environment starts at the first ` NAME=` after them.
     static func bottleProcesses(psOutput: String) -> BottleProcesses {
         var processes = BottleProcesses()
         let environment = try? NSRegularExpression(pattern: " [A-Za-z_][A-Za-z0-9_]*=")
-        for line in psOutput.split(separator: "\n").map(String.init) {
+        for raw in psOutput.split(separator: "\n").map(String.init) {
+            // A leading pid (from `-o pid=,command=`) isn't part of the command.
+            var line = String(raw.drop(while: { $0 == " " }))
+            if let space = line.firstIndex(of: " "), Int(line[..<space]) != nil { line = String(line[line.index(after: space)...]) }
             guard let prefixRange = line.range(of: " WINEPREFIX=") else { continue }
-            let afterPrefix = line[prefixRange.upperBound...]
-            let rest = String(afterPrefix)
+            let rest = String(line[prefixRange.upperBound...])
             let end = environment?.firstMatch(in: rest, range: NSRange(rest.startIndex..., in: rest)).flatMap { Range($0.range, in: rest) }?.lowerBound ?? rest.endIndex
             let prefix = String(rest[..<end])
-            let start = line.startIndex
-            let commandEnd = environment?.firstMatch(in: line, range: NSRange(start..., in: line)).flatMap { Range($0.range, in: line) }?.lowerBound ?? line.endIndex
-            let command = String(line[start..<commandEnd])
+            let command = windowsCommand(line) ?? commandOnly(line)
             processes.commands[prefix, default: []].append(command)
-            let program = command.split(separator: " ").first.map(String.init) ?? command
+            let program = commandOnly(line).split(separator: " ").first.map(String.init) ?? line
             if program.hasSuffix("/wineserver") { processes.active.insert(prefix) }
         }
         return processes
