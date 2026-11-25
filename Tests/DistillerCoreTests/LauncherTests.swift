@@ -39,6 +39,7 @@ final class LauncherTests: XCTestCase {
         XCTAssertEqual(DistillerEngine.launchArguments(kind: .battlenet, gameID: "d3", recipeArgs: ["-windowed"]), ["--exec=launch D3"],
                        "Battle.net doesn't pass anything on")
         XCTAssertEqual(DistillerEngine.launchArguments(kind: .battlenet, gameID: "newgame", recipeArgs: nil), ["--exec=launch newgame"])
+        XCTAssertEqual(DistillerEngine.launchArguments(kind: .battlenet, gameID: "anbs", recipeArgs: nil), ["--exec=launch ANBS"], "Diablo Immortal")
         XCTAssertEqual(DistillerEngine.launchArguments(kind: .steam, gameID: "440", recipeArgs: ["-applaunch", "440", "-dx11"]), ["-applaunch", "440", "-dx11"])
     }
 

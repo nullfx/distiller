@@ -40,7 +40,7 @@ public enum BattleNetLibrary {
     static let launchCodes: [String: String] = [
         "wow": "WoW", "wow_classic": "WoW_wow_classic", "wow_classic_era": "WoW_wow_classic_era",
         "d3": "D3", "pro": "Pro", "s1": "S1", "s2": "S2", "w3": "W3", "hs": "WTCG", "wtcg": "WTCG",
-        "hero": "Hero", "osi": "OSI", "fen": "Fen", "rtro": "RTRO",
+        "hero": "Hero", "osi": "OSI", "fen": "Fen", "rtro": "RTRO", "anbs": "ANBS",
     ]
 
     public static func launchCode(for productID: String) -> String {
